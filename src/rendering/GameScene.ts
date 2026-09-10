@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { BoardTile, MoveResult } from '../game/board/types';
+import type { BoardTile, Direction, MoveResult } from '../game/board/types';
 import { ART } from '../config/artDirection';
 import { KingdomEnvironment } from './environment/KingdomEnvironment';
 import { TileFactory, type TileVisual } from './tiles/TileFactory';
@@ -28,8 +28,10 @@ export class GameScene {
   private readonly tiles = new Map<number, TileInstance>();
   private readonly tweens: Tween[] = [];
   private readonly clock = new THREE.Clock();
-  private readonly cameraHome = new THREE.Vector3(8.65, 11.2, 13.2);
-  private readonly cameraTarget = new THREE.Vector3(0, 0.55, 0.65);
+  private readonly cameraHome = new THREE.Vector3(0.35, 14.5, 17.4);
+  private readonly cameraTarget = new THREE.Vector3(0, 0.42, 0.15);
+  private readonly dragTarget = new THREE.Vector2();
+  private readonly dragCurrent = new THREE.Vector2();
   private cameraShake = 0;
   private cameraPunch = 0;
   private hitStopRemaining = 0;
@@ -38,7 +40,7 @@ export class GameScene {
 
   constructor(container: HTMLElement) {
     this.scene.background = new THREE.Color(ART.colors.sky);
-    this.scene.fog = new THREE.Fog(ART.colors.skyFog, 19, 42);
+    this.scene.fog = new THREE.Fog(ART.colors.skyFog, 18, 39);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -47,7 +49,7 @@ export class GameScene {
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.06;
+    this.renderer.toneMappingExposure = 1.03;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.domElement.className = 'game-canvas';
@@ -72,7 +74,34 @@ export class GameScene {
     this.tweens.splice(0);
     this.cameraShake = 0;
     this.cameraPunch = 0;
+    this.hitStopRemaining = 0;
+    this.clearGesture();
     tiles.forEach((tile) => this.addTile(tile, true));
+  }
+
+  setGesture(dx: number, dy: number): void {
+    const magnitude = Math.min(1, Math.hypot(dx, dy) / 92);
+    this.dragTarget.set(
+      THREE.MathUtils.clamp(dx / 92, -1, 1) * magnitude,
+      THREE.MathUtils.clamp(dy / 92, -1, 1) * magnitude,
+    );
+    this.environment.setGesture(dx, dy, magnitude);
+  }
+
+  clearGesture(): void {
+    this.dragTarget.set(0, 0);
+    this.environment.clearGesture();
+  }
+
+  commitDirection(direction: Direction): void {
+    this.clearGesture();
+    this.environment.pulseDirection(direction);
+  }
+
+  rejectDirection(direction: Direction): void {
+    this.clearGesture();
+    this.environment.pulseDirection(direction);
+    this.cameraShake = Math.max(this.cameraShake, 0.02);
   }
 
   async applyMove(result: MoveResult): Promise<void> {
@@ -94,13 +123,18 @@ export class GameScene {
             elapsed: 0,
             duration: ART.motion.moveMs / 1000,
             update: (t) => {
-              const eased = 1 - Math.pow(1 - t, 4);
+              const drive = 1 - Math.pow(1 - t, 5);
               const arc = Math.sin(Math.PI * t);
-              visual.root.position.lerpVectors(start, target, eased);
-              visual.root.position.y += arc * 0.035;
-              visual.root.rotation.x = dz * 0.012 * arc;
-              visual.root.rotation.z = -dx * 0.012 * arc;
-              visual.root.scale.set(1 + arc * 0.016, 1 - arc * 0.026, 1 + arc * 0.016);
+              const settle = Math.sin(Math.PI * Math.min(1, t * 1.15));
+              visual.root.position.lerpVectors(start, target, drive);
+              visual.root.position.y += arc * 0.055;
+              visual.root.rotation.x = dz * 0.018 * arc;
+              visual.root.rotation.z = -dx * 0.018 * arc;
+              visual.root.scale.set(
+                1 + settle * 0.025,
+                1 - settle * 0.045,
+                1 + settle * 0.025,
+              );
             },
             complete: () => {
               visual.root.position.copy(target);
@@ -131,24 +165,24 @@ export class GameScene {
       };
       const visual = this.addTile(tile, false);
       const position = this.cellPosition(merge.at.row, merge.at.col);
-      visual.root.scale.set(0.44, 0.24, 0.44);
-      visual.root.position.y -= 0.08;
+      visual.root.scale.set(0.34, 0.18, 0.34);
+      visual.root.position.y -= 0.1;
 
       this.effects.merge(position, merge.value);
-      this.environment.impact(merge.value);
+      this.environment.impact(merge.value, position);
       this.mergeBounce(visual.root, merge.value);
 
       this.hitStopRemaining = Math.max(
         this.hitStopRemaining,
-        merge.value >= 512 ? 0.062 : merge.value >= 128 ? 0.045 : ART.motion.hitStopMs / 1000,
+        merge.value >= 1024 ? 0.078 : merge.value >= 512 ? 0.064 : merge.value >= 128 ? 0.05 : ART.motion.hitStopMs / 1000,
       );
       this.cameraShake = Math.max(
         this.cameraShake,
-        merge.value >= 1024 ? 0.19 : merge.value >= 512 ? 0.14 : merge.value >= 128 ? 0.085 : 0.038,
+        merge.value >= 1024 ? 0.24 : merge.value >= 512 ? 0.18 : merge.value >= 128 ? 0.11 : 0.05,
       );
       this.cameraPunch = Math.max(
         this.cameraPunch,
-        merge.value >= 1024 ? 1.05 : merge.value >= 512 ? 0.72 : merge.value >= 128 ? 0.38 : 0.16,
+        merge.value >= 1024 ? 1.35 : merge.value >= 512 ? 0.92 : merge.value >= 128 ? 0.5 : 0.22,
       );
     });
 
@@ -182,8 +216,8 @@ export class GameScene {
         update: (t) => {
           const scale = this.easeOutBack(t);
           instance.root.scale.setScalar(scale);
-          instance.root.position.y = y + Math.sin(Math.PI * t) * 0.13;
-          instance.root.rotation.y = (1 - t) * 0.08;
+          instance.root.position.y = y + Math.sin(Math.PI * t) * 0.15;
+          instance.root.rotation.y = (1 - t) * 0.1;
         },
         complete: () => {
           instance.root.scale.setScalar(1);
@@ -197,27 +231,34 @@ export class GameScene {
 
   private mergeBounce(root: THREE.Group, value: number): void {
     const baseY = this.cellPosition(0, 0).y;
-    const duration = value >= 512 ? 0.46 : ART.motion.mergeMs / 1000;
-    const jump = value >= 1024 ? 0.52 : value >= 512 ? 0.39 : value >= 128 ? 0.29 : 0.21;
+    const duration = value >= 512 ? 0.5 : ART.motion.mergeMs / 1000;
+    const jump = value >= 1024 ? 0.64 : value >= 512 ? 0.48 : value >= 128 ? 0.34 : 0.25;
 
     this.tweens.push({
       elapsed: 0,
       duration,
       update: (t) => {
-        if (t < 0.22) {
-          const p = t / 0.22;
+        if (t < 0.18) {
+          const p = t / 0.18;
           root.scale.set(
-            THREE.MathUtils.lerp(0.44, 1.2, p),
-            THREE.MathUtils.lerp(0.24, 0.73, p),
-            THREE.MathUtils.lerp(0.44, 1.2, p),
+            THREE.MathUtils.lerp(0.34, 1.28, p),
+            THREE.MathUtils.lerp(0.18, 0.7, p),
+            THREE.MathUtils.lerp(0.34, 1.28, p),
+          );
+        } else if (t < 0.42) {
+          const p = (t - 0.18) / 0.24;
+          root.scale.set(
+            THREE.MathUtils.lerp(1.28, 0.92, p),
+            THREE.MathUtils.lerp(0.7, 1.2, p),
+            THREE.MathUtils.lerp(1.28, 0.92, p),
           );
         } else {
-          const p = (t - 0.22) / 0.78;
-          const spring = Math.sin(p * Math.PI * 2.5) * (1 - p);
-          root.scale.set(1 + spring * 0.14, 1 - spring * 0.1, 1 + spring * 0.14);
+          const p = (t - 0.42) / 0.58;
+          const spring = Math.sin(p * Math.PI * 3) * (1 - p);
+          root.scale.set(1 + spring * 0.12, 1 - spring * 0.09, 1 + spring * 0.12);
         }
         root.position.y = baseY + Math.sin(Math.PI * t) * jump;
-        root.rotation.y = Math.sin(Math.PI * t) * (value >= 512 ? 0.12 : 0.06);
+        root.rotation.y = Math.sin(Math.PI * t) * (value >= 512 ? 0.18 : 0.08);
       },
       complete: () => {
         root.scale.setScalar(1);
@@ -228,10 +269,10 @@ export class GameScene {
   }
 
   private configureLighting(): void {
-    this.scene.add(new THREE.HemisphereLight(0xf8fcff, 0x6f9557, 2.05));
+    this.scene.add(new THREE.HemisphereLight(0xdff5ff, 0x496f36, 1.72));
 
-    const sun = new THREE.DirectionalLight(0xfff2d5, 3.0);
-    sun.position.set(-8, 15, 8);
+    const sun = new THREE.DirectionalLight(0xffd9a0, 3.25);
+    sun.position.set(-7, 14, 9);
     sun.castShadow = true;
     const mobile = this.isMobileLike();
     const shadowSize = mobile ? 1024 : 1536;
@@ -243,19 +284,23 @@ export class GameScene {
     sun.shadow.bias = -0.00035;
     this.scene.add(sun);
 
-    const warm = new THREE.DirectionalLight(0xffc58c, 0.92);
-    warm.position.set(8, 5.8, -3);
+    const warm = new THREE.DirectionalLight(0xff8d58, 0.82);
+    warm.position.set(8, 5.6, 5);
     this.scene.add(warm);
 
-    const skyFill = new THREE.DirectionalLight(0xc8efff, 0.48);
-    skyFill.position.set(-3, 4, -8);
+    const skyFill = new THREE.DirectionalLight(0x83d9ff, 0.62);
+    skyFill.position.set(-5, 5, -8);
     this.scene.add(skyFill);
+
+    const boardFill = new THREE.PointLight(0xffc65a, 0.5, 18, 2);
+    boardFill.position.set(0, 7.5, 2.5);
+    this.scene.add(boardFill);
   }
 
   private cellPosition(row: number, col: number): THREE.Vector3 {
     return new THREE.Vector3(
       (col - 1.5) * ART.board.gap,
-      0.29,
+      0.57,
       (row - 1.5) * ART.board.gap + ART.board.centerZ,
     );
   }
@@ -271,17 +316,17 @@ export class GameScene {
     this.camera.aspect = ratio;
 
     if (ratio < 0.58) {
-      this.camera.fov = 56;
-      this.cameraHome.set(10.2, 14.8, 18.25);
-      this.cameraTarget.set(0, 0.45, 0.72);
-    } else if (ratio < 0.82) {
       this.camera.fov = 50;
-      this.cameraHome.set(9.25, 13.25, 15.95);
-      this.cameraTarget.set(0, 0.5, 0.72);
+      this.cameraHome.set(0.28, 14.35, 17.35);
+      this.cameraTarget.set(0, 0.48, 0.02);
+    } else if (ratio < 0.82) {
+      this.camera.fov = 46;
+      this.cameraHome.set(0.55, 13.1, 15.85);
+      this.cameraTarget.set(0, 0.5, 0.08);
     } else {
       this.camera.fov = 39;
-      this.cameraHome.set(8.65, 11.2, 13.2);
-      this.cameraTarget.set(0, 0.55, 0.65);
+      this.cameraHome.set(1.8, 11.7, 14.2);
+      this.cameraTarget.set(0, 0.52, 0.12);
     }
 
     this.camera.position.copy(this.cameraHome);
@@ -301,6 +346,13 @@ export class GameScene {
     }
     this.visualTime += simulationDelta;
 
+    const dragBlend = 1 - Math.exp(-delta * 19);
+    this.dragCurrent.lerp(this.dragTarget, dragBlend);
+    this.tileLayer.position.x = this.dragCurrent.x * 0.13;
+    this.tileLayer.position.z = this.dragCurrent.y * 0.13;
+    this.tileLayer.rotation.z = -this.dragCurrent.x * 0.018;
+    this.tileLayer.rotation.x = this.dragCurrent.y * 0.014;
+
     if (simulationDelta > 0) {
       for (let i = this.tweens.length - 1; i >= 0; i -= 1) {
         const tween = this.tweens[i];
@@ -313,12 +365,12 @@ export class GameScene {
         }
       }
 
-      this.environment.update(this.visualTime);
+      this.environment.update(this.visualTime, simulationDelta);
       this.effects.update(simulationDelta);
       this.tiles.forEach((tile, id) => {
         tile.animatedParts.forEach((part, index) => {
-          part.rotation.y += simulationDelta * (0.38 + index * 0.12);
-          part.rotation.z += Math.sin(this.visualTime * 1.35 + id + index) * 0.00032;
+          part.rotation.y += simulationDelta * (0.42 + index * 0.14);
+          part.rotation.z += Math.sin(this.visualTime * 1.45 + id + index) * 0.00034;
         });
       });
     }
@@ -327,15 +379,15 @@ export class GameScene {
     if (this.cameraPunch > 0.002) {
       const towardTarget = this.cameraTarget.clone().sub(home).normalize();
       home.addScaledVector(towardTarget, this.cameraPunch);
-      this.cameraPunch *= Math.pow(0.025, delta);
+      this.cameraPunch *= Math.pow(0.02, delta);
     }
 
     const shake = this.cameraShake;
-    this.cameraShake *= Math.pow(0.018, delta);
+    this.cameraShake *= Math.pow(0.015, delta);
     if (shake > 0.002) {
       home.x += (Math.random() - 0.5) * shake;
-      home.y += (Math.random() - 0.5) * shake * 0.42;
-      home.z += (Math.random() - 0.5) * shake * 0.3;
+      home.y += (Math.random() - 0.5) * shake * 0.46;
+      home.z += (Math.random() - 0.5) * shake * 0.34;
     }
 
     this.camera.position.copy(home);
