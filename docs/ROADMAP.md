@@ -8,7 +8,7 @@
 - CI and Pages deployment
 - Codex/AI operating docs
 
-## M1 — Miniature Kingdom visual vertical slice
+## M1 — Miniature Kingdom visual vertical slice ← CURRENT
 
 Acceptance criteria:
 
@@ -18,31 +18,33 @@ Acceptance criteria:
 - merge motion has physical squash/stretch and tiered feedback
 - mobile portrait framing remains readable
 - production Pages build is playable on iPhone Safari
+- environment visibly reacts to 2048 input and merge progression
 
-### M1.1 mobile/art polish ← CURRENT
+### M1.1 mobile/art polish ✅
 
-Implemented in this pass:
+- portrait rendering and mobile performance budget
+- rounded toy-diorama visual language
+- first differentiated 2→2048 landmark set
+- first tiered feedback pass
 
-- portrait-first responsive camera
-- tighter board spacing and touch thresholds
-- rounded toy-diorama environment language
-- softer/cuter palette and environmental charm
-- clearer physical number badges
-- more differentiated 2→2048 silhouettes
-- hit-stop + squash/stretch + camera push/shake
-- layered spark/debris/shock/confetti feedback
-- high-tier environment reaction
-- mobile DPR and shadow-budget controls
+### M1.2 living-world / control pass ← VALIDATE ON DEVICE
 
-Exit check: review the deployed build on real iPhone Safari for board scale, number readability, touch feel and stable frame pacing.
+- screen-aligned mobile camera
+- live drag steering and directional energy rails
+- richer non-washed palette
+- denser village/environment dressing
+- number-world totems and magical board infrastructure
+- merge-to-castle energy transfer
+- castle/window/rune/foliage/water reactions
+- stronger layered impact VFX and audio
 
-### M1.2 legendary pass
+### M1.3 legendary pass
 
 - dedicated 1024→2048 anticipation / freeze / birth sequence
 - stronger 2048 landmark identity
-- kingdom celebration animation
-- authored or higher-fidelity final SFX pass for major merges
-- real-device performance/readability fixes from M1.1 review
+- kingdom-wide celebration animation
+- authored or higher-fidelity final SFX for major merges
+- real-device fixes from M1.2 review
 
 ## M2 — Same-screen duel prototype
 

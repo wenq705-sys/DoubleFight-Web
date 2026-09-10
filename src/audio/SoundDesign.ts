@@ -18,8 +18,9 @@ export class SoundDesign {
     const context = this.ensureContext();
     if (!context) return;
     const now = context.currentTime;
-    this.tone(context, now, 148, 104, 0.058, 0.022, 'sine');
-    this.tone(context, now + 0.012, 235, 178, 0.052, 0.012, 'triangle');
+    this.tone(context, now, 185, 112, 0.05, 0.028, 'triangle');
+    this.tone(context, now + 0.006, 320, 215, 0.042, 0.014, 'sine');
+    this.tone(context, now + 0.018, 92, 72, 0.055, 0.012, 'sine');
   }
 
   merge(value: number): void {
@@ -27,14 +28,20 @@ export class SoundDesign {
     if (!context) return;
     const now = context.currentTime;
     const tier = Math.max(1, Math.log2(value));
-    const root = 176 + tier * 22;
-    const volume = value >= 1024 ? 0.072 : value >= 512 ? 0.062 : value >= 128 ? 0.05 : 0.034;
+    const root = 172 + tier * 24;
+    const volume = value >= 1024 ? 0.09 : value >= 512 ? 0.076 : value >= 128 ? 0.06 : 0.044;
 
-    this.tone(context, now, 118 + tier * 3, 82 + tier * 2, 0.075, volume * 0.65, 'sine');
-    this.tone(context, now + 0.012, root, root * 1.16, 0.21, volume, 'triangle');
-    this.tone(context, now + 0.035, root * 1.5, root * 1.62, 0.18, volume * 0.56, 'sine');
+    this.tone(context, now, 980, 520, 0.035, volume * 0.32, 'square');
+    this.tone(context, now, 105 + tier * 2.4, 62 + tier * 1.4, 0.11, volume * 0.86, 'sine');
+    this.tone(context, now + 0.016, root, root * 1.19, 0.23, volume, 'triangle');
+    this.tone(context, now + 0.04, root * 1.5, root * 1.72, 0.2, volume * 0.62, 'sine');
 
-    if (value >= 128) this.tone(context, now + 0.055, root * 2, root * 2.18, 0.24, volume * 0.36, 'sine');
+    if (value >= 64) {
+      this.tone(context, now + 0.058, root * 2.02, root * 2.34, 0.27, volume * 0.4, 'sine');
+    }
+    if (value >= 512) {
+      this.tone(context, now + 0.085, root * 2.5, root * 2.82, 0.34, volume * 0.28, 'triangle');
+    }
   }
 
   legendary(): void {
@@ -42,9 +49,18 @@ export class SoundDesign {
     if (!context) return;
     const now = context.currentTime;
 
-    this.tone(context, now, 78, 62, 0.72, 0.08, 'sine');
-    [220, 277, 330, 440].forEach((frequency, index) => {
-      this.tone(context, now + index * 0.055, frequency, frequency * 1.06, 0.7, 0.055, index % 2 ? 'sine' : 'triangle');
+    this.tone(context, now, 72, 48, 0.82, 0.105, 'sine');
+    this.tone(context, now + 0.03, 118, 82, 0.56, 0.06, 'triangle');
+    [220, 277, 330, 440, 554].forEach((frequency, index) => {
+      this.tone(
+        context,
+        now + 0.09 + index * 0.055,
+        frequency,
+        frequency * 1.08,
+        0.72,
+        0.052,
+        index % 2 ? 'sine' : 'triangle',
+      );
     });
   }
 
@@ -63,7 +79,7 @@ export class SoundDesign {
     oscillator.frequency.setValueAtTime(Math.max(20, from), start);
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, to), start + duration);
     gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.linearRampToValueAtTime(volume, start + Math.min(0.02, duration * 0.25));
+    gain.gain.linearRampToValueAtTime(volume, start + Math.min(0.018, duration * 0.22));
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     oscillator.connect(gain).connect(context.destination);
     oscillator.start(start);
