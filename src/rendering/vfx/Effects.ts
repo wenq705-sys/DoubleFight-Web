@@ -24,6 +24,11 @@ interface LightEffect {
   peak: number;
 }
 
+function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+  if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
+  else material.dispose();
+}
+
 function starGeometry(outer = 0.12, inner = 0.055, points = 5): THREE.ShapeGeometry {
   const shape = new THREE.Shape();
   for (let i = 0; i < points * 2; i += 1) {
@@ -147,7 +152,7 @@ export class Effects {
       }
       if (particle.life <= 0) {
         particle.mesh.removeFromParent();
-        material.dispose();
+        disposeMaterial(material);
         particle.mesh.geometry.dispose();
         this.particles.splice(i, 1);
       }
@@ -161,7 +166,7 @@ export class Effects {
       if (ring.mesh.material instanceof THREE.MeshBasicMaterial) ring.mesh.material.opacity = (1 - progress) * 0.54;
       if (ring.life <= 0) {
         ring.mesh.removeFromParent();
-        ring.mesh.material.dispose();
+        disposeMaterial(ring.mesh.material);
         ring.mesh.geometry.dispose();
         this.rings.splice(i, 1);
       }
