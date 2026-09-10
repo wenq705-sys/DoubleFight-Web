@@ -13,7 +13,7 @@ app.innerHTML = `
   <div class="loading" id="loading-screen">
     <div class="loading__content">
       <div class="loading__crest"><span>2</span><span>4</span><span>8</span></div>
-      <div class="loading__title">正在搭建微缩王国</div>
+      <div class="loading__title">正在唤醒数字王国</div>
       <div class="loading__sub">DOUBLE FIGHT · MINIATURE KINGDOM</div>
     </div>
   </div>`;
@@ -39,10 +39,19 @@ function reset(): void {
 }
 
 async function move(direction: Direction): Promise<void> {
-  if (inputLocked) return;
-  const result = board.move(direction);
-  if (!result.changed) return;
+  if (inputLocked) {
+    scene.clearGesture();
+    return;
+  }
 
+  const result = board.move(direction);
+  if (!result.changed) {
+    scene.rejectDirection(direction);
+    navigator.vibrate?.(7);
+    return;
+  }
+
+  scene.commitDirection(direction);
   inputLocked = true;
   sound.move();
   await scene.applyMove(result);
@@ -52,7 +61,12 @@ async function move(direction: Direction): Promise<void> {
     const max = Math.max(...result.merges.map((merge) => merge.value));
     if (max >= 2048) sound.legendary();
     hud.showMerge(max, result.merges.length);
-    navigator.vibrate?.(max >= 1024 ? [28, 28, 52] : max >= 512 ? [22, 18, 34] : max >= 128 ? 28 : 12);
+    navigator.vibrate?.(
+      max >= 1024 ? [30, 24, 55] :
+      max >= 512 ? [24, 16, 38] :
+      max >= 128 ? [18, 10, 22] :
+      [10, 7, 13],
+    );
   }
 
   refresh();
@@ -69,7 +83,9 @@ scene.canvas.addEventListener('pointerdown', (event) => {
 scene.canvas.addEventListener(
   'pointermove',
   (event) => {
-    if (pointerStart) event.preventDefault();
+    if (!pointerStart) return;
+    event.preventDefault();
+    scene.setGesture(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
   },
   { passive: false },
 );
@@ -82,8 +98,11 @@ scene.canvas.addEventListener('pointerup', (event) => {
   pointerStart = null;
 
   const distance = Math.hypot(dx, dy);
-  const threshold = elapsed < 180 ? ART.mobile.swipeThresholdPx * 0.82 : ART.mobile.swipeThresholdPx;
-  if (distance < threshold) return;
+  const threshold = elapsed < 180 ? ART.mobile.swipeThresholdPx * 0.78 : ART.mobile.swipeThresholdPx;
+  if (distance < threshold) {
+    scene.clearGesture();
+    return;
+  }
 
   if (Math.abs(dx) > Math.abs(dy)) void move(dx > 0 ? 'right' : 'left');
   else void move(dy > 0 ? 'down' : 'up');
@@ -91,6 +110,7 @@ scene.canvas.addEventListener('pointerup', (event) => {
 
 scene.canvas.addEventListener('pointercancel', () => {
   pointerStart = null;
+  scene.clearGesture();
 });
 scene.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
@@ -116,5 +136,5 @@ requestAnimationFrame(() => {
   setTimeout(() => {
     loading.classList.add('loading--hidden');
     setTimeout(() => loading.remove(), 420);
-  }, 280);
+  }, 260);
 });
