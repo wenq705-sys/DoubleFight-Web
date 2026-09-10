@@ -8,7 +8,7 @@
 - CI and Pages deployment
 - Codex/AI operating docs
 
-## M1 — Miniature Kingdom visual vertical slice ← CURRENT
+## M1 — Miniature Kingdom visual vertical slice
 
 Acceptance criteria:
 
@@ -19,19 +19,30 @@ Acceptance criteria:
 - mobile portrait framing remains readable
 - production Pages build is playable on iPhone Safari
 
-### M1.1 next visual pass
+### M1.1 mobile/art polish ← CURRENT
 
-- improve number legibility on all camera angles
-- add bespoke battlement/roof silhouettes instead of mostly primitive stacks
-- add contact dust and subtle world reaction on higher merges
-- tune camera framing for small iPhone screens
-- profile draw calls / shadows / DPR
+Implemented in this pass:
+
+- portrait-first responsive camera
+- tighter board spacing and touch thresholds
+- rounded toy-diorama environment language
+- softer/cuter palette and environmental charm
+- clearer physical number badges
+- more differentiated 2→2048 silhouettes
+- hit-stop + squash/stretch + camera push/shake
+- layered spark/debris/shock/confetti feedback
+- high-tier environment reaction
+- mobile DPR and shadow-budget controls
+
+Exit check: review the deployed build on real iPhone Safari for board scale, number readability, touch feel and stable frame pacing.
 
 ### M1.2 legendary pass
 
-- dedicated 1024→2048 birth sequence
+- dedicated 1024→2048 anticipation / freeze / birth sequence
 - stronger 2048 landmark identity
 - kingdom celebration animation
+- authored or higher-fidelity final SFX pass for major merges
+- real-device performance/readability fixes from M1.1 review
 
 ## M2 — Same-screen duel prototype
 
