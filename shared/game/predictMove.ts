@@ -20,22 +20,26 @@ export interface PredictedMove {
 /**
  * Client-side latency hiding only.
  *
- * Computes movement/merge positions without spawning a new tile. The server remains
- * authoritative and supplies the actual spawn/result. Pending local commands can be
- * replayed on top of any fresh authoritative snapshot during reconciliation.
+ * Computes movement/merge positions without spawning a new tile. Petrified/blocked
+ * cells split a movement line into independent segments exactly like the shared board.
  */
-export function predictMoveTiles(inputTiles: readonly BoardTile[], direction: Direction): PredictedMove {
+export function predictMoveTiles(
+  inputTiles: readonly BoardTile[],
+  direction: Direction,
+  blockedCells: readonly CellPosition[] = [],
+): PredictedMove {
   const grid = Array.from({ length: SIZE }, () => Array<BoardTile | null>(SIZE).fill(null));
   for (const tile of inputTiles) {
     if (tile.row < 0 || tile.row >= SIZE || tile.col < 0 || tile.col >= SIZE) continue;
     grid[tile.row][tile.col] = { ...tile };
   }
 
+  const blocked = new Set(blockedCells.map((cell) => `${cell.row}:${cell.col}`));
   const output = Array.from({ length: SIZE }, () => Array<BoardTile | null>(SIZE).fill(null));
   const motions: PredictedMotion[] = [];
   let scoreDelta = 0;
 
-  for (const line of lines(direction)) {
+  for (const line of segments(direction, blocked)) {
     const active = line
       .map((position) => ({ position, tile: grid[position.row][position.col] }))
       .filter((entry): entry is { position: CellPosition; tile: BoardTile } => entry.tile !== null);
@@ -97,6 +101,23 @@ export function predictMoveTiles(inputTiles: readonly BoardTile[], direction: Di
     motions: changed ? motions : [],
     scoreDelta: changed ? scoreDelta : 0,
   };
+}
+
+function segments(direction: Direction, blocked: ReadonlySet<string>): CellPosition[][] {
+  const result: CellPosition[][] = [];
+  for (const line of lines(direction)) {
+    let segment: CellPosition[] = [];
+    for (const position of line) {
+      if (blocked.has(`${position.row}:${position.col}`)) {
+        if (segment.length > 0) result.push(segment);
+        segment = [];
+      } else {
+        segment.push(position);
+      }
+    }
+    if (segment.length > 0) result.push(segment);
+  }
+  return result;
 }
 
 function lines(direction: Direction): CellPosition[][] {
