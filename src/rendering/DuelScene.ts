@@ -25,6 +25,8 @@ interface BoardLayer {
   cellMaterial: THREE.MeshStandardMaterial;
   frameMaterial: THREE.MeshStandardMaterial;
   glowMaterial: THREE.MeshStandardMaterial;
+  glowBase: number;
+  pulse: number;
   theme: ThemeId;
 }
 
@@ -165,6 +167,11 @@ export class DuelScene {
     }
   }
 
+  pulseEnergy(role: BoardRole, gain: number): void {
+    const layer = role === 'local' ? this.local : this.remote;
+    layer.pulse = Math.max(layer.pulse, Math.min(1, 0.18 + gain / 28));
+  }
+
   nudge(direction: 'left' | 'right' | 'up' | 'down'): void {
     const amount = 0.09;
     const x = direction === 'left' ? -amount : direction === 'right' ? amount : 0;
@@ -251,6 +258,8 @@ export class DuelScene {
       cellMaterial,
       frameMaterial,
       glowMaterial,
+      glowBase: role === 'local' ? 0.14 : 0.08,
+      pulse: 0,
       theme: 'kingdom',
     };
   }
@@ -292,9 +301,12 @@ export class DuelScene {
     if (!this.active) return;
 
     const now = performance.now();
-    const time = this.clock.getElapsedTime();
+    const delta = Math.min(0.05, this.clock.getDelta());
+    const time = this.clock.elapsedTime;
 
     for (const layer of [this.local, this.remote]) {
+      layer.pulse = Math.max(0, layer.pulse - delta * 1.8);
+      layer.glowMaterial.emissiveIntensity = layer.glowBase + layer.pulse * 0.9;
       for (const visual of layer.tiles.values()) {
         const progress = THREE.MathUtils.clamp((now - visual.startedAt) / visual.duration, 0, 1);
         const eased = 1 - (1 - progress) ** 3;
