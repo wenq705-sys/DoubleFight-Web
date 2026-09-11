@@ -1,5 +1,18 @@
-import type { BoardTile, Direction, MatchSnapshot, ServerMessage } from '../../shared/index';
-import { MAX_BATTLE_ENERGY, predictMoveTiles } from '../../shared/index';
+import type {
+  BoardTile,
+  CellPosition,
+  Direction,
+  MatchPlayerState,
+  MatchSnapshot,
+  ServerMessage,
+  SkillEvent,
+  SkillId,
+} from '../../shared/index';
+import {
+  MAX_BATTLE_ENERGY,
+  SKILL_DEFINITIONS,
+  predictMoveTiles,
+} from '../../shared/index';
 import { THEMES, type ThemeId } from '../config/themes';
 import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 import { DuelScene } from '../rendering/DuelScene';
@@ -9,6 +22,12 @@ interface PendingMove {
   direction: Direction;
 }
 
+type SkillButtonView = {
+  button: HTMLButtonElement;
+  cost: HTMLElement;
+  cooldown: HTMLElement;
+};
+
 export class DuelScreen {
   private readonly root: HTMLElement;
   private readonly stage: HTMLElement;
@@ -16,9 +35,11 @@ export class DuelScreen {
   private readonly localName: HTMLElement;
   private readonly localTheme: HTMLElement;
   private readonly localScore: HTMLElement;
+  private readonly localStatus: HTMLElement;
   private readonly remoteName: HTMLElement;
   private readonly remoteTheme: HTMLElement;
   private readonly remoteScore: HTMLElement;
+  private readonly remoteStatus: HTMLElement;
   private readonly localEnergy: HTMLElement;
   private readonly localEnergyFill: HTMLElement;
   private readonly localEnergyValue: HTMLElement;
@@ -35,14 +56,20 @@ export class DuelScreen {
   private readonly resultTitle: HTMLElement;
   private readonly resultDetail: HTMLElement;
   private readonly inputZone: HTMLElement;
+  private readonly skillToast: HTMLElement;
+  private readonly skillFx: HTMLElement;
+  private readonly skillButtons = new Map<SkillId, SkillButtonView>();
 
   private pending: PendingMove[] = [];
   private predictedTiles: BoardTile[] = [];
   private predictedScore = 0;
+  private currentBlockedCells: CellPosition[] = [];
   private pointerStart: { x: number; y: number; at: number } | null = null;
   private currentMatchId: string | null = null;
   private readonly lastEnergyByPlayer = new Map<string, number>();
+  private serverClockOffsetMs = 0;
   private pingTimer: number | null = null;
+  private skillUiTimer: number | null = null;
   private active = false;
 
   private onEnterHandler: (() => void) | null = null;
@@ -74,6 +101,7 @@ export class DuelScreen {
             <small>对手</small>
             <strong id="duel-remote-name">等待对手</strong>
             <span id="duel-remote-theme">--</span>
+            <em id="duel-remote-status"></em>
           </div>
           <b><small>SCORE</small><strong id="duel-remote-score">0</strong></b>
         </section>
@@ -96,6 +124,7 @@ export class DuelScreen {
             <small>我</small>
             <strong id="duel-local-name">玩家</strong>
             <span id="duel-local-theme">--</span>
+            <em id="duel-local-status"></em>
           </div>
           <b><small>SCORE</small><strong id="duel-local-score">0</strong></b>
         </section>
@@ -106,8 +135,16 @@ export class DuelScreen {
           <em id="duel-local-energy-gain"></em>
         </div>
 
+        <div class="duel-skills" id="duel-skills">
+          ${skillButtonHtml('random_clear')}
+          ${skillButtonHtml('shield')}
+          ${skillButtonHtml('petrify')}
+        </div>
+
         <div class="duel__input-zone" id="duel-input-zone" aria-label="我的棋盘操作区"></div>
-        <div class="duel__hint">在下方自己的棋盘滑动 · 对手棋盘实时同步</div>
+        <div class="duel__hint">滑动下方棋盘 · 合成攒能量 · 技能由服务器判定</div>
+        <div class="duel-skill-toast" id="duel-skill-toast"></div>
+        <div class="duel-skill-fx" id="duel-skill-fx"><span></span></div>
 
         <div class="duel__reconnect duel__reconnect--hidden" id="duel-reconnect">
           <div class="duel__spinner"></div>
@@ -131,9 +168,11 @@ export class DuelScreen {
     this.localName = container.querySelector('#duel-local-name') as HTMLElement;
     this.localTheme = container.querySelector('#duel-local-theme') as HTMLElement;
     this.localScore = container.querySelector('#duel-local-score') as HTMLElement;
+    this.localStatus = container.querySelector('#duel-local-status') as HTMLElement;
     this.remoteName = container.querySelector('#duel-remote-name') as HTMLElement;
     this.remoteTheme = container.querySelector('#duel-remote-theme') as HTMLElement;
     this.remoteScore = container.querySelector('#duel-remote-score') as HTMLElement;
+    this.remoteStatus = container.querySelector('#duel-remote-status') as HTMLElement;
     this.localEnergy = container.querySelector('#duel-local-energy') as HTMLElement;
     this.localEnergyFill = container.querySelector('#duel-local-energy-fill') as HTMLElement;
     this.localEnergyValue = container.querySelector('#duel-local-energy-value') as HTMLElement;
@@ -150,6 +189,16 @@ export class DuelScreen {
     this.resultTitle = container.querySelector('#duel-result-title') as HTMLElement;
     this.resultDetail = container.querySelector('#duel-result-detail') as HTMLElement;
     this.inputZone = container.querySelector('#duel-input-zone') as HTMLElement;
+    this.skillToast = container.querySelector('#duel-skill-toast') as HTMLElement;
+    this.skillFx = container.querySelector('#duel-skill-fx') as HTMLElement;
+
+    (Object.keys(SKILL_DEFINITIONS) as SkillId[]).forEach((skillId) => {
+      const button = container.querySelector(`[data-skill="${skillId}"]`) as HTMLButtonElement;
+      const cost = button.querySelector('[data-role="cost"]') as HTMLElement;
+      const cooldown = button.querySelector('[data-role="cooldown"]') as HTMLElement;
+      this.skillButtons.set(skillId, { button, cost, cooldown });
+      button.addEventListener('click', () => this.castSkill(skillId));
+    });
 
     container.querySelector('#duel-exit')?.addEventListener('click', () => this.exit());
     container.querySelector('#duel-result-exit')?.addEventListener('click', () => this.exit());
@@ -172,22 +221,29 @@ export class DuelScreen {
     this.root.setAttribute('aria-hidden', 'true');
     this.scene.setActive(false);
     if (this.pingTimer !== null) window.clearInterval(this.pingTimer);
+    if (this.skillUiTimer !== null) window.clearInterval(this.skillUiTimer);
     this.pingTimer = null;
+    this.skillUiTimer = null;
   }
 
   private show(): void {
-    if (!this.active) {
-      this.active = true;
-      this.root.classList.remove('duel--hidden');
-      this.root.setAttribute('aria-hidden', 'false');
-      this.scene.setActive(true);
-      this.onEnterHandler?.();
+    if (this.active) return;
 
-      this.pingTimer = window.setInterval(() => {
-        if (this.active) this.client.ping();
-      }, 3_000);
-      this.client.ping();
-    }
+    this.active = true;
+    this.root.classList.remove('duel--hidden');
+    this.root.setAttribute('aria-hidden', 'false');
+    this.scene.setActive(true);
+    this.onEnterHandler?.();
+
+    this.pingTimer = window.setInterval(() => {
+      if (this.active) this.client.ping();
+    }, 3_000);
+
+    this.skillUiTimer = window.setInterval(() => {
+      if (this.active) this.refreshSkillButtons();
+    }, 100);
+
+    this.client.ping();
   }
 
   private consume(state: Readonly<OnlineClientState>, message?: ServerMessage): void {
@@ -201,12 +257,23 @@ export class DuelScreen {
     const reconnecting = this.active && state.status !== 'connected';
     this.reconnectOverlay.classList.toggle('duel__reconnect--hidden', !reconnecting);
 
+    if (message?.type === 'error' && this.active) {
+      this.showSkillToast(message.message, true);
+    }
+
+    if (message?.type === 'skill_event' && state.playerId) {
+      this.playSkillEvent(message.event, state.playerId);
+    }
+
     if (!state.match || !state.playerId) return;
+
+    this.serverClockOffsetMs = state.match.serverTime - Date.now();
 
     if (state.match.matchId !== this.currentMatchId) {
       this.currentMatchId = state.match.matchId;
       this.pending = [];
       this.predictedTiles = [];
+      this.currentBlockedCells = [];
       this.lastEnergyByPlayer.clear();
       this.result.classList.add('duel-result--hidden');
     }
@@ -241,9 +308,10 @@ export class DuelScreen {
 
     let predicted = me.board.tiles.map((tile) => ({ ...tile }));
     let predictedScore = me.board.score;
+    const blocked = me.board.blockedCells.map((cell) => ({ ...cell }));
 
     for (const pending of this.pending) {
-      const result = predictMoveTiles(predicted, pending.direction);
+      const result = predictMoveTiles(predicted, pending.direction, blocked);
       if (!result.changed) continue;
       predicted = result.tiles;
       predictedScore += result.scoreDelta;
@@ -251,6 +319,7 @@ export class DuelScreen {
 
     this.predictedTiles = predicted;
     this.predictedScore = predictedScore;
+    this.currentBlockedCells = blocked;
 
     this.localName.textContent = me.name;
     this.localTheme.textContent = THEMES[me.theme].label;
@@ -260,6 +329,9 @@ export class DuelScreen {
     this.remoteTheme.textContent = THEMES[opponent.theme].label;
     this.remoteScore.textContent = opponent.board.score.toLocaleString('zh-CN');
 
+    this.localStatus.textContent = statusText(me, this.serverNow());
+    this.remoteStatus.textContent = statusText(opponent, this.serverNow());
+
     this.updateEnergy('local', me.playerId, me.energy, me.maxEnergy);
     this.updateEnergy('remote', opponent.playerId, opponent.energy, opponent.maxEnergy);
 
@@ -267,12 +339,16 @@ export class DuelScreen {
 
     this.scene.setBoard('local', predicted, me.theme as ThemeId);
     this.scene.setBoard('remote', opponent.board.tiles, opponent.theme as ThemeId);
+    this.scene.setBlockedCells('local', blocked);
+    this.scene.setBlockedCells('remote', opponent.board.blockedCells);
+
+    this.refreshSkillButtons();
   }
 
   private attemptMove(direction: Direction): void {
     if (!this.active || this.pending.length >= 3) return;
 
-    const prediction = predictMoveTiles(this.predictedTiles, direction);
+    const prediction = predictMoveTiles(this.predictedTiles, direction, this.currentBlockedCells);
     if (!prediction.changed) {
       this.scene.nudge(direction);
       navigator.vibrate?.(6);
@@ -292,6 +368,31 @@ export class DuelScreen {
     }
 
     navigator.vibrate?.(8);
+  }
+
+  private castSkill(skillId: SkillId): void {
+    if (!this.active) return;
+    const state = this.client.snapshot();
+    const me = state.match?.players.find((player) => player.playerId === state.playerId);
+    if (!me) return;
+
+    const definition = SKILL_DEFINITIONS[skillId];
+    const remaining = Math.max(0, me.skillCooldowns[skillId] - this.serverNow());
+    if (remaining > 0) {
+      this.showSkillToast(`${definition.shortLabel}冷却中`, true);
+      return;
+    }
+    if (me.energy < definition.cost) {
+      this.showSkillToast(`能量不足 · 需要 ${definition.cost}`, true);
+      return;
+    }
+    if (skillId === 'shield' && me.shieldActive) {
+      this.showSkillToast('护盾已经激活', true);
+      return;
+    }
+
+    this.client.castSkill(skillId);
+    this.showSkillToast(`${definition.shortLabel} · 请求服务器判定`);
   }
 
   private updateEnergy(
@@ -330,6 +431,74 @@ export class DuelScreen {
       this.scene.pulseEnergy(role, gain);
       navigator.vibrate?.(gain >= 20 ? [10, 8, 18] : gain >= 8 ? 12 : 7);
     }
+  }
+
+  private refreshSkillButtons(): void {
+    const state = this.client.snapshot();
+    const me = state.match?.players.find((player) => player.playerId === state.playerId);
+    if (!me) return;
+
+    const now = this.serverNow();
+
+    for (const [skillId, view] of this.skillButtons) {
+      const definition = SKILL_DEFINITIONS[skillId];
+      const remaining = Math.max(0, me.skillCooldowns[skillId] - now);
+      const cooling = remaining > 0;
+      const blockedByState = skillId === 'shield' && me.shieldActive;
+      const affordable = me.energy >= definition.cost;
+
+      view.button.disabled = cooling || blockedByState || !affordable || !me.connected;
+      view.button.classList.toggle('duel-skill--ready', !view.button.disabled);
+      view.button.classList.toggle('duel-skill--active', blockedByState);
+      view.cost.textContent = blockedByState ? '已激活' : `${definition.cost}⚡`;
+      view.cooldown.textContent = cooling ? `${(remaining / 1000).toFixed(1)}s` : '';
+    }
+  }
+
+  private playSkillEvent(event: SkillEvent, playerId: string): void {
+    const casterIsLocal = event.casterId === playerId;
+    const definition = SKILL_DEFINITIONS[event.skillId];
+
+    if (event.skillId === 'petrify') {
+      if (event.outcome === 'shielded') {
+        this.showSkillToast(casterIsLocal ? '对方护盾抵消了石化' : '护盾抵消石化！');
+      } else {
+        this.showSkillToast(casterIsLocal ? '石化命中对手棋盘' : '你的棋盘被石化！');
+      }
+    } else if (event.skillId === 'shield') {
+      this.showSkillToast(casterIsLocal ? '护盾已激活' : '对手开启护盾');
+    } else {
+      this.showSkillToast(casterIsLocal ? '清除两枚棋子' : '对手使用清块');
+    }
+
+    this.skillFx.querySelector('span')!.textContent =
+      event.outcome === 'shielded' ? '◆' : definition.icon;
+    this.skillFx.className = 'duel-skill-fx';
+    void this.skillFx.offsetWidth;
+
+    if (event.skillId === 'petrify') {
+      this.skillFx.classList.add(casterIsLocal ? 'duel-skill-fx--up' : 'duel-skill-fx--down');
+    } else {
+      this.skillFx.classList.add(casterIsLocal ? 'duel-skill-fx--local' : 'duel-skill-fx--remote');
+    }
+
+    if (casterIsLocal) {
+      navigator.vibrate?.(event.skillId === 'petrify' ? [18, 10, 24] : [12, 7, 12]);
+    } else if (event.outcome !== 'shielded') {
+      navigator.vibrate?.([8, 8, 16]);
+    }
+  }
+
+  private showSkillToast(message: string, error = false): void {
+    this.skillToast.textContent = message;
+    this.skillToast.classList.toggle('duel-skill-toast--error', error);
+    this.skillToast.classList.remove('duel-skill-toast--show');
+    void this.skillToast.offsetWidth;
+    this.skillToast.classList.add('duel-skill-toast--show');
+  }
+
+  private serverNow(): number {
+    return Date.now() + this.serverClockOffsetMs;
   }
 
   private bindInput(): void {
@@ -371,9 +540,11 @@ export class DuelScreen {
     const reason =
       snapshot.endReason === 'board_locked'
         ? (won ? '对手棋盘已无法移动。' : '你的棋盘已无法移动。')
-        : snapshot.endReason === 'opponent_left'
-          ? '对手已离开房间。'
-          : '对局已经结束。';
+        : snapshot.endReason === 'petrified_lock'
+          ? (won ? '石化封死了对手的最后空间。' : '最后的可用空间被石化封锁。')
+          : snapshot.endReason === 'opponent_left'
+            ? '对手已离开房间。'
+            : '对局已经结束。';
 
     this.resultDetail.textContent = `${reason} 你 ${me?.board.score ?? 0} · 对手 ${opponent?.board.score ?? 0}`;
     this.result.classList.remove('duel-result--hidden');
@@ -384,10 +555,31 @@ export class DuelScreen {
     this.currentMatchId = null;
     this.pending = [];
     this.predictedTiles = [];
+    this.currentBlockedCells = [];
     this.lastEnergyByPlayer.clear();
     this.scene.clear();
     this.hide();
     this.result.classList.add('duel-result--hidden');
     this.onExitHandler?.();
   }
+}
+
+function skillButtonHtml(skillId: SkillId): string {
+  const definition = SKILL_DEFINITIONS[skillId];
+  return `
+    <button class="duel-skill" data-skill="${skillId}" type="button">
+      <span class="duel-skill__icon">${definition.icon}</span>
+      <strong>${definition.shortLabel}</strong>
+      <small data-role="cost">${definition.cost}⚡</small>
+      <b data-role="cooldown"></b>
+    </button>`;
+}
+
+function statusText(player: MatchPlayerState, now: number): string {
+  const labels: string[] = [];
+  if (player.shieldActive) labels.push('◆ 护盾');
+  if (player.petrifyExpiresAt > now) {
+    labels.push(`❄ 石化 ${Math.max(0, (player.petrifyExpiresAt - now) / 1000).toFixed(1)}s`);
+  }
+  return labels.join(' · ');
 }
