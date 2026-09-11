@@ -22,6 +22,8 @@ export {
 export type {
   ClientMessage,
   MatchEndReason,
+  MatchmakingState,
+  MatchmakingStatus,
   MatchPlayerState,
   MatchResult,
   MatchResultPlayer,
