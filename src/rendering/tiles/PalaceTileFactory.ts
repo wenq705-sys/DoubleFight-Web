@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { TileVisual } from './TileFactory';
+import { tierScale } from '../../config/tierProgression';
 
 const gradient = (() => {
   const data = new Uint8Array([38, 88, 154, 255]);
@@ -234,7 +235,7 @@ function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Obj
   const palette = PALETTES[value] ?? PALETTES[2048];
   const profile = PROFILES[value] ?? PROFILES[2048];
   const character = new THREE.Group();
-  character.scale.setScalar(profile.scale);
+  character.scale.setScalar(tierScale(value, 0.70, 1.40));
   character.position.y = 0.02;
   parent.add(character);
 
@@ -413,7 +414,7 @@ export class PalaceTileFactory {
     );
 
     // The base grows more subtly than the character so pieces stay inside a 4x4 cell.
-    root.userData.tierScale = profile.scale;
+    root.userData.tierScale = tierScale(value, 0.70, 1.40);
 
     addCharacter(root, value, animatedParts);
 
