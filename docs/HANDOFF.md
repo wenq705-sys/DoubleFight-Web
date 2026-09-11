@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone: M2.1 — Live Dual-Board Online Client.**
+**Milestone: M2.2 — Server-Authoritative Battle Energy.**
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
@@ -99,6 +99,45 @@ When both players ready, the server creates a real authoritative match and the c
 - lower-board swipe input zone
 - server-driven win/loss result overlay
 
+## M2.2 implemented
+
+### Shared battle economy
+- `shared/battle/energy.ts`
+- max battle energy: 100
+- stronger merge values award progressively more energy
+- multi-merge swipes receive deterministic combo bonuses
+- economy has no dependency on client clocks or network timing
+- future skill costs are reserved in the same shared contract
+
+Current merge reward examples:
+- 4 → +2
+- 8 → +3
+- 16 → +4
+- 32 → +6
+- 64 → +8
+- 128 → +11
+- 256 → +15
+- 512 → +20
+- 1024 → +26
+- 2048 → +34
+
+Two merges in one swipe add +2 combo energy; larger multi-merge swipes receive larger bonuses.
+
+### Server authority
+- each `RoomPlayerRecord` owns authoritative energy
+- energy resets to 0 at match start
+- only server-validated merges award energy
+- match snapshots include `energy` and `maxEnergy`
+- move acknowledgements include confirmed `energyGain`
+- protocol version advanced to v2
+
+### Duel feedback
+- both local and opponent energy bars are visible
+- local energy does not rise during client prediction
+- confirmed server energy animates +N feedback
+- the relevant duel board glow pulses more strongly for bigger gains
+- full energy has a distinct ready-state glow
+
 ## Deployment state
 
 The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
@@ -128,19 +167,20 @@ Remote test:
 - Online Duel uses a lightweight duel render, not two complete Solo environments.
 - first release target remains Douyin mini-game, followed by WeChat, then iOS.
 
-## Next exact task — M2.2
+## Next exact task — M2.3
 
-Build the server-authoritative battle energy loop:
+Implement the first server-authoritative PvP skills:
 
-1. derive energy from successful merges / merge value
-2. add energy to MatchPlayerState / snapshots
-3. server owns all energy truth
-4. client predicts only presentation, never authoritative energy
-5. Duel HUD gets a clear energy bar
-6. high merges and combo timing should feel substantially more rewarding
-7. no PvP skill effects yet; first validate the economy and pacing
+1. Random Clear — self recovery, initial target cost 35 energy
+2. Shield — self defense, initial target cost 45 energy
+3. Petrify — opponent pressure, initial target cost 50 energy
+4. all costs/cooldowns/effects validated on the server
+5. skill commands added to the shared protocol
+6. skill effects included in authoritative snapshots/events
+7. themes may change skill visuals, never skill balance
+8. build readable cross-board skill travel without loading two full Solo worlds
 
-After M2.2, implement the first three skills: Random Clear, Petrify and Shield.
+Energy tuning remains provisional until real two-phone playtests are possible.
 
 ## Real-device validation still required
 
