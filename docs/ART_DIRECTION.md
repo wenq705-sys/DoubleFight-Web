@@ -4,30 +4,38 @@
 
 ## North star
 
-The board should feel like a premium miniature mobile game that the player wants to touch. Art must read immediately on a phone screen, feel authored rather than generated, and avoid generic WebGL-demo fingerprints.
-
-Shared core phrase:
+The board should feel like a premium miniature mobile game that the player wants to touch.
 
 > **Bright premium stylized 3D + collectible progression + rich warm palette + reactive world feedback + high-impact but readable VFX.**
 
 ## Shared visual rules
 
 1. Board / pieces are always the focal point.
-2. Screen directions must visually match swipe directions.
-3. Numbers or rank labels must be readable on a narrow phone.
-4. Progression cannot be only a color swap; silhouette and costume/architecture must evolve.
-5. Environment is part of feedback, not static wallpaper.
-6. Routine merges are juicy; prestige merges are spectacular.
-7. No permanent bloom/noise across the whole screen.
-8. Mobile performance budget overrides decorative excess.
+2. Screen directions visually match swipe directions.
+3. **Model silhouette is primary identification.**
+4. Numbers are secondary 2048 information and must not block the model.
+5. Progression cannot be a color swap; silhouette/costume/architecture must evolve.
+6. Every tier should survive a "black silhouette test": adjacent tiers should still feel meaningfully different without color.
+7. Environment is part of feedback, not static wallpaper.
+8. Routine merges are juicy; prestige merges are spectacular.
+9. Mobile performance budget overrides decorative excess.
+
+## Number / label rule
+
+Do not attach a large plaque in front of the piece.
+
+Preferred hierarchy:
+
+```text
+90%  model / silhouette / costume / landmark
+10%  small number medallion or HUD information
+```
+
+Rank names belong in HUD/toasts/home progression screens rather than covering the character.
 
 ## Theme 1 — Miniature Kingdom
 
-### Identity
-
 Bright fantasy toy kingdom with chunky rounded buildings, village props, castle, bridge, grass, water and number-world runes.
-
-### Progression
 
 | Value | Visual role |
 | ---: | --- |
@@ -43,19 +51,13 @@ Bright fantasy toy kingdom with chunky rounded buildings, village props, castle,
 | 1024 | royal shrine/palace |
 | 2048 | crowned kingdom wonder |
 
-### Palette
-
-Deep grass, warm sand/brick/wood, royal blue, coral, teal, controlled gold.
+Palette: deep grass, warm sand/brick/wood, royal blue, coral, teal and controlled gold.
 
 ## Theme 2 — 后宫晋升 / Palace Rank
 
-### Identity
-
 Original stylized imperial-court fantasy: red lacquer, gold trim, jade board, warm lanterns, blossom garden, palace hall, banners and pond.
 
-This theme evokes palace-drama rank progression but must not copy named TV characters, actor likenesses, official logos or specific costume designs.
-
-### Character progression
+Do not copy named TV characters, actor likenesses, official logos or specific costume designs.
 
 | Value | Rank |
 | ---: | --- |
@@ -71,26 +73,47 @@ This theme evokes palace-drama rank progression but must not copy named TV chara
 | 1024 | 凤仪之主 |
 | 2048 | 母仪天下 |
 
-Low ranks use simple pastel robes/hair. Higher ranks gain stronger red/purple/blue palettes, gold embroidery cues, more elaborate hair ornaments, shoulder pieces, crown/halo prestige and stronger VFX.
+### Silhouette escalation
 
-Every character tile needs a large front-facing **rank + number plaque**. The silhouette should remain recognizable even if the player ignores the number.
+- 2: smallest body, plain pastel clothing, tray, minimal hair
+- 4: small fan + first ornament
+- 8: open fan + taller hair
+- 16: wider sleeves / stronger warm color
+- 32: crown profile and scepter begin
+- 64: wider skirt + halo
+- 128: cape + more elaborate crown
+- 256: larger royal profile + tassels
+- 512: queen-level red/gold silhouette
+- 1024: throne / royal frame
+- 2048: throne + crown halo + wing-like gold prestige shapes
 
-### Palace VFX motif
+## Palace VFX motif
 
 Allowed:
-- gold ceremonial light
+- ceremonial gold light
 - blossom/petal bursts
 - jade/teal secondary energy
-- fan/wing arcs
+- wing/fan arcs
 - lantern pulses
 - calligraphic fullscreen skill title
 - red/gold shock rings
 
 Avoid:
-- copying TV character portraits
 - photoreal celebrity faces
-- flat costume cutouts
-- generic neon cyber effects
+- copied TV costume/portrait designs
+- flat cutouts
+- generic cyber-neon effects
+
+## Home / theme islands
+
+Home should feel like a world/chapter selector rather than a settings menu.
+
+- one world/island occupies the visual center
+- selected island floats/breathes
+- horizontal swipe changes world
+- world title/progress/start CTA stay simple
+- locked future worlds may be previewed
+- current DOM/CSS islands are a lightweight shell and may later become authored 3D assets
 
 ## Camera and input
 
@@ -99,33 +122,17 @@ Mobile portrait is primary.
 - screen left/right maps to board left/right
 - screen up/down maps to board up/down
 - retain enough pitch for 3D depth
-- no strong 45° isometric yaw during normal play
-- board may subtly follow finger during drag
-
-## Motion language
-
-Movement is short, decisive and tactile:
-
-**input → immediate drive → tiny lift/lean → hard contact → hit-stop → compression → birth/pop → VFX → spring settle**
-
-Low tiers stay readable. Visual budget grows aggressively with tier.
-
-## Skill spectacle
-
-Fullscreen skills may temporarily exceed the normal VFX budget, but:
-- duration should be short,
-- 3D object counts must stay bounded,
-- DOM/CSS overlays are preferred for large fullscreen presentation where appropriate,
-- gameplay state must remain understandable immediately after the effect.
+- no strong 45° isometric yaw in normal play
 
 ## Performance art budget
 
-- mobile DPR is capped
-- shadow resolution is reduced on mobile
-- tile templates should reuse geometry/material/label textures
-- transient VFX counts are hard-capped
-- no decorative system may cause progressive long-session degradation
+- adaptive DPR, not permanent low-resolution rendering
+- repeated props should be instanced where practical
+- tile resources should be cached/reused
+- transient VFX must be pooled/bounded
+- high-detail authored assets should prefer stylized low-poly construction
+- optimize draw calls/material count before aggressively reducing triangle count
 
-## Future themes
+## Future assets
 
-Candidate packs: Candy Kingdom, Pirate Bay, Snow Citadel, Magic Academy, Mechanical Workshop.
+Core pieces should gradually move from procedural blockouts to stylized low-poly GLB assets. Aim for clean silhouettes, few meshes/materials and reusable palettes/atlases rather than excessive tiny geometry.
