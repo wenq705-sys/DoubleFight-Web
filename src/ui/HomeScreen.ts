@@ -143,7 +143,7 @@ export class HomeScreen {
   }
 
   private render(notify: boolean): void {
-    this.track.style.setProperty('--home-index', String(this.index));
+    this.track.style.transform = `translate3d(${-this.index * 100}%,0,0)`;
     const card = CARDS[this.index];
     this.title.textContent = card.title;
     this.kicker.textContent = card.kicker;
