@@ -185,12 +185,13 @@ export class OnlineLobby {
     }
 
     this.client.connect();
-    const unsubscribe = this.client.subscribe((next) => {
+    let unsubscribe: (() => void) | null = null;
+    unsubscribe = this.client.subscribe((next) => {
       if (next.status === 'connected') {
-        unsubscribe();
+        unsubscribe?.();
         action();
       }
-      if (next.status === 'closed' && next.lastError) unsubscribe();
+      if (next.status === 'closed' && next.lastError) unsubscribe?.();
     });
   }
 
