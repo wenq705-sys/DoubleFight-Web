@@ -1,6 +1,6 @@
 import type { BoardPublicState, Direction, MoveResult } from '../game/types';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export type NetworkThemeId = 'kingdom' | 'palace';
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
@@ -26,6 +26,8 @@ export interface MatchPlayerState {
   name: string;
   theme: NetworkThemeId;
   board: BoardPublicState;
+  energy: number;
+  maxEnergy: number;
   lastSequence: number;
   connected: boolean;
 }
@@ -71,6 +73,8 @@ export type ServerMessage =
       playerId: string;
       result: MoveResult;
       board: BoardPublicState;
+      energy: number;
+      energyGain: number;
     }
   | {
       type: 'match_end';
