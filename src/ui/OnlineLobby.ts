@@ -22,7 +22,6 @@ export class OnlineLobby {
   private readonly error: HTMLElement;
   private currentTheme: ThemeId = 'kingdom';
   private onCloseHandler: (() => void) | null = null;
-  private ticker: number | null = null;
 
   constructor(
     container: HTMLElement,
@@ -160,7 +159,7 @@ export class OnlineLobby {
 
     this.client.subscribe((state) => this.render(state));
 
-    this.ticker = window.setInterval(() => {
+    window.setInterval(() => {
       const state = this.client.snapshot();
       if (state.matchmaking.status === 'searching') this.renderMatchmaking(state);
     }, 100);
