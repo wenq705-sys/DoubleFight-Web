@@ -13,66 +13,64 @@ Read in order:
 5. `docs/ROADMAP.md`
 6. relevant ADRs under `docs/decisions/`
 
-Do not begin implementation before understanding the current milestone and locked decisions.
+## 2. Current milestone
 
-## 2. Current product priority
+**M2.0 / M2.1 — real server-based Online Duel.**
 
-Current milestone: **M1.4 Production Foundation**.
+"Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
-Priority order:
+Priority:
+1. shared deterministic correctness
+2. server authority / anti-desync design
+3. responsive client feel
+4. reconnect robustness
+5. mobile performance
+6. theme independence
+7. maintainable cross-platform architecture
 
-1. mobile performance stability over long sessions
-2. sharp/readable mobile rendering
-3. silhouette-first theme/piece quality
-4. tactile movement / merge / skill feedback
-5. maintainable architecture and Codex handoff quality
-6. deterministic 2048 correctness
+## 3. Online architecture rules
 
-Do **not** add multiplayer, backend, matchmaking, accounts, ads or unrelated modes unless HANDOFF/ROADMAP explicitly moves the milestone.
+- browser and server must reuse `shared/game`; do not fork Board2048
+- server controls RNG/spawns, scores and competitive state
+- every player action needs ordered sequence semantics
+- never trust a client-provided board/score
+- protocol changes live in `shared/protocol`
+- reconnect must restore state from server snapshots
+- M2.1 client prediction is presentation latency hiding, not authority
+- themes are cosmetic/presentation only; they cannot change competitive rules
+- do not put secrets in browser/client code
+- production browser WebSocket must use TLS (`wss://`)
 
-## 3. Art-direction guardrails
+## 4. Art/performance guardrails
 
-- premium stylized miniature 3D
-- no generic cyber-neon drift
-- no numbers, rank text, plaques or badges attached to gameplay pieces
-- identity priority is size > silhouette > discrete hue > accessories
-- adjacent tiers must use different hue families, never only lighter/darker variants
-- every theme must use the shared monotonic tier-growth rule
-- high-tier spectacle scales up aggressively but stays readable
-- palace theme uses original characters only
-
-## 4. Architecture/performance rules
-
-- game rules never depend on Three.js or DOM
-- renderer never owns authoritative game truth
-- reuse/caching is the default
-- do not introduce steady-state `new Mesh/new Geometry/new Material` inside repetitive merge loops when a pool/cache can serve it
-- repeated static props should consider `InstancedMesh`
-- VFX must be pooled and bounded on mobile
-- adaptive resolution should preserve sharpness when headroom exists
-- use `?debug=1` telemetry before guessing about performance
-- optimize draw calls/material changes before blindly cutting polygons
-- authored hero pieces may gradually migrate to stylized low-poly GLB assets; preserve procedural fallback until the asset pipeline is proven
+- no numbers/rank labels attached to gameplay pieces
+- identity priority: size > silhouette > discrete hue > accessories
+- adjacent tiers use distinct hue families
+- shared monotonic tier growth
+- pooled VFX / cached resources / instancing remain mandatory
+- Online Duel must use a lighter render than two full Solo worlds
+- use `?debug=1` before guessing about performance
+- core hero assets may gradually migrate to stylized low-poly GLB
 
 ## 5. Change discipline
 
-For each meaningful change:
+For meaningful changes:
+- update tests when rules/protocol change
+- update HANDOFF
+- update architecture/roadmap when durable design changes
+- add ADRs for important architectural decisions
+- run `npm run typecheck`, `npm test`, `npm run build`
+- server changes must also pass the CI health smoke test
 
-- update tests when rules change
-- update HANDOFF when milestone state changes
-- update ART_DIRECTION when a visual rule is accepted/rejected
-- add an ADR for durable architecture changes
-- run `npm run typecheck`, `npm test`, and `npm run build`
+## 6. Do not add yet unless milestone moves
 
-Do not silently rewrite locked product decisions.
+- public matchmaking
+- accounts
+- ranking backend
+- ads
+- payments
+- large skill catalog
+- Redis/distributed rooms
+- third theme
 
-## 6. Handoff style
-
-Report:
-- what changed
-- files changed
-- validation performed
-- visual/performance risks
-- exact next recommended task
-
-A new AI session must be able to continue without reconstructing project history from chat.
+M2.1 must first prove a smooth two-device live duel.
