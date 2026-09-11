@@ -44,6 +44,18 @@ export class SoundDesign {
     }
   }
 
+  skill(): void {
+    const context = this.ensureContext();
+    if (!context) return;
+    const now = context.currentTime;
+
+    this.tone(context, now, 82, 52, 0.52, 0.085, 'sine');
+    this.tone(context, now + 0.02, 220, 660, 0.42, 0.06, 'triangle');
+    this.tone(context, now + 0.08, 440, 880, 0.34, 0.045, 'sine');
+    this.tone(context, now + 0.16, 660, 1320, 0.42, 0.035, 'triangle');
+    this.tone(context, now + 0.26, 990, 520, 0.2, 0.028, 'square');
+  }
+
   legendary(): void {
     const context = this.ensureContext();
     if (!context) return;
