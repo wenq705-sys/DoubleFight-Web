@@ -15,7 +15,7 @@ Read in order:
 
 ## 2. Current milestone
 
-**M2.1 / M2.2 — live server-based Online Duel and battle energy.**
+**M2.2 / M2.3 — server-authoritative battle energy and first PvP skills.**
 
 "Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
@@ -31,7 +31,7 @@ Priority:
 ## 3. Online architecture rules
 
 - browser and server must reuse `shared/game`; do not fork Board2048
-- server controls RNG/spawns, scores and competitive state
+- server controls RNG/spawns, scores, energy, skills and competitive state
 - every player action needs ordered sequence semantics
 - never trust a client-provided board/score
 - protocol changes live in `shared/protocol`
@@ -75,4 +75,4 @@ For meaningful changes:
 - Redis/distributed rooms
 - third theme
 
-M2.2 should add merge-driven server-authoritative energy without destabilizing the M2.1 duel path.
+M2.2 energy is implemented. M2.3 may spend energy only through server-validated skill commands; clients must never debit/credit competitive energy as authority.
