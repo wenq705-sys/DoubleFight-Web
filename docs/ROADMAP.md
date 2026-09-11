@@ -64,13 +64,19 @@
 - connection / latency / reconnect overlays
 - match-end win/loss overlay
 
-### M2.2 energy system ← NEXT
+### M2.2 energy system ← IMPLEMENTED, PUBLIC SERVER TEST PENDING
 
-- merge value/combos generate battle energy
-- server owns energy truth
-- energy HUD and charge feedback
+- server-authoritative energy starts at 0 and caps at 100
+- stronger merge values award increasingly more energy
+- multiple merges in one swipe receive a deterministic combo bonus
+- energy is included in authoritative match snapshots
+- move acknowledgements include confirmed energy gain
+- local client never predicts authoritative energy
+- both players have live energy bars in Duel HUD
+- authoritative energy gains pulse the board and show +N feedback
+- first skill-cost tuning contract reserved for M2.3
 
-### M2.3 first PvP skills
+### M2.3 first PvP skills ← NEXT
 
 - Random Clear: self recovery
 - Petrify: opponent spatial pressure
