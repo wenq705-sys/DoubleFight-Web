@@ -13,7 +13,7 @@ Current themes:
 
 ## Current milestone
 
-**M2.3 — Live Online Duel + Energy + First PvP Skills**
+**M2.4 — Complete Online PvP Match Loop**
 
 Implemented:
 - Three.js mobile solo game
@@ -35,10 +35,15 @@ Implemented:
 - Random Clear / Shield / Petrify PvP skills
 - real petrified movement/spawn barriers
 - skill cooldown/status/cross-board feedback
+- authoritative 180-second round timer
+- score → highest tile → usable-space tie breakers
+- immutable match result payload
+- same-room rematch flow
+- reconnect-safe round deadline
 - Docker server image
 - CI server smoke test
 
-M2.4 will add the authoritative round timer, full winner/tie-break logic and rematch flow.
+M2.5 will add public matchmaking while keeping private room codes and the same RoomSession rules.
 
 ## Tech stack
 
