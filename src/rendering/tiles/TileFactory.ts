@@ -137,12 +137,12 @@ const TIER_STYLES: Record<number, TierStyle> = {
   8: { primary: 0x8d68d8, light: 0xcab8ef, dark: 0x553b9c },       // violet
   16: { primary: 0xf08a3c, light: 0xffbf82, dark: 0xb54c22 },      // orange
   32: { primary: 0xd8414d, light: 0xf18a90, dark: 0x8a2435 },      // red
-  64: { primary: 0x3d78d5, light: 0x92b7ef, dark: 0x234a98, scale: 1.02 },      // sapphire
-  128: { primary: 0x3da568, light: 0x8bd1a3, dark: 0x216a45, scale: 1.06 },     // emerald
-  256: { primary: 0xcf52a4, light: 0xe99dcc, dark: 0x782b77, scale: 1.10 },     // magenta
-  512: { primary: 0x323946, light: 0x737d8d, dark: 0x171c25, scale: 1.14 },     // obsidian
-  1024: { primary: 0xeaf4f7, light: 0xffffff, dark: 0x5aa4b7, scale: 1.18 },    // ivory / cyan
-  2048: { primary: 0xeec644, light: 0xffe991, dark: 0xa9681e, scale: 1.22 },     // sacred gold
+  64: { primary: 0x3d78d5, light: 0x92b7ef, dark: 0x234a98 },      // sapphire
+  128: { primary: 0x3da568, light: 0x8bd1a3, dark: 0x216a45 },     // emerald
+  256: { primary: 0xcf52a4, light: 0xe99dcc, dark: 0x782b77 },     // magenta
+  512: { primary: 0x323946, light: 0x737d8d, dark: 0x171c25 },     // obsidian
+  1024: { primary: 0xeaf4f7, light: 0xffffff, dark: 0x5aa4b7 },    // ivory / cyan
+  2048: { primary: 0xeec644, light: 0xffe991, dark: 0xa9681e },     // sacred gold
 };
 
 function applyTierIdentity(root: THREE.Group, value: number): void {
