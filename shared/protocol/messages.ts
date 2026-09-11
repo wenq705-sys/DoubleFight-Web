@@ -3,11 +3,18 @@ import type { TimeLimitTieBreaker } from '../battle/match';
 import type { SkillCooldowns, SkillId } from '../battle/skills';
 import { isSkillId } from '../battle/skills';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 export type NetworkThemeId = 'kingdom' | 'palace';
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
 export type MatchEndReason = 'board_locked' | 'opponent_left' | 'petrified_lock' | 'time_limit';
+export type MatchmakingStatus = 'idle' | 'searching' | 'matched' | 'timed_out';
+
+export interface MatchmakingState {
+  status: MatchmakingStatus;
+  joinedAt: number | null;
+  queueSize: number;
+}
 
 export interface RoomPlayerState {
   id: string;
@@ -90,6 +97,8 @@ export type ClientMessage =
   | { type: 'hello'; protocolVersion: number }
   | { type: 'create_room'; playerName: string; theme: NetworkThemeId }
   | { type: 'join_room'; roomCode: string; playerName: string; theme: NetworkThemeId }
+  | { type: 'join_matchmaking'; playerName: string; theme: NetworkThemeId }
+  | { type: 'cancel_matchmaking' }
   | { type: 'reconnect'; roomCode: string; reconnectToken: string }
   | { type: 'set_theme'; theme: NetworkThemeId }
   | { type: 'set_ready'; ready: boolean }
@@ -112,6 +121,7 @@ export type ServerMessage =
       room: RoomState;
     }
   | { type: 'room_state'; room: RoomState }
+  | { type: 'matchmaking_state'; state: MatchmakingState }
   | { type: 'match_start'; snapshot: MatchSnapshot }
   | { type: 'match_state'; snapshot: MatchSnapshot }
   | {
@@ -136,6 +146,8 @@ export type ServerMessage =
         | 'ROOM_NOT_FOUND'
         | 'ROOM_FULL'
         | 'ROOM_ALREADY_PLAYING'
+        | 'ALREADY_MATCHMAKING'
+        | 'NOT_MATCHMAKING'
         | 'NOT_IN_ROOM'
         | 'NOT_PLAYING'
         | 'NOT_READY'
@@ -187,6 +199,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   ) {
     return { type, roomCode: message.roomCode, playerName: message.playerName, theme: message.theme };
   }
+
+  if (type === 'join_matchmaking' && typeof message.playerName === 'string' && isNetworkThemeId(message.theme)) {
+    return { type, playerName: message.playerName, theme: message.theme };
+  }
+
+  if (type === 'cancel_matchmaking') return { type };
 
   if (type === 'reconnect' && typeof message.roomCode === 'string' && typeof message.reconnectToken === 'string') {
     return { type, roomCode: message.roomCode, reconnectToken: message.reconnectToken };
