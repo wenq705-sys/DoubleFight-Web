@@ -203,6 +203,7 @@ export class DuelScene {
     for (const layer of [this.local, this.remote]) {
       for (const visual of layer.tiles.values()) visual.holder.removeFromParent();
       layer.tiles.clear();
+      layer.blockers.forEach((blocker) => { blocker.visible = false; });
     }
   }
 
