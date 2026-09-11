@@ -196,6 +196,37 @@ Energy is capped at 100. Rewards rise with merge value, and multiple merges in o
 
 The local prediction path predicts board motion/score feel only. It does **not** predict authoritative energy.
 
+## M2.3 Server-authoritative skills
+
+`shared/battle/skills.ts` defines ids and tuning, while `RoomSession.castSkill()` owns all competitive mutation.
+
+```text
+CAST_SKILL(skillId, skillSequence)
+        ↓
+RoomSession validates
+energy / cooldown / target / sequence
+        ↓
+server mutates board + player status
+        ↓
+skill_event + MatchSnapshot
+        ↓
+both clients render the result
+```
+
+Move sequence and skill sequence are intentionally separate so skill acknowledgements cannot incorrectly advance client move reconciliation.
+
+### Petrified cells
+
+Petrify is not a cosmetic overlay. `Board2048` owns a blocked-cell set. A blocked cell:
+- cannot receive a spawn,
+- cannot contain a tile when created,
+- splits a movement row/column into independent segments,
+- counts as unavailable space for `canMove()`.
+
+`predictMoveTiles()` accepts authoritative blocked cells and applies the same line segmentation, preserving local input feel without inventing the competitive effect.
+
+Petrify currently lasts six seconds. Server timers clear the block and broadcast a fresh match snapshot. Shield is a one-hit state that consumes an incoming Petrify before any cell is blocked.
+
 ## Future platform layer
 
 Direct uses of browser-only APIs should progressively move behind platform adapters before Douyin packaging:
