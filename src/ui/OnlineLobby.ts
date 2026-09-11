@@ -5,6 +5,11 @@ import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 export class OnlineLobby {
   private readonly root: HTMLElement;
   private readonly status: HTMLElement;
+  private readonly matchmakingPanel: HTMLElement;
+  private readonly matchmakingTime: HTMLElement;
+  private readonly matchmakingQueue: HTMLElement;
+  private readonly matchButton: HTMLButtonElement;
+  private readonly cancelMatchButton: HTMLButtonElement;
   private readonly roomPanel: HTMLElement;
   private readonly roomCode: HTMLElement;
   private readonly players: HTMLElement;
@@ -17,6 +22,7 @@ export class OnlineLobby {
   private readonly error: HTMLElement;
   private currentTheme: ThemeId = 'kingdom';
   private onCloseHandler: (() => void) | null = null;
+  private ticker: number | null = null;
 
   constructor(
     container: HTMLElement,
@@ -49,8 +55,28 @@ export class OnlineLobby {
             </div>
           </div>
 
+          <section class="online-matchmaking">
+            <div class="online-matchmaking__hero">
+              <span>PUBLIC MATCH</span>
+              <strong>快速匹配</strong>
+              <small>自动寻找在线对手 · 180 秒技能对决</small>
+            </div>
+            <button id="online-matchmake" class="online-matchmaking__button" type="button">⚔ 开始匹配</button>
+
+            <div id="online-matchmaking-panel" class="online-matchmaking__search online-matchmaking__search--hidden">
+              <div class="online-matchmaking__radar"><i></i><b>VS</b></div>
+              <div>
+                <strong>正在寻找对手…</strong>
+                <span>已等待 <b id="online-matchmaking-time">0.0s</b> · 队列 <b id="online-matchmaking-queue">1</b> 人</span>
+              </div>
+              <button id="online-matchmaking-cancel" type="button">取消</button>
+            </div>
+          </section>
+
+          <div class="online-lobby__divider"><span>私人房</span></div>
+
           <div class="online-lobby__actions">
-            <button id="online-create" class="online-lobby__primary" type="button">创建房间</button>
+            <button id="online-create" class="online-lobby__secondary" type="button">创建 6 位房间</button>
             <div class="online-lobby__join">
               <input id="online-code-input" inputmode="numeric" maxlength="6" placeholder="6位房间码" />
               <button id="online-join" type="button">加入</button>
@@ -67,13 +93,18 @@ export class OnlineLobby {
             <div class="online-room__players" id="online-players"></div>
             <button class="online-room__ready" id="online-ready" type="button">准备</button>
             <button class="online-room__leave" id="online-leave" type="button">退出房间</button>
-            <p class="online-room__note">双方准备后立即进入实时双棋盘对决。每个人只操作自己的棋盘。</p>
+            <p class="online-room__note">私人房双方准备后进入实时对决；快速匹配成功后会自动开局。</p>
           </div>
         </div>
       </section>`);
 
     this.root = container.querySelector('#online-lobby') as HTMLElement;
     this.status = container.querySelector('#online-status') as HTMLElement;
+    this.matchmakingPanel = container.querySelector('#online-matchmaking-panel') as HTMLElement;
+    this.matchmakingTime = container.querySelector('#online-matchmaking-time') as HTMLElement;
+    this.matchmakingQueue = container.querySelector('#online-matchmaking-queue') as HTMLElement;
+    this.matchButton = container.querySelector('#online-matchmake') as HTMLButtonElement;
+    this.cancelMatchButton = container.querySelector('#online-matchmaking-cancel') as HTMLButtonElement;
     this.roomPanel = container.querySelector('#online-room') as HTMLElement;
     this.roomCode = container.querySelector('#online-room-code') as HTMLElement;
     this.players = container.querySelector('#online-players') as HTMLElement;
@@ -90,6 +121,17 @@ export class OnlineLobby {
 
     container.querySelector('#online-back')?.addEventListener('click', () => this.close());
     container.querySelector('#online-leave')?.addEventListener('click', () => this.client.leaveRoom());
+
+    this.matchButton.addEventListener('click', () => {
+      this.saveName();
+      this.ensureConnected(() => {
+        this.client.joinMatchmaking(this.playerName(), this.currentTheme);
+      });
+    });
+
+    this.cancelMatchButton.addEventListener('click', () => {
+      this.client.cancelMatchmaking();
+    });
 
     this.createButton.addEventListener('click', () => {
       this.saveName();
@@ -117,6 +159,11 @@ export class OnlineLobby {
     });
 
     this.client.subscribe((state) => this.render(state));
+
+    this.ticker = window.setInterval(() => {
+      const state = this.client.snapshot();
+      if (state.matchmaking.status === 'searching') this.renderMatchmaking(state);
+    }, 100);
   }
 
   show(theme: ThemeId): void {
@@ -128,6 +175,13 @@ export class OnlineLobby {
   }
 
   close(): void {
+    const state = this.client.snapshot();
+    if (state.matchmaking.status === 'searching') {
+      this.client.cancelMatchmaking();
+    }
+    if (state.room && state.match?.phase !== 'playing') {
+      this.client.leaveRoom();
+    }
     this.hideForMatch();
     this.onCloseHandler?.();
   }
@@ -152,10 +206,17 @@ export class OnlineLobby {
     this.root.dataset.status = state.status;
     this.error.textContent = state.lastError ?? '';
 
+    this.renderMatchmaking(state);
+
     const room = state.room;
+    const searching = state.matchmaking.status === 'searching';
     this.roomPanel.classList.toggle('online-room--hidden', !room);
-    this.createButton.disabled = Boolean(room);
-    this.joinButton.disabled = Boolean(room);
+
+    this.matchButton.disabled = Boolean(room) || searching || state.status !== 'connected';
+    this.createButton.disabled = Boolean(room) || searching;
+    this.joinButton.disabled = Boolean(room) || searching;
+    this.joinInput.disabled = Boolean(room) || searching;
+    this.nameInput.disabled = Boolean(room) || searching;
 
     if (!room) return;
 
@@ -178,6 +239,35 @@ export class OnlineLobby {
     if (state.match?.phase === 'playing') {
       this.status.textContent = '比赛进行中';
       this.readyButton.textContent = '比赛已开始';
+    }
+  }
+
+  private renderMatchmaking(state: Readonly<OnlineClientState>): void {
+    const matchmaking = state.matchmaking;
+    const searching = matchmaking.status === 'searching';
+    const matched = matchmaking.status === 'matched';
+
+    this.matchmakingPanel.classList.toggle(
+      'online-matchmaking__search--hidden',
+      !searching && !matched,
+    );
+
+    if (searching) {
+      const elapsed = matchmaking.joinedAt
+        ? Math.max(0, (Date.now() - matchmaking.joinedAt) / 1000)
+        : 0;
+      this.matchmakingTime.textContent = `${elapsed.toFixed(1)}s`;
+      this.matchmakingQueue.textContent = String(Math.max(1, matchmaking.queueSize));
+      this.status.textContent = '正在匹配在线对手';
+      this.cancelMatchButton.disabled = false;
+    } else if (matched) {
+      this.matchmakingTime.textContent = '找到对手';
+      this.matchmakingQueue.textContent = '2';
+      this.status.textContent = '匹配成功 · 正在创建对局';
+      this.cancelMatchButton.disabled = true;
+    } else if (matchmaking.status === 'timed_out') {
+      this.status.textContent = '暂时没有匹配到对手，可再次尝试';
+      this.matchButton.disabled = state.status !== 'connected';
     }
   }
 
@@ -209,6 +299,9 @@ export class OnlineLobby {
 }
 
 function statusText(state: Readonly<OnlineClientState>): string {
+  if (state.matchmaking.status === 'searching') return '正在匹配在线对手';
+  if (state.matchmaking.status === 'matched') return '匹配成功 · 正在创建对局';
+  if (state.matchmaking.status === 'timed_out') return '匹配超时，可再次尝试';
   if (state.status === 'connecting') return '正在连接联机服务器…';
   if (state.status === 'reconnecting') return '网络中断，正在尝试重连…';
   if (state.status === 'connected') {
