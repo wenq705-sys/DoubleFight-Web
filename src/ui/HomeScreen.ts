@@ -22,10 +22,12 @@ export class HomeScreen {
   private readonly kicker: HTMLElement;
   private readonly record: HTMLElement;
   private readonly startButton: HTMLButtonElement;
+  private readonly onlineButton: HTMLButtonElement;
   private readonly dots: HTMLElement;
   private index = 0;
   private pointerStart: number | null = null;
   private onStartHandler: ((theme: ThemeId) => void) | null = null;
+  private onOnlineHandler: ((theme: ThemeId) => void) | null = null;
   private onPreviewHandler: ((theme: ThemeId) => void) | null = null;
 
   constructor(container: HTMLElement, initialTheme: ThemeId) {
@@ -65,7 +67,8 @@ export class HomeScreen {
           <div class="home__record" id="home-record"></div>
           <div class="home__dots" id="home-dots"></div>
           <button class="home__start" id="home-start" type="button">进入世界</button>
-          <div class="home__tip">左右滑动选择主题</div>
+          <button class="home__online" id="home-online" type="button"><span>⚔</span> 在线对决 <small>M2</small></button>
+          <div class="home__tip">左右滑动选择主题 · 在线对决支持双方选择不同主题</div>
         </div>
       </section>`);
 
@@ -75,6 +78,7 @@ export class HomeScreen {
     this.kicker = container.querySelector('#home-kicker') as HTMLElement;
     this.record = container.querySelector('#home-record') as HTMLElement;
     this.startButton = container.querySelector('#home-start') as HTMLButtonElement;
+    this.onlineButton = container.querySelector('#home-online') as HTMLButtonElement;
     this.dots = container.querySelector('#home-dots') as HTMLElement;
 
     this.bind();
@@ -100,6 +104,10 @@ export class HomeScreen {
     this.onStartHandler = handler;
   }
 
+  onOnline(handler: (theme: ThemeId) => void): void {
+    this.onOnlineHandler = handler;
+  }
+
   onPreview(handler: (theme: ThemeId) => void): void {
     this.onPreviewHandler = handler;
   }
@@ -113,6 +121,12 @@ export class HomeScreen {
       const card = CARDS[this.index];
       if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
       this.onStartHandler?.(card.id);
+    });
+
+    this.onlineButton.addEventListener('click', () => {
+      const card = CARDS[this.index];
+      if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
+      this.onOnlineHandler?.(card.id);
     });
 
     this.root.addEventListener('pointerdown', (event) => {
@@ -148,7 +162,11 @@ export class HomeScreen {
     this.title.textContent = card.title;
     this.kicker.textContent = card.kicker;
     this.startButton.disabled = Boolean(card.locked);
+    this.onlineButton.disabled = Boolean(card.locked);
     this.startButton.textContent = card.locked ? '即将开放' : '进入世界';
+    this.onlineButton.innerHTML = card.locked
+      ? '<span>🔒</span> 在线对决 <small>未开放</small>'
+      : '<span>⚔</span> 在线对决 <small>M2</small>';
 
     if (card.id === 'kingdom' || card.id === 'palace') {
       const best = Number(localStorage.getItem(`doublefight-best-${card.id}`) ?? 0);
