@@ -44,7 +44,7 @@ export class RoomManager {
 
   unregister(connectionId: string): void {
     this.connections.delete(connectionId);
-    this.removeFromMatchmaking(connectionId, false);
+    this.removeFromMatchmaking(connectionId, true);
     const membership = this.memberships.get(connectionId);
     this.memberships.delete(connectionId);
     if (!membership) return;
@@ -207,7 +207,7 @@ export class RoomManager {
   }
 
   private createRoom(connectionId: string, playerName: string, theme: NetworkThemeId): void {
-    this.removeFromMatchmaking(connectionId, false);
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = this.generateRoomCode();
     const room = new RoomSession(code, (target, message) => this.send(target, message));
@@ -219,7 +219,7 @@ export class RoomManager {
   }
 
   private joinRoom(connectionId: string, roomCode: string, playerName: string, theme: NetworkThemeId): void {
-    this.removeFromMatchmaking(connectionId, false);
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
@@ -231,7 +231,7 @@ export class RoomManager {
   }
 
   private reconnect(connectionId: string, roomCode: string, reconnectToken: string): void {
-    this.removeFromMatchmaking(connectionId, false);
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
@@ -253,7 +253,7 @@ export class RoomManager {
   }
 
   private leaveRoom(connectionId: string): void {
-    this.removeFromMatchmaking(connectionId, false);
+    this.removeFromMatchmaking(connectionId, true);
     const membership = this.memberships.get(connectionId);
     if (!membership) return;
     this.memberships.delete(connectionId);
@@ -330,8 +330,14 @@ export class RoomManager {
       const secondLive = this.connections.has(second.connectionId);
 
       if (!firstLive || !secondLive) {
-        if (firstLive) this.matchmaking.enqueue(first);
-        if (secondLive) this.matchmaking.enqueue(second);
+        if (firstLive) {
+          this.matchmaking.enqueue(first);
+          this.scheduleMatchmakingTimeout(first.connectionId);
+        }
+        if (secondLive) {
+          this.matchmaking.enqueue(second);
+          this.scheduleMatchmakingTimeout(second.connectionId);
+        }
         continue;
       }
 
