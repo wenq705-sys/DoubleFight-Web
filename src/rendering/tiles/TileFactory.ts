@@ -97,21 +97,27 @@ function crystal(parent: THREE.Object3D, color: number, position: [number, numbe
 
 function numberTexture(value: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 384;
+  canvas.height = 208;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas2D is required for number labels.');
-  const fontSize = value >= 1024 ? 102 : value >= 128 ? 122 : 150;
+
+  const fontSize = value >= 1024 ? 104 : value >= 128 ? 122 : 142;
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.font = `1000 ${fontSize}px ui-rounded, "Arial Rounded MT Bold", "Trebuchet MS", sans-serif`;
+  context.font = `1000 ${fontSize}px ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.lineJoin = 'round';
-  context.lineWidth = value >= 512 ? 11 : 14;
-  context.strokeStyle = '#633d21';
-  context.strokeText(String(value), 256, 132);
-  context.fillStyle = value >= 512 ? '#fff8d8' : '#fff4c7';
-  context.fillText(String(value), 256, 132);
+
+  context.lineWidth = 20;
+  context.strokeStyle = '#3f2718';
+  context.strokeText(String(value), 192, 108);
+  context.lineWidth = 8;
+  context.strokeStyle = value >= 128 ? '#a8651d' : '#fff0bd';
+  context.strokeText(String(value), 192, 108);
+  context.fillStyle = value >= 512 ? '#fff7d1' : '#ffffff';
+  context.fillText(String(value), 192, 108);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
@@ -119,15 +125,28 @@ function numberTexture(value: number): THREE.CanvasTexture {
 }
 
 function addNumberBadge(parent: THREE.Object3D, value: number, y: number, z: number, scale = 1): void {
-  const badgeColor = value >= 512 ? C.goldDeep : value >= 128 ? C.gold : C.cream;
-  const badgeY = Math.min(y, 0.48);
-  const badgeX = 0.5 * scale;
-  const badge = cylinder(parent, 0.25 * scale, 0.075, badgeColor, [badgeX, badgeY, z], 20, value >= 128);
-  badge.rotation.x = Math.PI / 2;
-  const material = new THREE.MeshBasicMaterial({ map: numberTexture(value), transparent: true, depthWrite: false });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(0.46 * scale, 0.3 * scale), material);
-  label.position.set(badgeX, badgeY, z + 0.046);
-  label.renderOrder = 20;
+  const prestige = value >= 128;
+  const width = (value >= 1024 ? 0.90 : value >= 128 ? 0.82 : 0.72) * scale;
+  const badgeY = Math.min(y, 0.45);
+  const badgeZ = Math.max(z, 0.74);
+
+  roundedBox(parent, [width + 0.10, 0.42 * scale, 0.07], C.gold, [0, badgeY, badgeZ], 0.10, true);
+  roundedBox(
+    parent,
+    [width, 0.32 * scale, 0.078],
+    prestige ? C.woodDark : C.royalBlue,
+    [0, badgeY, badgeZ + 0.038],
+    0.08,
+  );
+
+  const material = new THREE.MeshBasicMaterial({
+    map: numberTexture(value),
+    transparent: true,
+    depthWrite: false,
+  });
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.88, 0.29 * scale), material);
+  label.position.set(0, badgeY, badgeZ + 0.081);
+  label.renderOrder = 40;
   parent.add(label);
 }
 
