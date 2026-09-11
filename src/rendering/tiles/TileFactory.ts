@@ -162,7 +162,27 @@ export interface TileVisual {
 }
 
 export class TileFactory {
+  private readonly templates = new Map<number, THREE.Group>();
+
   create(value: number): TileVisual {
+    let template = this.templates.get(value);
+    if (!template) {
+      const built = this.build(value);
+      built.animatedParts.forEach((part) => { part.userData.tileAnimated = true; });
+      template = built.root;
+      this.templates.set(value, template);
+    }
+
+    const root = template.clone(true);
+    const animatedParts: THREE.Object3D[] = [];
+    root.traverse((node) => {
+      if (node.userData.tileAnimated) animatedParts.push(node);
+      if (node instanceof THREE.Mesh) node.frustumCulled = false;
+    });
+    return { root, animatedParts };
+  }
+
+  private build(value: number): TileVisual {
     const root = new THREE.Group();
     const animatedParts: THREE.Object3D[] = [];
 
