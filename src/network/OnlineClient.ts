@@ -131,6 +131,10 @@ export class OnlineClient {
     this.send({ type: 'set_ready', ready });
   }
 
+  setRematchReady(ready: boolean): void {
+    this.send({ type: 'set_rematch_ready', ready });
+  }
+
   move(direction: 'left' | 'right' | 'up' | 'down'): number {
     const sequence = this.sequence++;
     this.send({ type: 'move', direction, sequence });
