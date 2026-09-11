@@ -182,6 +182,16 @@ export class TileFactory {
     return { root, animatedParts };
   }
 
+  warmup(values: number[]): void {
+    values.forEach((value) => {
+      if (!this.templates.has(value)) {
+        const built = this.build(value);
+        built.animatedParts.forEach((part) => { part.userData.tileAnimated = true; });
+        this.templates.set(value, built.root);
+      }
+    });
+  }
+
   private build(value: number): TileVisual {
     const root = new THREE.Group();
     const animatedParts: THREE.Object3D[] = [];
