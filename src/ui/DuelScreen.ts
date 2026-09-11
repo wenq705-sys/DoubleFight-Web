@@ -436,9 +436,12 @@ export class DuelScreen {
   private refreshSkillButtons(): void {
     const state = this.client.snapshot();
     const me = state.match?.players.find((player) => player.playerId === state.playerId);
+    const opponent = state.match?.players.find((player) => player.playerId !== state.playerId);
     if (!me) return;
 
     const now = this.serverNow();
+    this.localStatus.textContent = statusText(me, now);
+    if (opponent) this.remoteStatus.textContent = statusText(opponent, now);
 
     for (const [skillId, view] of this.skillButtons) {
       const definition = SKILL_DEFINITIONS[skillId];
