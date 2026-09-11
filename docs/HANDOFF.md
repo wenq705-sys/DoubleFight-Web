@@ -2,99 +2,125 @@
 
 ## Current state
 
-**Milestone: M1.4 — Production Foundation.**
+**Milestone: M2.0 — Real Online Duel Foundation.**
 
-The game is still a single-board 3D 2048 prototype, but this milestone deliberately shifts from "AI demo iteration" toward a production-friendly mobile structure before same-screen multiplayer.
+The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
-## What is implemented
+Solo Theme Islands remain the default game mode. Online Duel is the major launch feature required before the Douyin release.
 
-### Core
-- deterministic 2048 board logic
-- random-clear skill
-- mobile swipe + keyboard controls
-- score/best/highest tracking
+## Existing M1 foundation
 
-### Themes
-- Miniature Kingdom
-- 后宫晋升 / Palace Rank
-- runtime theme switching
-- per-theme progression records
+- premium mobile Three.js 2048
+- Miniature Kingdom + Palace Rank themes
+- numberless piece identity through size/silhouette/discrete hue
+- theme islands home
+- Random Clear solo skill prototype
+- pooled VFX / instancing / adaptive DPR / performance telemetry
+- gradual future migration toward authored stylized low-poly GLB assets
 
-### Home / product shell
-- new floating **Theme Islands** home inspired by level/chapter island selectors
-- swipe between Miniature Kingdom / Palace Rank
-- locked Candy Kingdom / Snow Temple placeholders
-- gameplay HUD now returns to the theme-island home rather than directly toggling worlds
+## M2.0 implemented
 
-### Piece readability
-- palace giant rank plaques removed
-- piece/model silhouette is primary
-- **mobile readability hotfix:** 2/4/8/16 Palace tiers now use much stronger size, palette, hair, prop, shoulder and base-shape differences
-- Palace 2 = small mint maid + tray + plain single bun
-- Palace 4 = warm yellow/orange + twin buns + large fan
-- Palace 8 = purple + tall central bun + lateral hairpins + open fan
-- Palace 16 = coral/red + wide sleeves/shoulders + ceremonial back fan
-- all gameplay-piece number plates/badges have now been removed in both Palace and Kingdom
-- Palace tiers use discrete hue families instead of repeated light/dark reds
-- Miniature Kingdom uses the same discrete tier-color rule
-- Palace rank/Kingdom landmark names remain in HUD rather than on pieces
-- a shared `tierProgression` helper enforces monotonic physical growth for every current and future theme
-- high tiers continue crown/cape/halo/throne or landmark-complexity escalation
+### Shared authoritative core
+- `shared/game/Board2048.ts`
+- deterministic `SeededRandom`
+- public board snapshot
+- browser compatibility re-exports
+- browser + Node server use the same rules
 
-### Performance architecture
-- adaptive DPR starts higher for clarity and reduces only if measured FPS requires it
-- runtime quality tiers: high / medium / low
-- optional `?debug=1` telemetry exposes FPS, frame time, DPR, draw calls, triangles, geometries and textures
-- pooled VFX objects replace repeated new/dispose during merge/skill loops
-- palace environment merge sparks are pooled
-- kingdom merge-to-castle energy motes are pooled
-- palace rail posts/caps use `InstancedMesh`
-- kingdom walls/caps use `InstancedMesh`
-- tile factories cache one template per value and reuse shared render resources
-- common early/mid tiers warm up during idle time
-- lower quality freezes repeated shadow-map updates before heavily degrading canvas clarity
+### Protocol
+- versioned online message contract
+- runtime client-message parser
+- create/join/reconnect/theme/ready/move/leave/ping
+- room/match/move/error server messages
 
-## Locked product decisions
+### WebSocket game server
+- Node.js + TypeScript + `ws`
+- `/ws` endpoint
+- `/health` endpoint
+- 6-digit private rooms
+- two-player maximum
+- independent player themes
+- ready-to-start flow
+- server-created authoritative Board2048 per player
+- server-owned RNG
+- monotonically increasing move sequence validation
+- board-lock match ending
+- WebSocket heartbeat
+- 30-second reconnect identity grace
+- Dockerfile
+- CI server health smoke test
 
-- 2048 remains the core.
-- Mobile portrait is primary.
-- Screen directions must match swipe directions.
-- Visual identity comes primarily from models/silhouettes, not giant labels.
-- Gameplay pieces must not display numeric/rank labels. Recognition comes from size + silhouette + hue + accessories.
-- Palace characters are original; do not copy named TV characters or actor likenesses.
-- Environment participates in gameplay feedback.
-- Themes are first-class worlds surfaced from the home screen.
-- Strong fullscreen skills are allowed, but their runtime cost must be bounded.
-- Core hero pieces should **gradually** migrate to authored stylized low-poly GLB assets; do not pause current development waiting for that migration.
+### Browser networking
+- `OnlineClient`
+- reconnect/backoff
+- room/reconnect identity tracking
+- latency ping capability
+- endpoint from `VITE_WS_URL` or `?ws=`
 
-## Current risk list
+### Product UI
+Theme Islands now expose **在线对决**.
 
-- procedural models are still blockout-level compared with authored GLB assets
-- home islands are a lightweight DOM/CSS production shell, not final authored 3D island assets
-- real-device 10–20 minute profiling is still required
-- 1024+1024→2048 still needs its dedicated legendary event
-- audio remains procedural
-- same-screen PvP is not yet implemented
+The online lobby supports:
+- nickname
+- currently selected theme
+- create room
+- enter 6-digit code
+- room player list
+- ready/cancel ready
+- connection/reconnect status
 
-## Validation requested next
+When both players ready, the server already creates a real authoritative match. M2.0 deliberately stops before rendering/controlling the dual-board battle scene.
 
-On iPhone Safari:
-1. compare sharpness versus previous 1.25 DPR build
-2. play at least 10–20 minutes and watch for progressive lag
-3. judge whether Palace 2/4/8/16/32/64 can be identified with no numbers at all
-4. confirm adjacent tier colors are clearly different hue families and sizes strictly increase
-5. test the new Theme Islands home flow
-6. optionally open with `?debug=1` and capture the telemetry after a long session
+## Deployment state
 
-## Codex onboarding
+The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
 
-Read, in order:
-1. `AGENTS.md`
-2. `docs/HANDOFF.md`
-3. `docs/ART_DIRECTION.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/GAME_DESIGN.md`
-6. `docs/ROADMAP.md`
-7. ADRs in `docs/decisions/`
+Therefore the public Pages build will show the Online Duel UI and report that the server is not configured. This is expected and honest.
 
-Do not infer product direction from code alone.
+Local test:
+- run `npm run dev:server`
+- run `npm run dev`
+- browser automatically uses `ws://localhost:8787/ws`
+
+Remote test:
+- deploy `Dockerfile.server`
+- provide a TLS `wss://.../ws` endpoint
+- set `VITE_WS_URL` at build time or use `?ws=wss://...`
+
+## Locked online decisions
+
+- PvP is server-based, not two people sharing one phone.
+- each player uses their own device.
+- each player can choose a different theme.
+- themes never change competitive balance.
+- server is authoritative for board/spawn/score/future energy/skills/winner.
+- client must remain responsive; M2.1 adds prediction/reconciliation.
+- server and client share the same deterministic core.
+- future skills are server-authoritative.
+- Online Duel uses a lightweight duel render, not two complete Solo environments.
+- first release target remains Douyin mini-game, followed by WeChat, then iOS.
+
+## Next exact task — M2.1
+
+Build the actual online battle client:
+
+1. one large local 4×4 board
+2. one compact live opponent board
+3. both themes rendered independently
+4. own swipe sends sequence-numbered MOVE
+5. immediate local movement presentation / prediction
+6. server move acknowledgement and reconciliation
+7. remote board updates
+8. connection/latency/reconnect overlay
+9. keep Solo mode unchanged
+
+No PvP skills yet. First prove two real phones can play simultaneous authoritative 2048 smoothly.
+
+## Validation
+
+CI must pass:
+- web TypeScript
+- server TypeScript
+- unit tests
+- client production build
+- server health smoke test
