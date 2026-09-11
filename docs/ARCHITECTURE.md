@@ -2,99 +2,167 @@
 
 ## Intent
 
-The codebase separates deterministic game rules from presentation so the same 2048 core can later support single-player, local same-screen multiplayer, AI opponents and platform-specific shells without rewriting rendering.
+Double Fight separates deterministic game rules, rendering and network authority so the same product can ship on web previews, Douyin mini-game, WeChat mini-game and later iOS without rewriting competitive rules.
 
-## Layers
+## Shared core
+
+### `shared/game/`
+
+Platform-independent TypeScript.
+
+- `Board2048`: moves, merges, spawning, score, clear rules
+- `SeededRandom`: deterministic server-compatible RNG
+- shared game types / public board snapshots
+
+The browser and Node game server import the same implementation. Do not create a second server-only 2048 implementation.
+
+### `shared/protocol/`
+
+Versioned online protocol.
+
+Current messages cover:
+- hello/version
+- create room
+- join room
+- reconnect
+- select theme
+- ready
+- move
+- leave
+- ping/pong
+- room state
+- match start/state/end
+- move acknowledgements/errors
+
+Protocol changes must be explicit and version-aware.
+
+## Browser client
 
 ### `src/game/`
-Pure game-domain code. No Three.js, DOM, audio, storage or platform APIs.
+Compatibility re-exports from shared core while legacy client paths are migrated.
 
-`Board2048` owns 4×4 cell state, tile identity/value, moves and merge legality, score delta, spawn rules, random-clear rules and game-over detection. It returns authoritative results so presentation can animate without becoming game truth.
-
-### `src/rendering/`
-Three.js presentation layer.
-
-- `GameScene`: renderer, camera, lighting, visual tile registry, animation coordination
-- `environment/`: theme environment construction
-- `tiles/`: theme-specific tile/piece factories
-- `vfx/`: pooled transient effects
-
-### `src/performance/`
-Runtime quality management.
-
-`PerformanceManager` samples FPS/frame time plus renderer calls/triangles/geometries/textures and adjusts DPR/quality gradually. Use `?debug=1` to expose the in-app telemetry panel.
+### `src/network/`
+`OnlineClient` owns WebSocket connection state, exponential reconnect, room identity/token and protocol I/O.
 
 ### `src/ui/`
-DOM interface only.
+- `HomeScreen`: Theme Islands / solo + Online Duel entry
+- `OnlineLobby`: room create/join/ready/reconnect UI
+- `Hud`: solo in-game HUD
 
-- `HomeScreen`: floating theme-island selection / chapter shell
-- `Hud`: in-game score, theme navigation, skill controls, overlays
+### `src/rendering/`
+Three.js presentation. Rendering is never authoritative game truth.
 
-UI requests actions but never mutates `Board2048` directly.
+### `src/performance/`
+Adaptive quality / telemetry.
 
-### `src/audio/`
-Non-authoritative feedback. Audio must degrade gracefully.
+## Game server
 
-### `src/config/`
-Art/game tuning constants and theme metadata.
+### `server/index.ts`
+HTTP health endpoint + WebSocket endpoint `/ws`, heartbeat and connection lifecycle.
 
-## Data flow
+### `server/RoomManager.ts`
+Owns:
+- active connections
+- 6-digit room lookup
+- connection→player membership
+- reconnect grace timers
+- protocol command dispatch
+
+### `server/RoomSession.ts`
+Owns authoritative two-player room/match state:
+- players
+- independent themes
+- ready state
+- authoritative Board2048 instances
+- deterministic server RNG
+- monotonically increasing client action sequence
+- game-over winner result
+
+Current M2.0 state is intentionally in-memory. Redis/persistent horizontal scaling is deferred until actual concurrency requires it.
+
+## Authority model
 
 ```text
-Home/theme selection
-  ↓
-Session shell
-  ↓
-Input
-  ↓
-Board2048
-  ↓
-Authoritative result
-  ├─→ GameScene       → movement / pieces / environment
-  ├─→ pooled Effects  → bounded VFX
-  ├─→ HUD             → score / rank / skill state
-  └─→ SoundDesign     → audio / haptics
+Player swipe
+   ↓
+client presentation / future prediction
+   ↓
+MOVE(direction, sequence)
+   ↓
+WebSocket server
+   ↓
+RoomSession
+   ↓
+shared Board2048
+   ↓
+authoritative MoveResult + BoardPublicState
+   ↓
+both clients
 ```
+
+The server controls spawn RNG. A modified client cannot choose spawn cells or values.
+
+## Reconnect model
+
+A joined player receives a cryptographically random reconnect token. On connection loss:
+- the room retains identity/state for 30 seconds,
+- the client reconnects,
+- sends room code + token,
+- server rebinds the new WebSocket connection,
+- current room/match snapshot is returned.
+
+Persistent account-based recovery is a later platform milestone.
+
+## Server deployment
+
+Local:
+
+```bash
+npm install
+npm run dev:server
+```
+
+Health:
+
+```text
+GET http://localhost:8787/health
+WS  ws://localhost:8787/ws
+```
+
+Container:
+
+```bash
+docker build -f Dockerfile.server -t doublefight-server .
+docker run --rm -p 8787:8787 doublefight-server
+```
+
+Production browser clients must use `wss://`. Configure `VITE_WS_URL=wss://host/ws`.
+
+For temporary testing the client also accepts a query override:
+`?ws=wss://host/ws`.
 
 ## Rendering/resource rules
 
-1. Piece templates are built once per value/theme and cloned with shared Geometry/Material/CanvasTexture resources.
-2. Repeated static decoration should use `InstancedMesh` when practical.
-3. Transient VFX uses fixed pools. No steady-state merge loop should continually allocate/dispose GPU resources.
-4. Screen-space or DOM/CSS presentation is preferred for very large fullscreen overlays.
-5. Text is secondary information. Core piece identity comes from silhouette and art progression.
-6. Mobile resolution is adaptive instead of globally forcing a low DPR.
-7. Development performance telemetry must remain available with `?debug=1`.
+Existing M1 rules remain:
+- cached piece templates
+- instanced repeated props
+- pooled VFX
+- adaptive DPR
+- numberless silhouette/hue piece identity
+- monotonic tier-size growth
+- optional `?debug=1` performance telemetry
 
-## Current performance targets
+## Future M2.1
 
-- modern iPhone / comparable Android: target ~60 FPS during ordinary play
-- temporary skill spikes: avoid sustained drops below ~45 FPS
-- no obvious progressive slowdown over 20-minute sessions
-- full 16-cell board must remain responsive
-- memory/geometries/textures should stabilize after theme/template warmup
-- draw calls matter more than raw triangle count for the current low-poly direction
+The next client layer must render one large local board and one compact opponent board while preserving the current performance budget. Do not instantiate two full Solo environments. Online Duel needs a lighter duel presentation.
 
-## Future 3D asset pipeline
+## Future platform layer
 
-Procedural pieces remain the blockout/runtime fallback. Core hero pieces should gradually migrate toward authored stylized low-poly `.glb` assets.
-
-Target pipeline:
-
-```text
-Blender / AI-assisted 3D
-  ↓
-stylized low-poly cleanup
-  ↓
-GLB
-  ↓
-theme AssetManager/cache
-  ↓
-shared materials / instancing where possible
-```
-
-Do not block current product development waiting for the asset migration.
-
-## Future local-duel architecture
-
-Two-player same-screen mode should instantiate two independent board/session models and render them through a duel coordinator. Skills should be commands/events through a duel rules layer, not renderer hacks.
+Direct uses of browser-only APIs should progressively move behind platform adapters before Douyin packaging:
+- storage
+- lifecycle
+- audio resume
+- haptics
+- safe area
+- share/invite
+- account identity
