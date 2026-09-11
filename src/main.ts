@@ -6,6 +6,8 @@ import { THEMES, type ThemeId } from './config/themes';
 import { GameScene } from './rendering/GameScene';
 import { Hud } from './ui/Hud';
 import { HomeScreen } from './ui/HomeScreen';
+import { OnlineLobby } from './ui/OnlineLobby';
+import { OnlineClient } from './network/OnlineClient';
 import { SoundDesign } from './audio/SoundDesign';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -32,6 +34,9 @@ let skillCharges = 3;
 let theme: ThemeId = localStorage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
 
 const home = new HomeScreen(app, theme);
+const onlineEndpoint = resolveOnlineEndpoint();
+const onlineClient = new OnlineClient(onlineEndpoint);
+const onlineLobby = new OnlineLobby(app, onlineClient, Boolean(onlineEndpoint));
 
 const highest = () => Math.max(2, ...board.tiles().map((tile) => tile.value));
 
@@ -215,6 +220,20 @@ hud.onRestart(reset);
 hud.onSkill(() => { void useRandomClear(); });
 hud.onHome(openHome);
 
+home.onOnline((nextTheme) => {
+  theme = nextTheme;
+  localStorage.setItem('doublefight-theme', theme);
+  home.hide();
+  scene.setHomeMode(true);
+  hud.setVisible(false);
+  onlineLobby.show(theme);
+});
+
+onlineLobby.onClose(() => {
+  onlineLobby.setTheme(theme);
+  home.show(theme);
+});
+
 home.onPreview((nextTheme) => {
   if (nextTheme === theme) return;
   applyTheme(nextTheme);
@@ -225,6 +244,20 @@ home.onStart(startGame);
 reset();
 applyTheme(theme);
 openHome();
+
+function resolveOnlineEndpoint(): string {
+  const query = new URLSearchParams(window.location.search).get('ws');
+  if (query?.startsWith('ws://') || query?.startsWith('wss://')) return query;
+
+  const viteEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  const configured = viteEnv?.VITE_WS_URL?.trim();
+  if (configured?.startsWith('ws://') || configured?.startsWith('wss://')) return configured;
+
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'ws://localhost:8787/ws';
+  }
+  return '';
+}
 
 requestAnimationFrame(() => {
   const loading = document.querySelector<HTMLElement>('#loading-screen');
