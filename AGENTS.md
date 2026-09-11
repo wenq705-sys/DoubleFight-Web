@@ -15,7 +15,7 @@ Read in order:
 
 ## 2. Current milestone
 
-**M2.3 / M2.4 — first server-authoritative PvP skills and complete match loop.**
+**M2.4 / M2.5 — complete server-authoritative match loop and public matchmaking.**
 
 "Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
@@ -31,7 +31,7 @@ Priority:
 ## 3. Online architecture rules
 
 - browser and server must reuse `shared/game`; do not fork Board2048
-- server controls RNG/spawns, scores, energy, skills and competitive state
+- server controls RNG/spawns, scores, energy, skills, round time, results and competitive state
 - every player action needs ordered sequence semantics
 - never trust a client-provided board/score
 - protocol changes live in `shared/protocol`
@@ -39,6 +39,8 @@ Priority:
 - client prediction is presentation latency hiding, not authority
 - blocked/petrified cells are shared-core gameplay state, not client-only VFX
 - move sequence and skill sequence are separate ordered streams
+- clients display roundEndsAt; they never start/reset the authoritative match timer
+- result UI must render the server MatchResult rather than independently deciding who won
 - stable tile ids in authoritative snapshots are part of the duel animation/reconciliation contract
 - prediction must never invent the authoritative random spawn
 - themes are cosmetic/presentation only; they cannot change competitive rules
@@ -77,4 +79,4 @@ For meaningful changes:
 - Redis/distributed rooms
 - third theme
 
-M2.3 skills are implemented. M2.4 must keep timer, winner resolution and rematch state server-authoritative; clients never decide the winner.
+M2.4 is implemented. M2.5 matchmaking must create/reuse the existing authoritative RoomSession rather than fork competitive rules into a second match engine.

@@ -1,17 +1,20 @@
 import type { BoardPublicState, BoardTile, CellPosition, Direction, MoveResult } from '../game/types';
+import type { TimeLimitTieBreaker } from '../battle/match';
 import type { SkillCooldowns, SkillId } from '../battle/skills';
 import { isSkillId } from '../battle/skills';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export type NetworkThemeId = 'kingdom' | 'palace';
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
+export type MatchEndReason = 'board_locked' | 'opponent_left' | 'petrified_lock' | 'time_limit';
 
 export interface RoomPlayerState {
   id: string;
   name: string;
   theme: NetworkThemeId;
   ready: boolean;
+  rematchReady: boolean;
   connected: boolean;
   isHost: boolean;
 }
@@ -38,14 +41,35 @@ export interface MatchPlayerState {
   connected: boolean;
 }
 
+export interface MatchResultPlayer {
+  playerId: string;
+  name: string;
+  theme: NetworkThemeId;
+  score: number;
+  highest: number;
+  usableEmptyCells: number;
+}
+
+export interface MatchResult {
+  winnerId: string | null;
+  reason: MatchEndReason;
+  tieBreaker: TimeLimitTieBreaker | null;
+  finishedAt: number;
+  players: MatchResultPlayer[];
+}
+
 export interface MatchSnapshot {
   matchId: string;
   roomCode: string;
   phase: 'playing' | 'finished';
   serverTime: number;
+  roundStartedAt: number;
+  roundEndsAt: number;
+  durationMs: number;
   players: MatchPlayerState[];
   winnerId: string | null;
-  endReason: 'board_locked' | 'opponent_left' | 'petrified_lock' | null;
+  endReason: MatchEndReason | null;
+  result: MatchResult | null;
 }
 
 export type SkillOutcome = 'applied' | 'shielded';
@@ -69,6 +93,7 @@ export type ClientMessage =
   | { type: 'reconnect'; roomCode: string; reconnectToken: string }
   | { type: 'set_theme'; theme: NetworkThemeId }
   | { type: 'set_ready'; ready: boolean }
+  | { type: 'set_rematch_ready'; ready: boolean }
   | { type: 'move'; direction: Direction; sequence: number }
   | { type: 'cast_skill'; skillId: SkillId; sequence: number }
   | { type: 'leave_room' }
@@ -114,6 +139,7 @@ export type ServerMessage =
         | 'NOT_IN_ROOM'
         | 'NOT_PLAYING'
         | 'NOT_READY'
+        | 'REMATCH_NOT_AVAILABLE'
         | 'INVALID_RECONNECT'
         | 'STALE_SEQUENCE'
         | 'STALE_SKILL_SEQUENCE'
@@ -171,6 +197,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
 
   if (type === 'set_ready' && typeof message.ready === 'boolean') {
+    return { type, ready: message.ready };
+  }
+
+  if (type === 'set_rematch_ready' && typeof message.ready === 'boolean') {
     return { type, ready: message.ready };
   }
 

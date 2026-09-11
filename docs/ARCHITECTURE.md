@@ -227,6 +227,48 @@ Petrify is not a cosmetic overlay. `Board2048` owns a blocked-cell set. A blocke
 
 Petrify currently lasts six seconds. Server timers clear the block and broadcast a fresh match snapshot. Shield is a one-hit state that consumes an incoming Petrify before any cell is blocked.
 
+## M2.4 Match lifecycle
+
+The server owns the wall clock.
+
+At match creation:
+
+```text
+roundStartedAt = server now
+roundEndsAt   = roundStartedAt + 180s
+```
+
+`RoomManager` schedules the deadline, while `RoomSession.resolveTimeLimit()` is also checked before competitive commands so a delayed timer callback cannot allow a late MOVE or skill.
+
+Reconnect does not pause or recreate the round. The reconnecting client receives the same `roundEndsAt` and computes display time from `MatchSnapshot.serverTime`.
+
+Time-limit resolution is deterministic:
+
+```text
+score
+  ↓ tie
+highest tile
+  ↓ tie
+usable empty cells
+  ↓ tie
+draw
+```
+
+The server freezes a `MatchResult` payload at finish. Result UI renders that payload instead of recomputing the winner.
+
+### Rematch
+
+A finished private room is reusable. `set_rematch_ready` updates per-player readiness. Once both connected players opt in, `RoomSession` starts a completely new match while preserving room/player/theme identity.
+
+New match resets:
+- board / RNG seed
+- energy
+- shield / petrify
+- cooldowns
+- action sequence authority
+- result state
+- timer
+
 ## Future platform layer
 
 Direct uses of browser-only APIs should progressively move behind platform adapters before Douyin packaging:

@@ -245,12 +245,13 @@ export class Board2048 {
   }
 
   /** Debug/test helper. Production server remains authoritative over calls to this. */
-  load(values: number[][]): void {
+  load(values: number[][], score = 0): void {
     if (values.length !== SIZE || values.some((row) => row.length !== SIZE)) {
       throw new Error('Board2048.load expects a 4x4 matrix.');
     }
 
     this.blocked.clear();
+    this._score = Math.max(0, Math.floor(score));
     this.grid = values.map((row, rowIndex) =>
       row.map((value, colIndex) =>
         value

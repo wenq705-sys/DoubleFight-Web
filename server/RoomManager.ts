@@ -24,6 +24,7 @@ export class RoomManager {
   private readonly connections = new Map<string, ConnectionTransport>();
   private readonly memberships = new Map<string, Membership>();
   private readonly disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly matchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   register(send: (message: ServerMessage) => void): ConnectionTransport {
     const connection: ConnectionTransport = { id: randomUUID(), send };
@@ -60,12 +61,14 @@ export class RoomManager {
 
       currentRoom.removePlayer(membership.playerId);
       if (currentRoom.isEmpty()) {
+        this.clearMatchTimer(currentRoom.code);
         this.rooms.delete(currentRoom.code);
         return;
       }
 
       currentRoom.broadcast({ type: 'room_state', room: currentRoom.state() });
       if (currentRoom.phase === 'finished' && currentRoom.matchId) {
+        this.clearMatchTimer(currentRoom.code);
         currentRoom.broadcast({ type: 'match_end', snapshot: currentRoom.matchSnapshot() });
       }
     }, 30_000);
@@ -102,11 +105,30 @@ export class RoomManager {
           this.withRoom(connectionId, (room, player) => {
             const started = room.setReady(player.id, message.ready);
             room.broadcast({ type: 'room_state', room: room.state() });
-            if (started) room.broadcast({ type: 'match_start', snapshot: room.matchSnapshot() });
+            if (started) {
+              this.scheduleMatchDeadline(room);
+              room.broadcast({ type: 'match_start', snapshot: room.matchSnapshot() });
+            }
+          });
+          return;
+        case 'set_rematch_ready':
+          this.withRoom(connectionId, (room, player) => {
+            const started = room.setRematchReady(player.id, message.ready);
+            room.broadcast({ type: 'room_state', room: room.state() });
+            if (started) {
+              this.scheduleMatchDeadline(room);
+              room.broadcast({ type: 'match_start', snapshot: room.matchSnapshot() });
+            }
           });
           return;
         case 'move':
           this.withRoom(connectionId, (room, player) => {
+            if (room.resolveTimeLimit(Date.now())) {
+              this.clearMatchTimer(room.code);
+              room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+              room.broadcast({ type: 'room_state', room: room.state() });
+              return;
+            }
             const { result, energyGain } = room.move(player.id, message.direction, message.sequence);
             room.sendTo(player.id, {
               type: 'move_ack',
@@ -118,7 +140,9 @@ export class RoomManager {
               energyGain,
             });
             if (room.phase === 'finished') {
+              this.clearMatchTimer(room.code);
               room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+              room.broadcast({ type: 'room_state', room: room.state() });
             } else {
               room.broadcast({ type: 'match_state', snapshot: room.matchSnapshot() });
             }
@@ -126,11 +150,19 @@ export class RoomManager {
           return;
         case 'cast_skill':
           this.withRoom(connectionId, (room, player) => {
+            if (room.resolveTimeLimit(Date.now())) {
+              this.clearMatchTimer(room.code);
+              room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+              room.broadcast({ type: 'room_state', room: room.state() });
+              return;
+            }
             const cast = room.castSkill(player.id, message.skillId, message.sequence);
             room.broadcast({ type: 'skill_event', event: cast.event });
 
             if (room.phase === 'finished') {
+              this.clearMatchTimer(room.code);
               room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+              room.broadcast({ type: 'room_state', room: room.state() });
             } else {
               room.broadcast({ type: 'match_state', snapshot: room.matchSnapshot() });
             }
@@ -219,12 +251,14 @@ export class RoomManager {
 
     room.removePlayer(membership.playerId);
     if (room.isEmpty()) {
+      this.clearMatchTimer(room.code);
       this.rooms.delete(room.code);
       return;
     }
 
     room.broadcast({ type: 'room_state', room: room.state() });
     if (room.phase === 'finished' && room.matchId) {
+      this.clearMatchTimer(room.code);
       room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
     }
   }
@@ -266,6 +300,7 @@ export class RoomManager {
       NOT_IN_ROOM: 'NOT_IN_ROOM',
       NOT_PLAYING: 'NOT_PLAYING',
       NOT_READY: 'NOT_READY',
+      REMATCH_NOT_AVAILABLE: 'REMATCH_NOT_AVAILABLE',
       INVALID_RECONNECT: 'INVALID_RECONNECT',
       STALE_SEQUENCE: 'STALE_SEQUENCE',
       STALE_SKILL_SEQUENCE: 'STALE_SKILL_SEQUENCE',
@@ -284,6 +319,29 @@ export class RoomManager {
       if (!this.rooms.has(code)) return code;
     }
     throw new Error('BAD_MESSAGE');
+  }
+
+  private scheduleMatchDeadline(room: RoomSession): void {
+    this.clearMatchTimer(room.code);
+    const expectedMatchId = room.matchId;
+    const delay = Math.max(0, room.roundEndsAt - Date.now()) + 30;
+
+    const timer = setTimeout(() => {
+      this.matchTimers.delete(room.code);
+      if (room.phase !== 'playing' || room.matchId !== expectedMatchId) return;
+      if (!room.resolveTimeLimit(Date.now())) return;
+
+      room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+      room.broadcast({ type: 'room_state', room: room.state() });
+    }, delay);
+    timer.unref?.();
+    this.matchTimers.set(room.code, timer);
+  }
+
+  private clearMatchTimer(roomCode: string): void {
+    const timer = this.matchTimers.get(roomCode);
+    if (timer) clearTimeout(timer);
+    this.matchTimers.delete(roomCode);
   }
 
   private scheduleEffectExpiry(room: RoomSession, expiresAt: number): void {
@@ -315,6 +373,7 @@ function errorMessage(code: ErrorCode): string {
     NOT_IN_ROOM: '当前连接不在房间中。',
     NOT_PLAYING: '比赛尚未开始。',
     NOT_READY: '玩家尚未准备。',
+    REMATCH_NOT_AVAILABLE: '当前还不能发起再来一局。',
     INVALID_RECONNECT: '重连凭证无效。',
     STALE_SEQUENCE: '该移动操作已经处理过。',
     STALE_SKILL_SEQUENCE: '该技能操作已经处理过。',
