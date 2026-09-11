@@ -13,7 +13,7 @@ Current themes:
 
 ## Current milestone
 
-**M2.4 — Complete Online PvP Match Loop**
+**M2.5 — Public Matchmaking + Complete Online PvP**
 
 Implemented:
 - Three.js mobile solo game
@@ -40,10 +40,15 @@ Implemented:
 - immutable match result payload
 - same-room rematch flow
 - reconnect-safe round deadline
+- public FIFO quick-match queue
+- queue cancel / timeout / disconnect cleanup
+- independent themes preserved during automatic pairing
+- auto-match reuses the exact same authoritative RoomSession
+- private six-digit rooms remain available
 - Docker server image
 - CI server smoke test
 
-M2.5 will add public matchmaking while keeping private room codes and the same RoomSession rules.
+M2.6 is production server deployment + real-device network hardening. The gameplay/server code is ready, but GitHub Pages still needs a public TLS `wss://` endpoint before real public matching works.
 
 ## Tech stack
 
@@ -144,7 +149,8 @@ src/
 
 server/
   index.ts       HTTP + WebSocket entry
-  RoomManager.ts connection/room/reconnect orchestration
+  MatchmakingQueue.ts FIFO quick-match queue
+  RoomManager.ts connection/queue/room/reconnect orchestration
   RoomSession.ts authoritative two-player match state
 
 tests/
