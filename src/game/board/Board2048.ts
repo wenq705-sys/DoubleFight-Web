@@ -1,4 +1,4 @@
-import type { BoardTile, CellPosition, Direction, MergeEvent, MoveResult, TileMotion } from './types';
+import type { BoardTile, CellPosition, ClearResult, Direction, MergeEvent, MoveResult, TileMotion } from './types';
 
 const SIZE = 4;
 type Cell = BoardTile | null;
@@ -82,6 +82,25 @@ export class Board2048 {
     this._score += scoreDelta;
     const spawned = this.spawnRandom();
     return { changed: true, scoreDelta, motions, merges, spawned, gameOver: !this.canMove() };
+  }
+
+  clearRandom(count = 2): ClearResult {
+    const occupied = this.tiles();
+    if (occupied.length === 0 || count <= 0) return { removed: [], gameOver: !this.canMove() };
+
+    const pool = [...occupied];
+    const removed: BoardTile[] = [];
+    const targetCount = Math.min(Math.floor(count), pool.length);
+
+    for (let index = 0; index < targetCount; index += 1) {
+      const pickIndex = Math.min(pool.length - 1, Math.floor(this.random() * pool.length));
+      const [tile] = pool.splice(pickIndex, 1);
+      if (!tile) continue;
+      this.grid[tile.row][tile.col] = null;
+      removed.push({ ...tile });
+    }
+
+    return { removed, gameOver: !this.canMove() };
   }
 
   canMove(): boolean {
