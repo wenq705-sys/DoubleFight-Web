@@ -1,4 +1,4 @@
-import type { ThemeId, ThemeMeta } from '../config/themes';
+import { PALACE_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
 
 export class Hud {
   readonly root: HTMLElement;
@@ -37,7 +37,7 @@ export class Hud {
 
         <div class="hud__highest"><span id="highest-label">王国地标</span> <strong id="highest-value">4</strong></div>
 
-        <button class="hud__theme" id="theme-toggle" type="button" aria-label="切换主题">🏰 微缩王国</button>
+        <button class="hud__theme" id="theme-toggle" type="button" aria-label="返回主题岛">☁ 主题岛</button>
 
         <button class="hud__skill" id="clear-skill" type="button" aria-label="随机清块技能">
           <span class="hud__skill-icon">◇</span>
@@ -91,16 +91,23 @@ export class Hud {
     this.bestValue.textContent = best.toLocaleString('zh-CN');
   }
 
-  setHighest(value: number): void {
-    this.highestValue.textContent = String(value);
+  setHighest(value: number, theme: ThemeId): void {
+    this.highestValue.textContent = theme === 'palace'
+      ? `${PALACE_RANKS[value] ?? '凤仪'} · ${value}`
+      : String(value);
   }
 
   setTheme(theme: ThemeMeta): void {
     this.subtitle.textContent = theme.subtitle;
     this.highestLabel.textContent = theme.highestLabel;
-    this.themeButton.textContent = theme.id === 'palace' ? '🏯 后宫晋升' : '🏰 微缩王国';
+    this.themeButton.textContent = '☁ 主题岛';
     this.root.dataset.theme = theme.id;
     document.body.dataset.theme = theme.id;
+  }
+
+  setVisible(visible: boolean): void {
+    this.root.classList.toggle('hud--hidden', !visible);
+    if (!visible) this.hideGameOver();
   }
 
   setSkillCharges(charges: number): void {
@@ -148,6 +155,10 @@ export class Hud {
   onRestart(handler: () => void): void {
     this.restartButton.addEventListener('click', handler);
     this.retryButton.addEventListener('click', handler);
+  }
+
+  onHome(handler: () => void): void {
+    this.themeButton.addEventListener('click', handler);
   }
 
   onThemeToggle(handler: () => void): void {

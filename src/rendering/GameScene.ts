@@ -7,6 +7,7 @@ import { PalaceEnvironment } from './environment/PalaceEnvironment';
 import { TileFactory, type TileVisual } from './tiles/TileFactory';
 import { PalaceTileFactory } from './tiles/PalaceTileFactory';
 import { Effects } from './vfx/Effects';
+import { PerformanceManager, type QualityLevel } from '../performance/PerformanceManager';
 
 type Tween = {
   elapsed: number;
@@ -39,6 +40,8 @@ export class GameScene {
   private readonly dragCurrent = new THREE.Vector2();
   private readonly environments = new Map<ThemeId, ThemeEnvironment>();
   private readonly factories = new Map<ThemeId, ThemeTileFactory>();
+  private readonly performance: PerformanceManager;
+  private readonly debugElement: HTMLElement | undefined;
 
   private environment: ThemeEnvironment;
   private tileFactory: ThemeTileFactory;
@@ -48,6 +51,7 @@ export class GameScene {
   private hitStopRemaining = 0;
   private visualTime = 0;
   private disposed = false;
+  private homeMode = false;
 
   constructor(container: HTMLElement) {
     this.scene.background = new THREE.Color(ART.colors.sky);
@@ -67,6 +71,13 @@ export class GameScene {
     container.appendChild(this.renderer.domElement);
     this.canvas = this.renderer.domElement;
 
+    if (new URLSearchParams(window.location.search).get('debug') === '1') {
+      const debug = document.createElement('pre');
+      debug.className = 'perf-debug';
+      container.appendChild(debug);
+      this.debugElement = debug;
+    }
+
     this.environment = this.getEnvironment('kingdom');
     this.tileFactory = this.getFactory('kingdom');
 
@@ -75,14 +86,42 @@ export class GameScene {
     this.world.add(this.tileLayer);
     this.effects = new Effects(this.world, this.isMobileLike());
 
+    this.performance = new PerformanceManager(
+      this.renderer,
+      (dpr) => this.applyPixelRatio(dpr),
+      (quality) => this.applyQuality(quality),
+      this.debugElement,
+    );
+
     this.configureLighting();
     this.resize();
+    this.prewarmTheme('kingdom');
     window.addEventListener('resize', this.resize);
     window.addEventListener('orientationchange', this.resize);
     this.animate();
   }
 
   get theme(): ThemeId { return this.currentTheme; }
+
+  setHomeMode(enabled: boolean): void {
+    this.homeMode = enabled;
+    this.world.visible = !enabled;
+    this.clearGesture();
+    this.effects.clearTransient();
+  }
+
+  prewarmTheme(theme: ThemeId): void {
+    const factory = this.getFactory(theme);
+    const run = () => factory.warmup([2, 4, 8, 16, 32, 64, 128]);
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    };
+    if (idleWindow.requestIdleCallback) {
+      idleWindow.requestIdleCallback(run, { timeout: 900 });
+    } else {
+      setTimeout(run, 80);
+    }
+  }
 
   setTheme(theme: ThemeId, tiles: BoardTile[]): void {
     if (theme === this.currentTheme) return;
@@ -106,6 +145,7 @@ export class GameScene {
     }
 
     this.reset(tiles);
+    this.prewarmTheme(theme);
   }
 
   reset(tiles: BoardTile[]): void {
@@ -417,9 +457,6 @@ export class GameScene {
     const width = Math.max(1, window.innerWidth);
     const height = Math.max(1, window.innerHeight);
     const ratio = width / height;
-    const mobile = this.isMobileLike();
-
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.75));
     this.renderer.setSize(width, height);
     this.camera.aspect = ratio;
 
@@ -505,7 +542,20 @@ export class GameScene {
     this.camera.position.copy(home);
     this.camera.lookAt(this.cameraTarget);
     this.renderer.render(this.scene, this.camera);
+    this.performance.frame(delta);
   };
+
+  private applyPixelRatio(dpr: number): void {
+    this.renderer.setPixelRatio(dpr);
+    this.renderer.setSize(Math.max(1, window.innerWidth), Math.max(1, window.innerHeight), false);
+  }
+
+  private applyQuality(quality: QualityLevel): void {
+    this.effects.setQuality(quality);
+    // Keep the gameplay image crisp; reduce expensive shadow updates before reducing canvas resolution further.
+    this.renderer.shadowMap.autoUpdate = quality !== 'low';
+    if (quality === 'low') this.renderer.shadowMap.needsUpdate = true;
+  }
 
   private isMobileLike(): boolean {
     return window.innerWidth < 760 || window.matchMedia('(pointer: coarse)').matches;

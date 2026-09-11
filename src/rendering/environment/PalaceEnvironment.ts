@@ -94,6 +94,7 @@ interface SkillSpark {
   life: number;
   maxLife: number;
   velocity: THREE.Vector3;
+  active: boolean;
 }
 
 export class PalaceEnvironment {
@@ -120,6 +121,7 @@ export class PalaceEnvironment {
     this.createPond();
     this.createBanners();
     this.createPetals();
+    this.createSparkPool();
   }
 
   setGesture(dx: number, dy: number, strength: number): void {
@@ -144,30 +146,24 @@ export class PalaceEnvironment {
 
   impact(value: number, position: THREE.Vector3): void {
     this.impactEnergy = Math.max(this.impactEnergy, Math.min(1, 0.2 + Math.log2(value) * 0.06));
-    const count = value >= 128 ? 8 : 4;
-    for (let i = 0; i < count; i += 1) {
-      const material = new THREE.MeshBasicMaterial({
-        color: i % 2 ? C.goldLight : C.blossom,
-        transparent: true,
-        opacity: 0.85,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      });
-      const spark = add(
-        this.root,
-        i % 2 ? new THREE.OctahedronGeometry(0.055, 0) : new THREE.PlaneGeometry(0.1, 0.07),
-        material,
-        [position.x, position.y + 0.75, position.z],
-      );
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+    const requested = value >= 128 ? 8 : 4;
+    const available = this.sparks.filter((spark) => !spark.active).slice(0, requested);
+    available.forEach((spark, index) => {
+      const angle = (index / Math.max(1, available.length)) * Math.PI * 2 + Math.random() * 0.3;
       const life = 0.5 + Math.random() * 0.22;
-      this.sparks.push({
-        mesh: spark,
-        life,
-        maxLife: life,
-        velocity: new THREE.Vector3(Math.cos(angle) * 0.7, 0.7 + Math.random() * 0.6, Math.sin(angle) * 0.7),
-      });
-    }
+      spark.active = true;
+      spark.life = life;
+      spark.maxLife = life;
+      spark.velocity.set(Math.cos(angle) * 0.7, 0.7 + Math.random() * 0.6, Math.sin(angle) * 0.7);
+      spark.mesh.position.set(position.x, position.y + 0.75, position.z);
+      spark.mesh.scale.setScalar(1);
+      spark.mesh.rotation.set(0, 0, 0);
+      spark.mesh.visible = true;
+      if (spark.mesh.material instanceof THREE.MeshBasicMaterial) {
+        spark.mesh.material.color.setHex(index % 2 ? C.goldLight : C.blossom);
+        spark.mesh.material.opacity = 0.85;
+      }
+    });
   }
 
   skillPulse(): void {
@@ -209,12 +205,8 @@ export class PalaceEnvironment {
       spark.mesh.scale.setScalar(Math.max(0.01, normalized));
       if (spark.mesh.material instanceof THREE.MeshBasicMaterial) spark.mesh.material.opacity = normalized;
       if (spark.life <= 0) {
-        spark.mesh.removeFromParent();
-        spark.mesh.geometry.dispose();
-        const material = spark.mesh.material;
-        if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-        else material.dispose();
-        this.sparks.splice(i, 1);
+        spark.active = false;
+        spark.mesh.visible = false;
       }
     }
   }
@@ -260,21 +252,48 @@ export class PalaceEnvironment {
 
   private createRails(): void {
     const railZ = [-5.05, 5.45];
+    railZ.forEach((z) => box(this.root, [11.0, 0.16, 0.14], C.lacquer, [0, 0.95, z], 0.04));
+    for (const x of [-5.38, 5.38]) box(this.root, [0.14, 0.16, 10.4], C.lacquer, [x, 0.95, 0.2], 0.04);
+
+    const transforms: THREE.Matrix4[] = [];
+    const dummy = new THREE.Object3D();
     railZ.forEach((z) => {
-      box(this.root, [11.0, 0.16, 0.14], C.lacquer, [0, 0.95, z], 0.04);
       for (let x = -5.25; x <= 5.25; x += 1.05) {
-        cyl(this.root, 0.075, 0.82, C.lacquerDark, [x, 0.72, z], 10);
-        sphereGold(this.root, [x, 1.16, z]);
+        dummy.position.set(x, 0.72, z);
+        dummy.updateMatrix();
+        transforms.push(dummy.matrix.clone());
       }
     });
-
     for (const x of [-5.38, 5.38]) {
-      box(this.root, [0.14, 0.16, 10.4], C.lacquer, [x, 0.95, 0.2], 0.04);
       for (let z = -4.6; z <= 4.9; z += 1.06) {
-        cyl(this.root, 0.075, 0.82, C.lacquerDark, [x, 0.72, z], 10);
-        sphereGold(this.root, [x, 1.16, z]);
+        dummy.position.set(x, 0.72, z);
+        dummy.updateMatrix();
+        transforms.push(dummy.matrix.clone());
       }
     }
+
+    const posts = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.075, 0.075, 0.82, 8),
+      toon(C.lacquerDark),
+      transforms.length,
+    );
+    const caps = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.09, 8, 6),
+      new THREE.MeshStandardMaterial({ color: C.gold, roughness: 0.26, metalness: 0.5 }),
+      transforms.length,
+    );
+    transforms.forEach((matrix, index) => {
+      posts.setMatrixAt(index, matrix);
+      const cap = matrix.clone();
+      cap.setPosition(matrix.elements[12], 1.16, matrix.elements[14]);
+      caps.setMatrixAt(index, cap);
+    });
+    posts.instanceMatrix.needsUpdate = true;
+    caps.instanceMatrix.needsUpdate = true;
+    posts.castShadow = true;
+    posts.receiveShadow = true;
+    caps.castShadow = true;
+    this.root.add(posts, caps);
   }
 
   private createPalace(): void {
@@ -403,6 +422,30 @@ export class PalaceEnvironment {
     }
   }
 
+  private createSparkPool(): void {
+    const geometry = new THREE.OctahedronGeometry(0.06, 0);
+    for (let index = 0; index < 14; index += 1) {
+      const material = new THREE.MeshBasicMaterial({
+        color: index % 2 ? C.goldLight : C.blossom,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const spark = new THREE.Mesh(geometry, material);
+      spark.visible = false;
+      spark.castShadow = false;
+      this.root.add(spark);
+      this.sparks.push({
+        mesh: spark,
+        life: 0,
+        maxLife: 1,
+        velocity: new THREE.Vector3(),
+        active: false,
+      });
+    }
+  }
+
   private bannerTexture(text: string): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 192;
@@ -430,7 +473,3 @@ function sphere(
   return add(parent, new THREE.SphereGeometry(radius, 12, 9), toon(color), position);
 }
 
-function sphereGold(parent: THREE.Object3D, position: [number, number, number]): void {
-  const material = new THREE.MeshStandardMaterial({ color: C.gold, roughness: 0.26, metalness: 0.5 });
-  add(parent, new THREE.SphereGeometry(0.09, 10, 8), material, position);
-}

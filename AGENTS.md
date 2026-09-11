@@ -4,7 +4,7 @@ This file is the operational contract for AI agents working in this repository.
 
 ## 1. Read before editing
 
-Read these files, in order:
+Read in order:
 
 1. `docs/HANDOFF.md`
 2. `docs/ART_DIRECTION.md`
@@ -17,63 +17,61 @@ Do not begin implementation before understanding the current milestone and locke
 
 ## 2. Current product priority
 
-The current milestone is **single-player 3D 2048 visual vertical slice**.
+Current milestone: **M1.4 Production Foundation**.
 
 Priority order:
 
-1. visual quality / art-direction fidelity
-2. tactile movement and merge feedback
-3. mobile portrait readability and performance
-4. deterministic 2048 correctness
-5. maintainable architecture
+1. mobile performance stability over long sessions
+2. sharp/readable mobile rendering
+3. silhouette-first theme/piece quality
+4. tactile movement / merge / skill feedback
+5. maintainable architecture and Codex handoff quality
+6. deterministic 2048 correctness
 
-Do **not** add multiplayer, skills, metagame, ads, backend, matchmaking, account systems, or new game modes unless `docs/HANDOFF.md` explicitly moves the milestone forward.
+Do **not** add multiplayer, backend, matchmaking, accounts, ads or unrelated modes unless HANDOFF/ROADMAP explicitly moves the milestone.
 
 ## 3. Art-direction guardrails
 
-The visual target is a premium stylized miniature fantasy kingdom.
+- premium stylized miniature 3D
+- no generic cyber-neon drift
+- no giant text plaques covering pieces
+- model silhouette is primary; number is secondary
+- adjacent tiers must differ in silhouette, not only color
+- high-tier spectacle scales up aggressively but stays readable
+- palace theme uses original characters only
 
-Never drift toward:
+## 4. Architecture/performance rules
 
-- generic black + blue/purple neon UI
-- cyberpunk grids
-- default primitive-demo aesthetics
-- excessive bloom/emissive glow
-- particle spam used to hide weak modelling
-- flat 2048 rectangles with only palette swaps
-
-Every higher number should feel like a meaningful building/landmark evolution.
-
-## 4. Architecture rules
-
-- Game rules must not depend on Three.js or DOM APIs.
-- Rendering consumes game state/results; it never owns game truth.
-- VFX/audio failures must not break game logic.
-- New rendering features belong under `src/rendering/`.
-- Reusable tuning values belong under `src/config/`.
-- Avoid god classes and files that mix rules, renderer, DOM, and network concerns.
-- Keep mobile GPU/thermal cost in mind; visual quality comes from composition, silhouettes, lighting and timing before raw effect count.
+- game rules never depend on Three.js or DOM
+- renderer never owns authoritative game truth
+- reuse/caching is the default
+- do not introduce steady-state `new Mesh/new Geometry/new Material` inside repetitive merge loops when a pool/cache can serve it
+- repeated static props should consider `InstancedMesh`
+- VFX must be pooled and bounded on mobile
+- adaptive resolution should preserve sharpness when headroom exists
+- use `?debug=1` telemetry before guessing about performance
+- optimize draw calls/material changes before blindly cutting polygons
+- authored hero pieces may gradually migrate to stylized low-poly GLB assets; preserve procedural fallback until the asset pipeline is proven
 
 ## 5. Change discipline
 
 For each meaningful change:
 
 - update tests when rules change
-- update `docs/HANDOFF.md` when milestone state changes
-- update `docs/ART_DIRECTION.md` when an art rule is accepted or rejected
-- add an ADR when making a durable architectural choice
+- update HANDOFF when milestone state changes
+- update ART_DIRECTION when a visual rule is accepted/rejected
+- add an ADR for durable architecture changes
 - run `npm run typecheck`, `npm test`, and `npm run build`
 
 Do not silently rewrite locked product decisions.
 
 ## 6. Handoff style
 
-At the end of a task, report:
-
+Report:
 - what changed
 - files changed
 - validation performed
 - visual/performance risks
 - exact next recommended task
 
-The goal is that a new AI session can continue without asking the user to reconstruct project history.
+A new AI session must be able to continue without reconstructing project history from chat.

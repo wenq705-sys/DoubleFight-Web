@@ -73,11 +73,14 @@ const sphere = (
 
 interface EnergyMote {
   root: THREE.Group;
+  headMaterial: THREE.MeshBasicMaterial;
+  haloMaterial: THREE.MeshBasicMaterial;
   start: THREE.Vector3;
   control: THREE.Vector3;
   end: THREE.Vector3;
   age: number;
   duration: number;
+  active: boolean;
 }
 
 function numberTexture(value: number): THREE.CanvasTexture {
@@ -134,6 +137,7 @@ export class KingdomEnvironment {
     this.createMountains();
     this.createFlags();
     this.createClouds();
+    this.createEnergyMotePool();
 
     this.water = addMesh(
       this.root,
@@ -188,48 +192,26 @@ export class KingdomEnvironment {
     this.impactEnergy = Math.max(this.impactEnergy, Math.min(1, 0.2 + tier * 0.07));
     this.castlePulse = Math.max(this.castlePulse, value >= 512 ? 1 : value >= 128 ? 0.72 : 0.38);
 
-    const moteCount = value >= 512 ? 3 : value >= 128 ? 2 : 1;
+    const requested = value >= 512 ? 3 : value >= 128 ? 2 : 1;
     const color = value >= 512 ? C.gold : value >= 128 ? C.crystalBlue : C.coralLight;
-    for (let index = 0; index < moteCount; index += 1) {
-      const root = new THREE.Group();
-      const head = addMesh(
-        root,
-        new THREE.SphereGeometry(0.085 + index * 0.012, 10, 8),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.92,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        }),
-        [0, 0, 0],
-      );
-      head.castShadow = false;
-      const halo = addMesh(
-        root,
-        new THREE.SphereGeometry(0.17 + index * 0.015, 10, 8),
-        new THREE.MeshBasicMaterial({
-          color,
-          transparent: true,
-          opacity: 0.18,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        }),
-        [0, 0, 0],
-      );
-      halo.castShadow = false;
-      this.root.add(root);
+    const available = this.energyMotes.filter((mote) => !mote.active).slice(0, requested);
 
-      const start = position.clone().add(new THREE.Vector3((index - (moteCount - 1) / 2) * 0.12, 0.66, 0));
-      const end = new THREE.Vector3((index - (moteCount - 1) / 2) * 0.12, 3.45, -5.92);
-      const control = start.clone().lerp(end, 0.48);
-      control.y += 2.4 + index * 0.22;
-      const duration = 0.62 + index * 0.08;
-      root.position.copy(start);
-      this.energyMotes.push({ root, start, control, end, age: 0, duration });
-    }
+    available.forEach((mote, index) => {
+      const offset = (index - (available.length - 1) / 2) * 0.12;
+      mote.active = true;
+      mote.age = 0;
+      mote.duration = 0.62 + index * 0.08;
+      mote.start.set(position.x + offset, position.y + 0.66, position.z);
+      mote.end.set(offset, 3.45, -5.92);
+      mote.control.copy(mote.start).lerp(mote.end, 0.48);
+      mote.control.y += 2.4 + index * 0.22;
+      mote.root.position.copy(mote.start);
+      mote.root.scale.setScalar(0.65);
+      mote.root.visible = true;
+      mote.headMaterial.color.setHex(color);
+      mote.haloMaterial.color.setHex(color);
+    });
   }
-
   update(time: number, delta: number): void {
     const impact = this.impactEnergy;
     this.impactEnergy *= Math.pow(0.035, delta);
@@ -273,28 +255,23 @@ export class KingdomEnvironment {
         0.62 + Math.sin(time * 2.5 + index * 0.7) * 0.09 + this.castlePulse * 2.7;
     });
 
-    for (let index = this.energyMotes.length - 1; index >= 0; index -= 1) {
-      const mote = this.energyMotes[index];
+    for (const mote of this.energyMotes) {
+      if (!mote.active) continue;
       mote.age += delta;
       const t = THREE.MathUtils.clamp(mote.age / mote.duration, 0, 1);
       const oneMinus = 1 - t;
-      mote.root.position
-        .copy(mote.start)
-        .multiplyScalar(oneMinus * oneMinus)
-        .add(mote.control.clone().multiplyScalar(2 * oneMinus * t))
-        .add(mote.end.clone().multiplyScalar(t * t));
-      const scale = 0.65 + Math.sin(t * Math.PI) * 0.7;
-      mote.root.scale.setScalar(scale);
+      const a = oneMinus * oneMinus;
+      const b = 2 * oneMinus * t;
+      const d = t * t;
+      mote.root.position.set(
+        mote.start.x * a + mote.control.x * b + mote.end.x * d,
+        mote.start.y * a + mote.control.y * b + mote.end.y * d,
+        mote.start.z * a + mote.control.z * b + mote.end.z * d,
+      );
+      mote.root.scale.setScalar(0.65 + Math.sin(t * Math.PI) * 0.7);
       if (t >= 1) {
-        mote.root.traverse((node) => {
-          if (!(node instanceof THREE.Mesh)) return;
-          node.geometry.dispose();
-          const material = node.material;
-          if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
-          else material.dispose();
-        });
-        mote.root.removeFromParent();
-        this.energyMotes.splice(index, 1);
+        mote.active = false;
+        mote.root.visible = false;
         this.castlePulse = Math.max(this.castlePulse, 1);
       }
     }
@@ -302,6 +279,46 @@ export class KingdomEnvironment {
     if (this.water.material instanceof THREE.MeshStandardMaterial) {
       this.water.material.opacity = 0.84 + Math.sin(time * 1.25) * 0.035;
       this.water.material.emissiveIntensity = 0.07 + impact * 0.16;
+    }
+  }
+
+  private createEnergyMotePool(): void {
+    const headGeometry = new THREE.SphereGeometry(0.09, 8, 6);
+    const haloGeometry = new THREE.SphereGeometry(0.18, 8, 6);
+    for (let index = 0; index < 6; index += 1) {
+      const root = new THREE.Group();
+      root.visible = false;
+      const headMaterial = new THREE.MeshBasicMaterial({
+        color: C.coralLight,
+        transparent: true,
+        opacity: 0.92,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const haloMaterial = new THREE.MeshBasicMaterial({
+        color: C.coralLight,
+        transparent: true,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const head = new THREE.Mesh(headGeometry, headMaterial);
+      const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+      head.castShadow = false;
+      halo.castShadow = false;
+      root.add(head, halo);
+      this.root.add(root);
+      this.energyMotes.push({
+        root,
+        headMaterial,
+        haloMaterial,
+        start: new THREE.Vector3(),
+        control: new THREE.Vector3(),
+        end: new THREE.Vector3(),
+        age: 0,
+        duration: 1,
+        active: false,
+      });
     }
   }
 
@@ -386,18 +403,55 @@ export class KingdomEnvironment {
   private createWalls(): void {
     const wallZTop = -5.36;
     const wallZBottom = 5.72;
+    const blockMatrices: THREE.Matrix4[] = [];
+    const capMatrices: THREE.Matrix4[] = [];
+    const dummy = new THREE.Object3D();
+
     for (let x = -5.38; x <= 5.38; x += 1.08) {
-      roundedBox(this.root, [0.84, 0.66, 0.68], C.stone, [x, 0.46, wallZTop], 0.1);
-      roundedBox(this.root, [0.84, 0.66, 0.68], C.stone, [x, 0.46, wallZBottom], 0.1);
+      for (const z of [wallZTop, wallZBottom]) {
+        dummy.position.set(x, 0.46, z);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        blockMatrices.push(dummy.matrix.clone());
+      }
       if (Math.abs(x) < 4.8) {
-        roundedBox(this.root, [0.46, 0.12, 0.34], C.brick, [x, 0.84, wallZTop + 0.02], 0.05);
-        roundedBox(this.root, [0.46, 0.12, 0.34], C.brick, [x, 0.84, wallZBottom - 0.02], 0.05);
+        for (const z of [wallZTop + 0.02, wallZBottom - 0.02]) {
+          dummy.position.set(x, 0.84, z);
+          dummy.updateMatrix();
+          capMatrices.push(dummy.matrix.clone());
+        }
       }
     }
     for (let z = -4.3; z <= 4.7; z += 1.08) {
-      roundedBox(this.root, [0.68, 0.66, 0.84], C.stone, [-5.38, 0.46, z], 0.1);
-      roundedBox(this.root, [0.68, 0.66, 0.84], C.stone, [5.38, 0.46, z], 0.1);
+      for (const x of [-5.38, 5.38]) {
+        dummy.position.set(x, 0.46, z);
+        dummy.rotation.y = Math.PI / 2;
+        dummy.updateMatrix();
+        blockMatrices.push(dummy.matrix.clone());
+      }
     }
+
+    const blocks = new THREE.InstancedMesh(
+      new RoundedBoxGeometry(0.84, 0.66, 0.68, 3, 0.1),
+      toon(C.stone),
+      blockMatrices.length,
+    );
+    blockMatrices.forEach((matrix, index) => blocks.setMatrixAt(index, matrix));
+    blocks.instanceMatrix.needsUpdate = true;
+    blocks.castShadow = true;
+    blocks.receiveShadow = true;
+
+    const caps = new THREE.InstancedMesh(
+      new RoundedBoxGeometry(0.46, 0.12, 0.34, 3, 0.05),
+      toon(C.brick),
+      capMatrices.length,
+    );
+    capMatrices.forEach((matrix, index) => caps.setMatrixAt(index, matrix));
+    caps.instanceMatrix.needsUpdate = true;
+    caps.castShadow = true;
+    caps.receiveShadow = true;
+
+    this.root.add(blocks, caps);
   }
 
   private createCastle(): void {

@@ -120,11 +120,13 @@ function numberTexture(value: number): THREE.CanvasTexture {
 
 function addNumberBadge(parent: THREE.Object3D, value: number, y: number, z: number, scale = 1): void {
   const badgeColor = value >= 512 ? C.goldDeep : value >= 128 ? C.gold : C.cream;
-  const badge = cylinder(parent, 0.56 * scale, 0.09, badgeColor, [0, y, z], 28, value >= 128);
+  const badgeY = Math.min(y, 0.48);
+  const badgeX = 0.5 * scale;
+  const badge = cylinder(parent, 0.25 * scale, 0.075, badgeColor, [badgeX, badgeY, z], 20, value >= 128);
   badge.rotation.x = Math.PI / 2;
   const material = new THREE.MeshBasicMaterial({ map: numberTexture(value), transparent: true, depthWrite: false });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(1.06 * scale, 0.55 * scale), material);
-  label.position.set(0, y, z + 0.051);
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(0.46 * scale, 0.3 * scale), material);
+  label.position.set(badgeX, badgeY, z + 0.046);
   label.renderOrder = 20;
   parent.add(label);
 }
@@ -177,9 +179,19 @@ export class TileFactory {
     const animatedParts: THREE.Object3D[] = [];
     root.traverse((node) => {
       if (node.userData.tileAnimated) animatedParts.push(node);
-      if (node instanceof THREE.Mesh) node.frustumCulled = false;
+      if (node instanceof THREE.Mesh) node.frustumCulled = true;
     });
     return { root, animatedParts };
+  }
+
+  warmup(values: number[]): void {
+    values.forEach((value) => {
+      if (!this.templates.has(value)) {
+        const built = this.build(value);
+        built.animatedParts.forEach((part) => { part.userData.tileAnimated = true; });
+        this.templates.set(value, built.root);
+      }
+    });
   }
 
   private build(value: number): TileVisual {
@@ -273,7 +285,7 @@ export class TileFactory {
     }
 
     root.traverse((node: THREE.Object3D) => {
-      if (node instanceof THREE.Mesh) node.frustumCulled = false;
+      if (node instanceof THREE.Mesh) node.frustumCulled = true;
     });
     return { root, animatedParts };
   }
