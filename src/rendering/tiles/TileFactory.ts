@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { ART } from '../../config/artDirection';
+import { tierScale } from '../../config/tierProgression';
 
 const C = ART.colors;
 const gradient = (() => {
@@ -126,17 +127,16 @@ type TierStyle = {
   primary: number;
   light: number;
   dark: number;
-  scale: number;
 };
 
 const TIER_STYLES: Record<number, TierStyle> = {
   // Deliberately discrete hue families. Adjacent tiers must never be light/dark
   // variants of the same hue.
-  2: { primary: 0x43b9a7, light: 0x9be1d5, dark: 0x236f68, scale: 0.82 },       // turquoise
-  4: { primary: 0xf0c64a, light: 0xffe59a, dark: 0xb87822, scale: 0.86 },       // amber
-  8: { primary: 0x8d68d8, light: 0xcab8ef, dark: 0x553b9c, scale: 0.90 },       // violet
-  16: { primary: 0xf08a3c, light: 0xffbf82, dark: 0xb54c22, scale: 0.94 },      // orange
-  32: { primary: 0xd8414d, light: 0xf18a90, dark: 0x8a2435, scale: 0.98 },      // red
+  2: { primary: 0x43b9a7, light: 0x9be1d5, dark: 0x236f68 },       // turquoise
+  4: { primary: 0xf0c64a, light: 0xffe59a, dark: 0xb87822 },       // amber
+  8: { primary: 0x8d68d8, light: 0xcab8ef, dark: 0x553b9c },       // violet
+  16: { primary: 0xf08a3c, light: 0xffbf82, dark: 0xb54c22 },      // orange
+  32: { primary: 0xd8414d, light: 0xf18a90, dark: 0x8a2435 },      // red
   64: { primary: 0x3d78d5, light: 0x92b7ef, dark: 0x234a98, scale: 1.02 },      // sapphire
   128: { primary: 0x3da568, light: 0x8bd1a3, dark: 0x216a45, scale: 1.06 },     // emerald
   256: { primary: 0xcf52a4, light: 0xe99dcc, dark: 0x782b77, scale: 1.10 },     // magenta
@@ -147,7 +147,7 @@ const TIER_STYLES: Record<number, TierStyle> = {
 
 function applyTierIdentity(root: THREE.Group, value: number): void {
   const style = TIER_STYLES[value] ?? TIER_STYLES[2048];
-  root.scale.setScalar(style.scale);
+  root.scale.setScalar(tierScale(value, 0.82, 1.22));
 
   root.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
