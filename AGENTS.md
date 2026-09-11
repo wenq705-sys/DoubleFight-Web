@@ -15,7 +15,7 @@ Read in order:
 
 ## 2. Current milestone
 
-**M2.4 / M2.5 — complete server-authoritative match loop and public matchmaking.**
+**M2.5 / M2.6 — public matchmaking and production-server hardening.**
 
 "Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
@@ -41,6 +41,8 @@ Priority:
 - move sequence and skill sequence are separate ordered streams
 - clients display roundEndsAt; they never start/reset the authoritative match timer
 - result UI must render the server MatchResult rather than independently deciding who won
+- public matchmaking must only pair players into the existing RoomSession; never fork match rules
+- queue state is not reconnect-persistent; room/match state is reconnect-persistent
 - stable tile ids in authoritative snapshots are part of the duel animation/reconciliation contract
 - prediction must never invent the authoritative random spawn
 - themes are cosmetic/presentation only; they cannot change competitive rules
@@ -70,7 +72,6 @@ For meaningful changes:
 
 ## 6. Do not add yet unless milestone moves
 
-- public matchmaking
 - accounts
 - ranking backend
 - ads
@@ -79,4 +80,4 @@ For meaningful changes:
 - Redis/distributed rooms
 - third theme
 
-M2.4 is implemented. M2.5 matchmaking must create/reuse the existing authoritative RoomSession rather than fork competitive rules into a second match engine.
+M2.5 is implemented. Do not add MMR/regions/bots until production queue data exists. M2.6 should focus on public TLS deployment, real-device validation, rate limits and observability.
