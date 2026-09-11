@@ -2,63 +2,108 @@
 
 ## Product thesis
 
-`双数对决 / Double Fight` is a **3D 2048 skill-duel game** designed for portrait mobile play and short, highly tactile sessions.
+`双数对决 / Double Fight` is a **3D 2048 online skill-duel game** designed for portrait mobile play, short sessions and continuously expandable visual themes.
 
 Long-term signature:
 
-> **2048 clarity + same-screen human competition + spectacular but readable skill interaction + seasonal 3D themes.**
+> **2048 clarity + real-time two-device competition + spectacular skill interaction + independent 3D themes.**
 
-## Current playable milestone
+## Modes
 
-Single-player 2048 remains the core. One controlled recovery skill is now implemented to validate the eventual duel skill language without replacing the 2048 loop.
+### Solo / Theme Islands
+
+The default product shell is the Theme Islands home. The player selects a world and plays a full-screen premium 3D 2048 session.
+
+Solo mode carries:
+- theme discovery
+- high score / highest tier
+- visual progression
+- future unlocks / collections / challenges
+
+### Online Duel
+
+Two players use **two separate devices** and connect through the authoritative game server.
+
+Each player:
+- chooses their own visual theme independently,
+- controls only their own 4×4 board,
+- sees both their own board and the opponent state,
+- earns combat resources from strong 2048 play,
+- sends skills across the duel.
+
+A Palace player can fight a Kingdom player. Themes are visual/content presentation; they must not create balance differences.
+
+## Network gameplay principle
+
+2048 actions are compact commands:
+
+`LEFT / RIGHT / UP / DOWN`
+
+The server owns:
+- authoritative board state
+- spawn RNG
+- score
+- future energy/skill state
+- win/loss
+
+The client is responsible for responsive presentation and later uses prediction/reconciliation so network latency does not damage swipe feel.
+
+## First PvP skill set
 
 ### Random Clear
+Self-targeted recovery. Clears low-value/random own tiles according to final balance rules.
 
-- 3 charges per round in the prototype
-- clears up to 2 random occupied cells
-- dramatic fullscreen presentation
-- intended as recovery / space-control, not an automatic win button
-- future tuning may connect charges to merges, combos, ads, round rules, or loadout systems
+### Petrify
+Opponent-targeted pressure. Temporarily blocks a cell or otherwise reduces usable space.
 
-## Planned duel format
+### Shield
+Self-targeted defense. Negates or mitigates the next hostile control effect.
 
-- portrait same-screen play
-- Player 2 board faces the opposite physical direction
-- two independent 4×4 boards
-- simultaneous touch zones
-- short timed rounds
-- score + survival pressure
-- skills earned through strong 2048 play, not unrelated resource systems
+Skills must amplify 2048 tension rather than replace the 2048 loop.
 
-## Skill principles
+## Energy
 
-Skills must amplify 2048 tension rather than replace it.
+The planned PvP economy is:
 
-Prototype / candidate families:
+```text
+better / higher merges
+        ↓
+more battle energy
+        ↓
+more skill opportunities
+        ↓
+pressure / recovery / counters
+```
 
-- **Random Clear**: remove random own tiles; recovery/control
-- **Hammer**: remove one selected own tile; precision recovery
-- **Freeze**: brief opponent input interruption; tempo attack
-- **Petrify**: temporarily lock one opponent cell; spatial pressure
+Skills should therefore reward strong core play, not operate as an unrelated timer.
 
-Every skill requires:
-- instantly understandable game-state effect,
-- strong audiovisual spectacle,
-- bounded mobile performance cost,
-- anti-frustration rules for PvP.
+## Match direction
+
+Initial tuning target: approximately 2–3 minute rounds.
+
+Win hierarchy is expected to use:
+1. board lock / inability to move,
+2. score at time limit,
+3. highest tier,
+4. remaining free space,
+5. draw only if all tie breakers remain equal.
+
+Exact numbers remain subject to playtesting.
 
 ## Theme strategy
 
-Gameplay logic remains stable while themes change environment, tile/character progression, merge VFX motif, audio palette, UI accents and legendary 2048 celebration.
+Themes change:
+- pieces/characters/buildings
+- environment
+- merge motif
+- skill presentation
+- UI accent
+- legendary 2048 celebration
 
-### Theme 1 — Miniature Kingdom
+Themes do **not** change competitive rules or base skill balance.
 
-Numbers progress as collectible buildings/landmarks.
+Current themes:
+- Miniature Kingdom
+- 后宫晋升 / Palace Rank
 
-### Theme 2 — 后宫晋升
-
-Original court characters progress through rank/visual prestige:
-
-宫女 → 答应 → 常在 → 贵人 → 嫔 → 妃 → 贵妃 → 皇贵妃 → 皇后 → 凤仪之主 → 母仪天下.
-
-Do not use copied TV characters or actor likenesses. The theme should evoke palace-drama rank progression through original stylized art.
+Core pieces will gradually migrate from procedural blockouts to authored stylized low-poly GLB assets.
