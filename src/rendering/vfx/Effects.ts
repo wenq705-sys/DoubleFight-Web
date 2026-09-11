@@ -37,17 +37,18 @@ const SHARED = {
 export class Effects {
   private readonly items: FxItem[] = [];
   private readonly lights: LightItem[] = [];
-  private readonly maxByQuality: Record<QualityLevel, number> = {
-    high: this.mobile ? 92 : 132,
-    medium: this.mobile ? 68 : 104,
-    low: this.mobile ? 48 : 82,
-  };
+  private readonly maxByQuality: Record<QualityLevel, number>;
   private quality: QualityLevel = 'high';
 
   constructor(
     private readonly parent: THREE.Object3D,
     private readonly mobile = false,
   ) {
+    this.maxByQuality = {
+      high: mobile ? 92 : 132,
+      medium: mobile ? 68 : 104,
+      low: mobile ? 48 : 82,
+    };
     this.prewarm();
   }
 
