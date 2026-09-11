@@ -21,6 +21,7 @@ const C = {
   lacquerLight: 0xb43632,
   lacquerDark: 0x521418,
   gold: 0xe6ae38,
+  goldDeep: 0x9f6418,
   goldLight: 0xffd66c,
   stone: 0xd8c5a6,
   stoneDark: 0x917d67,
