@@ -269,6 +269,43 @@ New match resets:
 - result state
 - timer
 
+## M2.5 Public matchmaking
+
+Matchmaking is deliberately an orchestration layer, not a second match implementation.
+
+`MatchmakingQueue` stores lightweight waiting entries:
+
+```text
+connectionId
+nickname
+theme
+joinedAt
+```
+
+`RoomManager` pairs FIFO entries and immediately converts them into a normal `RoomSession`:
+
+```text
+Quick Match
+   ↓
+MatchmakingQueue
+   ↓ two live clients
+RoomSession
+   ↓
+same reconnect / Board2048 / energy / skills / timer / results / rematch
+```
+
+This keeps competitive rules identical between public matchmaking and six-digit private rooms.
+
+Current queue behavior:
+- one global FIFO queue
+- 60-second timeout
+- cancel supported
+- disconnect removes the queue entry immediately
+- selected themes are independent and cosmetic
+- no MMR, bots or region buckets yet
+
+Those should only be added after production concurrency/latency data justifies the complexity.
+
 ## Future platform layer
 
 Direct uses of browser-only APIs should progressively move behind platform adapters before Douyin packaging:

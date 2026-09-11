@@ -24,6 +24,12 @@ Solo mode carries:
 
 Two players use **two separate devices** and connect through the authoritative game server.
 
+Entry paths:
+- **快速匹配** — server FIFO queue finds another live player and starts immediately
+- **私人房** — create/share a 6-digit room code, then both players ready manually
+
+Both paths enter the exact same competitive RoomSession after pairing.
+
 Each player:
 - chooses their own visual theme independently,
 - controls only their own 4×4 board,

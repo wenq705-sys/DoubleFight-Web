@@ -5,7 +5,10 @@ import {
   type NetworkThemeId,
   type ServerMessage,
 } from '../shared/index';
+import { MatchmakingQueue } from './MatchmakingQueue';
 import { RoomSession, type RoomPlayerRecord } from './RoomSession';
+
+export const MATCHMAKING_TIMEOUT_MS = 60_000;
 
 type ErrorCode = Extract<ServerMessage, { type: 'error' }>['code'];
 
@@ -25,6 +28,8 @@ export class RoomManager {
   private readonly memberships = new Map<string, Membership>();
   private readonly disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly matchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly matchmaking = new MatchmakingQueue();
+  private readonly matchmakingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   register(send: (message: ServerMessage) => void): ConnectionTransport {
     const connection: ConnectionTransport = { id: randomUUID(), send };
@@ -39,6 +44,7 @@ export class RoomManager {
 
   unregister(connectionId: string): void {
     this.connections.delete(connectionId);
+    this.removeFromMatchmaking(connectionId, true);
     const membership = this.memberships.get(connectionId);
     this.memberships.delete(connectionId);
     if (!membership) return;
@@ -91,6 +97,12 @@ export class RoomManager {
           return;
         case 'join_room':
           this.joinRoom(connectionId, message.roomCode, message.playerName, message.theme);
+          return;
+        case 'join_matchmaking':
+          this.joinMatchmaking(connectionId, message.playerName, message.theme);
+          return;
+        case 'cancel_matchmaking':
+          this.cancelMatchmaking(connectionId);
           return;
         case 'reconnect':
           this.reconnect(connectionId, message.roomCode, message.reconnectToken);
@@ -185,15 +197,17 @@ export class RoomManager {
     }
   }
 
-  stats(): { rooms: number; connections: number; playing: number } {
+  stats(): { rooms: number; connections: number; playing: number; queued: number } {
     return {
       rooms: this.rooms.size,
       connections: this.connections.size,
       playing: [...this.rooms.values()].filter((room) => room.phase === 'playing').length,
+      queued: this.matchmaking.size,
     };
   }
 
   private createRoom(connectionId: string, playerName: string, theme: NetworkThemeId): void {
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = this.generateRoomCode();
     const room = new RoomSession(code, (target, message) => this.send(target, message));
@@ -205,6 +219,7 @@ export class RoomManager {
   }
 
   private joinRoom(connectionId: string, roomCode: string, playerName: string, theme: NetworkThemeId): void {
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
@@ -216,6 +231,7 @@ export class RoomManager {
   }
 
   private reconnect(connectionId: string, roomCode: string, reconnectToken: string): void {
+    this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
@@ -237,6 +253,7 @@ export class RoomManager {
   }
 
   private leaveRoom(connectionId: string): void {
+    this.removeFromMatchmaking(connectionId, true);
     const membership = this.memberships.get(connectionId);
     if (!membership) return;
     this.memberships.delete(connectionId);
@@ -261,6 +278,147 @@ export class RoomManager {
       this.clearMatchTimer(room.code);
       room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
     }
+  }
+
+  private joinMatchmaking(
+    connectionId: string,
+    playerName: string,
+    theme: NetworkThemeId,
+  ): void {
+    if (this.matchmaking.has(connectionId)) throw new Error('ALREADY_MATCHMAKING');
+
+    if (this.memberships.has(connectionId)) {
+      this.leaveRoom(connectionId);
+    }
+
+    const entry = {
+      connectionId,
+      playerName: sanitizeQueueName(playerName),
+      theme,
+      joinedAt: Date.now(),
+    };
+    this.matchmaking.enqueue(entry);
+    this.scheduleMatchmakingTimeout(connectionId);
+    this.notifyMatchmakingQueue();
+    this.tryMatchmake();
+  }
+
+  private cancelMatchmaking(connectionId: string): void {
+    if (!this.matchmaking.has(connectionId)) throw new Error('NOT_MATCHMAKING');
+    this.removeFromMatchmaking(connectionId, false);
+    this.send(connectionId, {
+      type: 'matchmaking_state',
+      state: {
+        status: 'idle',
+        joinedAt: null,
+        queueSize: this.matchmaking.size,
+      },
+    });
+    this.notifyMatchmakingQueue();
+  }
+
+  private tryMatchmake(): void {
+    while (this.matchmaking.size >= 2) {
+      const pair = this.matchmaking.takePair();
+      if (!pair) return;
+
+      const [first, second] = pair;
+      this.clearMatchmakingTimer(first.connectionId);
+      this.clearMatchmakingTimer(second.connectionId);
+
+      const firstLive = this.connections.has(first.connectionId);
+      const secondLive = this.connections.has(second.connectionId);
+
+      if (!firstLive || !secondLive) {
+        if (firstLive) {
+          this.matchmaking.enqueue(first);
+          this.scheduleMatchmakingTimeout(first.connectionId);
+        }
+        if (secondLive) {
+          this.matchmaking.enqueue(second);
+          this.scheduleMatchmakingTimeout(second.connectionId);
+        }
+        continue;
+      }
+
+      const code = this.generateRoomCode();
+      const room = new RoomSession(code, (target, message) => this.send(target, message));
+      const firstPlayer = room.addPlayer(first.connectionId, first.playerName, first.theme);
+      const secondPlayer = room.addPlayer(second.connectionId, second.playerName, second.theme);
+
+      this.rooms.set(code, room);
+      this.memberships.set(first.connectionId, { roomCode: code, playerId: firstPlayer.id });
+      this.memberships.set(second.connectionId, { roomCode: code, playerId: secondPlayer.id });
+
+      const matchedState = {
+        status: 'matched' as const,
+        joinedAt: null,
+        queueSize: this.matchmaking.size,
+      };
+      this.send(first.connectionId, { type: 'matchmaking_state', state: matchedState });
+      this.send(second.connectionId, { type: 'matchmaking_state', state: matchedState });
+
+      this.sendJoined(first.connectionId, room, firstPlayer);
+      this.sendJoined(second.connectionId, room, secondPlayer);
+
+      room.setReady(firstPlayer.id, true);
+      const started = room.setReady(secondPlayer.id, true);
+
+      room.broadcast({ type: 'room_state', room: room.state() });
+      if (started) {
+        this.scheduleMatchDeadline(room);
+        room.broadcast({ type: 'match_start', snapshot: room.matchSnapshot() });
+      }
+    }
+
+    this.notifyMatchmakingQueue();
+  }
+
+  private notifyMatchmakingQueue(): void {
+    const queueSize = this.matchmaking.size;
+    for (const entry of this.matchmaking.snapshot()) {
+      this.send(entry.connectionId, {
+        type: 'matchmaking_state',
+        state: {
+          status: 'searching',
+          joinedAt: entry.joinedAt,
+          queueSize,
+        },
+      });
+    }
+  }
+
+  private scheduleMatchmakingTimeout(connectionId: string): void {
+    this.clearMatchmakingTimer(connectionId);
+    const timer = setTimeout(() => {
+      const entry = this.matchmaking.remove(connectionId);
+      this.matchmakingTimers.delete(connectionId);
+      if (!entry) return;
+
+      this.send(connectionId, {
+        type: 'matchmaking_state',
+        state: {
+          status: 'timed_out',
+          joinedAt: entry.joinedAt,
+          queueSize: this.matchmaking.size,
+        },
+      });
+      this.notifyMatchmakingQueue();
+    }, MATCHMAKING_TIMEOUT_MS);
+    timer.unref?.();
+    this.matchmakingTimers.set(connectionId, timer);
+  }
+
+  private removeFromMatchmaking(connectionId: string, notifyQueue: boolean): void {
+    const removed = this.matchmaking.remove(connectionId);
+    this.clearMatchmakingTimer(connectionId);
+    if (removed && notifyQueue) this.notifyMatchmakingQueue();
+  }
+
+  private clearMatchmakingTimer(connectionId: string): void {
+    const timer = this.matchmakingTimers.get(connectionId);
+    if (timer) clearTimeout(timer);
+    this.matchmakingTimers.delete(connectionId);
   }
 
   private withRoom(
@@ -297,6 +455,8 @@ export class RoomManager {
       ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
       ROOM_FULL: 'ROOM_FULL',
       ROOM_ALREADY_PLAYING: 'ROOM_ALREADY_PLAYING',
+      ALREADY_MATCHMAKING: 'ALREADY_MATCHMAKING',
+      NOT_MATCHMAKING: 'NOT_MATCHMAKING',
       NOT_IN_ROOM: 'NOT_IN_ROOM',
       NOT_PLAYING: 'NOT_PLAYING',
       NOT_READY: 'NOT_READY',
@@ -370,6 +530,8 @@ function errorMessage(code: ErrorCode): string {
     ROOM_NOT_FOUND: '房间不存在或已经关闭。',
     ROOM_FULL: '房间已经有两名玩家。',
     ROOM_ALREADY_PLAYING: '该房间已经开始比赛。',
+    ALREADY_MATCHMAKING: '你已经在匹配队列中。',
+    NOT_MATCHMAKING: '当前没有正在进行的匹配。',
     NOT_IN_ROOM: '当前连接不在房间中。',
     NOT_PLAYING: '比赛尚未开始。',
     NOT_READY: '玩家尚未准备。',
@@ -383,4 +545,10 @@ function errorMessage(code: ErrorCode): string {
     SKILL_NO_TARGET: '当前没有可用的技能目标。',
   };
   return messages[code];
+}
+
+
+function sanitizeQueueName(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  return (trimmed || '玩家').slice(0, 16);
 }

@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone: M2.4 — Complete Server-Authoritative Match Loop.**
+**Milestone: M2.5 — Public Matchmaking over the Existing Match Engine.**
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
@@ -219,6 +219,46 @@ Instant endings still override the timer:
 - visible mm:ss server timer with 10-second danger state
 - result panel shows both scores, highest tiles, usable spaces and the winning rule
 
+## M2.5 implemented
+
+### Queue layer
+- `server/MatchmakingQueue.ts`
+- in-memory FIFO queue only; it does not know Board2048 rules
+- queue entries contain connection id, sanitized nickname, selected theme and join time
+- one connection cannot occupy multiple queue positions
+- cancel/disconnect removes the entry
+- waiting entries receive updated queue size
+- unmatched entries time out after 60 seconds
+
+### Pairing
+`RoomManager` owns matchmaking orchestration.
+
+When two live entries are available:
+1. remove the pair from the queue
+2. create a normal 6-digit `RoomSession`
+3. add one player with each player's independently selected theme
+4. create the normal room memberships/reconnect tokens
+5. auto-ready both players
+6. schedule the existing authoritative 180s deadline
+7. broadcast the normal `match_start`
+
+After step 2 there is no matchmaking-specific battle path. Energy, skills, timer, results, reconnect and rematch all use the same M2.0–M2.4 code.
+
+### Client / UX
+- protocol v5 adds `join_matchmaking`, `cancel_matchmaking` and `matchmaking_state`
+- `OnlineClientState` now includes matchmaking state
+- Online Duel lobby makes **快速匹配** the primary CTA
+- current selected theme is submitted with the queue request
+- waiting UI shows elapsed time and current queue population
+- player can cancel while searching
+- private create/join-by-code remains available below the quick-match flow
+- matched players move directly into the existing DuelScreen
+
+### Cleanup / observability
+- disconnected queued sockets are removed immediately rather than receiving room reconnect grace
+- stale paired sockets are skipped safely
+- `/health` now exposes `queued` through `RoomManager.stats()`
+
 ## Deployment state
 
 The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
@@ -248,19 +288,19 @@ Remote test:
 - Online Duel uses a lightweight duel render, not two complete Solo environments.
 - first release target remains Douyin mini-game, followed by WeChat, then iOS.
 
-## Next exact task — M2.5
+## Next exact task — M2.6
 
-Add public matchmaking without changing the private-room match engine:
+Deploy and harden the actual public game server:
 
-1. server queue join/leave
-2. pair two compatible waiting players into a normal RoomSession
-3. matchmaking state / cancel UI
-4. basic queue timeout and stale-connection cleanup
-5. preserve independent theme selection
-6. keep private six-digit rooms intact
-7. leave region/MMR sophistication until real concurrency data exists
+1. deploy `Dockerfile.server` behind TLS and obtain a stable `wss://.../ws`
+2. configure the web client with `VITE_WS_URL`
+3. validate quick match + private rooms using two real phones on different networks
+4. test reconnect while Wi-Fi/5G/background state changes
+5. add basic connection/message rate limits before broad public access
+6. add structured server logs/metrics for queue, room, match completion and errors
+7. collect real queue/latency data before introducing regions/MMR
 
-Before production launch, the existing server still needs a public TLS `wss://` deployment for real two-phone latency and balance testing.
+M2.5 intentionally stays single-queue FIFO because there is no production population data yet.
 
 ## Real-device validation still required
 

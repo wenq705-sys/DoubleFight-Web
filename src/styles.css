@@ -1582,3 +1582,171 @@ body[data-theme="palace"] .hud__hint{
   .duel-result__player strong{font-size:19px}
   .duel-result__player small{font-size:7px}
 }
+
+
+/* === M2.5 public matchmaking === */
+.online-matchmaking{
+  margin-top:14px;
+  padding:14px;
+  border:2px solid rgba(67,107,137,.25);
+  border-radius:21px;
+  background:
+    radial-gradient(circle at 82% 18%,rgba(86,184,210,.2),transparent 30%),
+    linear-gradient(155deg,rgba(241,253,249,.88),rgba(223,241,238,.76));
+  box-shadow:0 8px 24px rgba(45,80,91,.09);
+}
+.online-matchmaking__hero span,
+.online-matchmaking__hero strong,
+.online-matchmaking__hero small{display:block}
+.online-matchmaking__hero span{
+  color:#3c7f96;
+  font-size:8px;
+  font-weight:1000;
+  letter-spacing:.17em;
+}
+.online-matchmaking__hero strong{
+  margin-top:2px;
+  color:#294b59;
+  font-size:22px;
+  line-height:1.05;
+  font-weight:1000;
+}
+.online-matchmaking__hero small{
+  margin-top:4px;
+  color:#5f777c;
+  font-size:9px;
+  font-weight:800;
+}
+.online-matchmaking__button{
+  width:100%;
+  min-height:52px;
+  margin-top:12px;
+  border:2px solid #ffd36e;
+  border-radius:16px;
+  background:linear-gradient(180deg,#e05c48,#a62e36);
+  color:#fff2be;
+  box-shadow:0 5px 0 #74212b,0 9px 22px rgba(111,40,40,.2);
+  font-size:16px;
+  font-weight:1000;
+  letter-spacing:.03em;
+}
+.online-matchmaking__button:disabled{
+  opacity:.48;
+  filter:saturate(.55);
+}
+.online-matchmaking__search{
+  margin-top:11px;
+  display:grid;
+  grid-template-columns:48px 1fr auto;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  border:1px solid rgba(57,114,137,.2);
+  border-radius:15px;
+  background:rgba(255,255,255,.52);
+}
+.online-matchmaking__search--hidden{display:none}
+.online-matchmaking__search>div:nth-child(2)>strong,
+.online-matchmaking__search>div:nth-child(2)>span{display:block}
+.online-matchmaking__search>div:nth-child(2)>strong{
+  color:#315c6c;
+  font-size:11px;
+  font-weight:1000;
+}
+.online-matchmaking__search>div:nth-child(2)>span{
+  margin-top:3px;
+  color:#6b8185;
+  font-size:8px;
+  font-weight:800;
+}
+.online-matchmaking__search>div:nth-child(2)>span b{
+  color:#397d94;
+  font-variant-numeric:tabular-nums;
+}
+.online-matchmaking__search>button{
+  min-width:52px;
+  min-height:34px;
+  border:1px solid rgba(111,72,52,.2);
+  border-radius:10px;
+  background:rgba(255,247,224,.78);
+  color:#885545;
+  font-size:9px;
+  font-weight:950;
+}
+.online-matchmaking__search>button:disabled{opacity:.45}
+.online-matchmaking__radar{
+  position:relative;
+  width:44px;
+  height:44px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:radial-gradient(circle,#417e99 0 28%,#d8f2ee 29% 43%,#80bdc7 44% 46%,#e8faf6 47%);
+  overflow:hidden;
+}
+.online-matchmaking__radar::before,
+.online-matchmaking__radar::after{
+  content:"";
+  position:absolute;
+  background:rgba(37,91,111,.2);
+}
+.online-matchmaking__radar::before{left:50%;top:0;bottom:0;width:1px}
+.online-matchmaking__radar::after{top:50%;left:0;right:0;height:1px}
+.online-matchmaking__radar i{
+  position:absolute;
+  inset:4px;
+  border-radius:50%;
+  background:conic-gradient(from 0deg,rgba(80,190,201,.58),transparent 25%,transparent);
+  animation:matchmaking-radar 1.2s linear infinite;
+}
+.online-matchmaking__radar b{
+  position:relative;
+  z-index:2;
+  color:#fff7d0;
+  font-size:10px;
+  font-weight:1000;
+  text-shadow:0 1px 4px rgba(0,0,0,.35);
+}
+@keyframes matchmaking-radar{to{transform:rotate(360deg)}}
+
+.online-lobby__divider{
+  position:relative;
+  margin:15px 0 3px;
+  text-align:center;
+}
+.online-lobby__divider::before{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  height:1px;
+  background:rgba(111,78,53,.17);
+}
+.online-lobby__divider span{
+  position:relative;
+  padding:0 10px;
+  color:#94725a;
+  background:#f5e8c8;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.12em;
+}
+.online-lobby__secondary{
+  min-height:43px;
+  border:1.5px solid rgba(79,117,138,.38);
+  border-radius:14px;
+  background:rgba(240,250,246,.72);
+  color:#3d6a79;
+  font-size:12px;
+  font-weight:950;
+}
+.online-lobby__secondary:disabled{opacity:.45}
+
+@media(max-width:390px){
+  .online-matchmaking{padding:12px}
+  .online-matchmaking__hero strong{font-size:20px}
+  .online-matchmaking__button{min-height:49px;font-size:15px}
+  .online-matchmaking__search{grid-template-columns:42px 1fr auto;gap:7px;padding:8px}
+  .online-matchmaking__radar{width:40px;height:40px}
+}

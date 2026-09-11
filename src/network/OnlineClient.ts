@@ -2,6 +2,7 @@ import {
   PROTOCOL_VERSION,
   type ClientMessage,
   type MatchSnapshot,
+  type MatchmakingState,
   type NetworkThemeId,
   type RoomState,
   type ServerMessage,
@@ -17,6 +18,7 @@ export interface OnlineClientState {
   reconnectToken: string | null;
   room: RoomState | null;
   match: MatchSnapshot | null;
+  matchmaking: MatchmakingState;
   latencyMs: number | null;
   lastError: string | null;
 }
@@ -39,6 +41,11 @@ export class OnlineClient {
     reconnectToken: null,
     room: null,
     match: null,
+    matchmaking: {
+      status: 'idle',
+      joinedAt: null,
+      queueSize: 0,
+    },
     latencyMs: null,
     lastError: null,
   };
@@ -94,6 +101,15 @@ export class OnlineClient {
 
     socket.addEventListener('close', () => {
       this.socket = null;
+      if (this.state.matchmaking.status === 'searching') {
+        this.patch({
+          matchmaking: {
+            status: 'idle',
+            joinedAt: null,
+            queueSize: 0,
+          },
+        });
+      }
       if (this.intentionalClose) {
         this.patch({ status: 'closed' });
         return;
@@ -121,6 +137,14 @@ export class OnlineClient {
 
   joinRoom(roomCode: string, playerName: string, theme: NetworkThemeId): void {
     this.send({ type: 'join_room', roomCode, playerName, theme });
+  }
+
+  joinMatchmaking(playerName: string, theme: NetworkThemeId): void {
+    this.send({ type: 'join_matchmaking', playerName, theme });
+  }
+
+  cancelMatchmaking(): void {
+    this.send({ type: 'cancel_matchmaking' });
   }
 
   setTheme(theme: NetworkThemeId): void {
@@ -156,6 +180,11 @@ export class OnlineClient {
       reconnectToken: null,
       room: null,
       match: null,
+      matchmaking: {
+        status: 'idle',
+        joinedAt: null,
+        queueSize: 0,
+      },
     });
   }
 
@@ -181,11 +210,19 @@ export class OnlineClient {
           playerId: message.playerId,
           reconnectToken: message.reconnectToken,
           room: message.room,
+          matchmaking: {
+            status: 'idle',
+            joinedAt: null,
+            queueSize: 0,
+          },
           lastError: null,
         }, message);
         break;
       case 'room_state':
         this.patch({ room: message.room }, message);
+        break;
+      case 'matchmaking_state':
+        this.patch({ matchmaking: message.state, lastError: null }, message);
         break;
       case 'match_start':
       case 'match_state':

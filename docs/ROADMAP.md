@@ -100,12 +100,30 @@
 - a rematch creates a fresh match id, fresh boards, zero energy and a new 180s deadline
 - protocol v4 adds round/result/rematch state
 
-### M2.5 matchmaking ← NEXT
+### M2.5 public matchmaking ← IMPLEMENTED, PUBLIC SERVER TEST PENDING
 
-- queue
-- automatic opponent matching
-- latency/region strategy
-- platform invite/share hooks later
+- quick-match entry is now the primary Online Duel action
+- in-memory FIFO matchmaking queue
+- join / cancel / 60-second queue timeout
+- disconnect immediately removes stale queued clients
+- queue count and wait-time UI
+- two live queued players are paired into the existing RoomSession
+- both players preserve their independently selected themes
+- matched rooms auto-ready and immediately start the standard authoritative 180s match
+- private six-digit rooms remain unchanged
+- health stats expose current queued count
+- protocol v5 adds matchmaking state/messages
+- no MMR/region split yet; wait for real concurrency data
+
+### M2.6 production server + real-device network hardening ← NEXT
+
+- deploy the existing Docker game server behind public TLS `wss://`
+- connect GitHub Pages / later Douyin client to the production endpoint
+- two-phone latency / reconnect / background-resume testing
+- basic gateway rate limiting and abuse protection
+- server logs / room / queue / error observability
+- measure queue wait time and match completion rate
+- only then decide whether region buckets or MMR are justified
 
 ## M3 — Production assets
 
