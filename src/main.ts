@@ -46,7 +46,7 @@ const persistThemeRecord = (): void => {
 
 const refresh = () => {
   hud.setScore(board.score);
-  hud.setHighest(highest());
+  hud.setHighest(highest(), theme);
   hud.setSkillCharges(skillCharges);
   persistThemeRecord();
 };
