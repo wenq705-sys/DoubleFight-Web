@@ -15,7 +15,7 @@ Read in order:
 
 ## 2. Current milestone
 
-**M2.2 / M2.3 — server-authoritative battle energy and first PvP skills.**
+**M2.3 / M2.4 — first server-authoritative PvP skills and complete match loop.**
 
 "Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
@@ -37,6 +37,8 @@ Priority:
 - protocol changes live in `shared/protocol`
 - reconnect must restore state from server snapshots
 - client prediction is presentation latency hiding, not authority
+- blocked/petrified cells are shared-core gameplay state, not client-only VFX
+- move sequence and skill sequence are separate ordered streams
 - stable tile ids in authoritative snapshots are part of the duel animation/reconciliation contract
 - prediction must never invent the authoritative random spawn
 - themes are cosmetic/presentation only; they cannot change competitive rules
@@ -75,4 +77,4 @@ For meaningful changes:
 - Redis/distributed rooms
 - third theme
 
-M2.2 energy is implemented. M2.3 may spend energy only through server-validated skill commands; clients must never debit/credit competitive energy as authority.
+M2.3 skills are implemented. M2.4 must keep timer, winner resolution and rematch state server-authoritative; clients never decide the winner.
