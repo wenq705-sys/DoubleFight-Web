@@ -1,45 +1,88 @@
 # DoubleFight-Web / 双数对决
 
-> A mobile-first 3D 2048 skill-duel game. The current milestone is a **single-player visual vertical slice** that establishes the art quality, interaction feel, and technical foundation before multiplayer and skills are introduced.
+A mobile-first **3D 2048 online skill-duel game**.
+
+The product has two pillars:
+
+- **Solo Theme Islands** — premium themed 3D 2048 worlds
+- **Online Duel** — two players on two devices, server-authoritative 2048, independent themes and future cross-board skills
+
+Current themes:
+- Miniature Kingdom
+- 后宫晋升 / Palace Rank
 
 ## Current milestone
 
-**V0.1 — Miniature Kingdom 3D 2048 Vertical Slice**
+**M2.0 — Shared Online Core + WebSocket Rooms**
 
-- Standard 4×4 2048 rules
-- Mobile swipe + keyboard/WASD input
-- Three.js real-time 3D scene
-- Stylized miniature kingdom board
-- Procedural 2 → 2048 building progression
-- Soft shadows, stylized lighting, fog and camera framing
-- Merge squash/stretch, particles, shock rings, camera impact and haptics
-- GitHub Actions CI and GitHub Pages deployment
+Implemented:
+- Three.js mobile solo game
+- Theme Islands home
+- pooled/instanced/adaptive performance architecture
+- shared client/server Board2048
+- deterministic seeded RNG
+- versioned WebSocket protocol
+- Node/TypeScript authoritative game server
+- 6-digit rooms
+- independent player themes
+- Ready → authoritative match start
+- move validation / server board snapshots
+- heartbeat and 30-second reconnect identity
+- browser online lobby
+- Docker server image
+- CI server smoke test
 
-## Product direction
-
-The product direction is intentionally narrow:
-
-1. Make **one 3D 2048 board** visually strong and satisfying enough to play on its own.
-2. Preserve that visual quality when moving to **two-player same-screen portrait play**.
-3. Add **skill-versus-skill interaction** only after the 2048 interaction and art baseline are approved.
-4. Ship new seasons primarily through **theme packs** while keeping the core game stable.
-
-The first visual theme is **Miniature Kingdom**: bright, toy-like, premium stylized 3D with a readable fantasy kingdom silhouette. Avoid generic cyber-neon / AI-demo aesthetics.
+M2.1 will add the actual dual-board battle screen and client prediction/reconciliation.
 
 ## Tech stack
 
-- Three.js
+Client:
 - TypeScript
+- Three.js
 - Vite
 - Vitest
+
+Server:
+- Node.js
+- TypeScript
+- `ws` WebSocket server
+- shared deterministic game core
+
+Infrastructure:
 - GitHub Actions
-- GitHub Pages
+- GitHub Pages for web preview
+- Dockerfile for the game server
 
 ## Development
 
+Install:
+
 ```bash
 npm install
+```
+
+Client:
+
+```bash
 npm run dev
+```
+
+Game server:
+
+```bash
+npm run dev:server
+```
+
+Local client automatically targets:
+
+```text
+ws://localhost:8787/ws
+```
+
+Health:
+
+```text
+http://localhost:8787/health
 ```
 
 Quality checks:
@@ -50,41 +93,59 @@ npm test
 npm run build
 ```
 
+## Production server configuration
+
+Use TLS in production:
+
+```env
+VITE_WS_URL=wss://game.example.com/ws
+```
+
+The client also accepts a temporary test override:
+
+```text
+?ws=wss://game.example.com/ws
+```
+
+Container:
+
+```bash
+docker build -f Dockerfile.server -t doublefight-server .
+docker run --rm -p 8787:8787 doublefight-server
+```
+
 ## Repository map
 
 ```text
-src/
-  game/          deterministic game rules and session state
-  rendering/     Three.js scene, environment, tile presentation, VFX
-  audio/         procedural sound feedback
-  ui/            DOM HUD and overlays
-  config/        product/art tuning constants
+shared/
+  game/          authoritative cross-platform Board2048 + RNG
+  protocol/      versioned client/server protocol
 
-tests/           deterministic rule tests
-docs/            product, art, architecture, roadmap, handoff, ADRs
-.github/          CI, Pages deploy, templates
-AGENTS.md         mandatory AI/Codex operating instructions
+src/
+  network/       browser WebSocket client
+  game/          compatibility exports / client session use
+  rendering/     Three.js world, pieces, VFX
+  performance/   adaptive mobile performance
+  ui/            Theme Islands, Online Lobby, gameplay HUD
+  audio/
+  config/
+
+server/
+  index.ts       HTTP + WebSocket entry
+  RoomManager.ts connection/room/reconnect orchestration
+  RoomSession.ts authoritative two-player match state
+
+tests/
+docs/
+.github/
 ```
 
-## Documentation reading order
+## Release direction
 
-For any AI/Codex session, read in this order before making changes:
+1. finish real Online Duel
+2. progressively replace procedural hero pieces with stylized low-poly GLB assets
+3. Douyin mini-game first release
+4. WeChat mini-game
+5. iOS
 
-1. `AGENTS.md`
-2. `docs/HANDOFF.md`
-3. `docs/ART_DIRECTION.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/GAME_DESIGN.md`
-6. `docs/ROADMAP.md`
-
-## GitHub Pages
-
-Production preview is deployed from `main` by `.github/workflows/deploy-pages.yml`.
-
-Expected URL:
-
-`https://wenq705-sys.github.io/DoubleFight-Web/`
-
-## Status
-
-This repository is the **new web/Three.js implementation**. It is intentionally independent from the previous Unity repository.
+GitHub Pages remains the rapid mobile preview environment; the WebSocket game server is deployed separately.
