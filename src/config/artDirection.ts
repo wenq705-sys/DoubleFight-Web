@@ -36,7 +36,7 @@ export const ART = {
     hitStopMs: 42,
   },
   mobile: {
-    maxPixelRatio: 1.42,
+    maxPixelRatio: 1.65,
     swipeThresholdPx: 15,
   },
 } as const;
