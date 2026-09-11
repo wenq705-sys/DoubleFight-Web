@@ -3,12 +3,17 @@ import {
   Board2048,
   SeededRandom,
   randomUint32,
+  MATCH_DURATION_MS,
   MAX_BATTLE_ENERGY,
   SKILL_DEFINITIONS,
   clampBattleEnergy,
   emptySkillCooldowns,
   energyForMerges,
+  resolveTimeLimitStandings,
   type Direction,
+  type MatchEndReason,
+  type MatchResult,
+  type MatchResultPlayer,
   type MatchSnapshot,
   type NetworkThemeId,
   type RoomPlayerState,
@@ -17,6 +22,7 @@ import {
   type SkillCooldowns,
   type SkillEvent,
   type SkillId,
+  type TimeLimitTieBreaker,
 } from '../shared/index';
 
 export interface RoomPlayerRecord {
@@ -24,6 +30,7 @@ export interface RoomPlayerRecord {
   name: string;
   theme: NetworkThemeId;
   ready: boolean;
+  rematchReady: boolean;
   connected: boolean;
   reconnectToken: string;
   connectionId: string | null;
@@ -48,7 +55,10 @@ export class RoomSession {
   phase: 'lobby' | 'playing' | 'finished' = 'lobby';
   matchId: string | null = null;
   winnerId: string | null = null;
-  endReason: 'board_locked' | 'opponent_left' | 'petrified_lock' | null = null;
+  endReason: MatchEndReason | null = null;
+  result: MatchResult | null = null;
+  roundStartedAt = 0;
+  roundEndsAt = 0;
 
   private hostId: string | null = null;
 
@@ -66,6 +76,7 @@ export class RoomSession {
       name: sanitizeName(name),
       theme,
       ready: false,
+      rematchReady: false,
       connected: true,
       reconnectToken: randomBytes(24).toString('base64url'),
       connectionId,
@@ -97,11 +108,26 @@ export class RoomSession {
     player.ready = false;
   }
 
-  setReady(playerId: string, ready: boolean): boolean {
+  setReady(playerId: string, ready: boolean, now = Date.now()): boolean {
     const player = this.requirePlayer(playerId);
     if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
     player.ready = ready;
-    return this.tryStart();
+    return this.tryStart(now);
+  }
+
+  setRematchReady(playerId: string, ready: boolean, now = Date.now()): boolean {
+    if (this.phase !== 'finished' || !this.matchId) throw new Error('REMATCH_NOT_AVAILABLE');
+    const player = this.requirePlayer(playerId);
+    player.rematchReady = ready;
+
+    if (
+      this.players.size === 2 &&
+      [...this.players.values()].every((entry) => entry.rematchReady && entry.connected)
+    ) {
+      this.startMatch(now);
+      return true;
+    }
+    return false;
   }
 
   move(playerId: string, direction: Direction, sequence: number): {
@@ -109,8 +135,9 @@ export class RoomSession {
     result: ReturnType<Board2048['move']>;
     energyGain: number;
   } {
-    if (this.phase !== 'playing') throw new Error('NOT_PLAYING');
-    this.expireTimedEffects(Date.now());
+    const now = Date.now();
+    if (this.phase !== 'playing' || now >= this.roundEndsAt) throw new Error('NOT_PLAYING');
+    this.expireTimedEffects(now);
 
     const player = this.requirePlayer(playerId);
     if (!player.board) throw new Error('NOT_PLAYING');
@@ -125,16 +152,14 @@ export class RoomSession {
 
     if (result.gameOver) {
       const opponent = this.opponentOf(player.id);
-      this.phase = 'finished';
-      this.winnerId = opponent?.id ?? null;
-      this.endReason = 'board_locked';
+      this.finishMatch('board_locked', opponent?.id ?? null, null, now);
     }
 
     return { player, result, energyGain };
   }
 
   castSkill(playerId: string, skillId: SkillId, sequence: number, now = Date.now()): SkillCastResult {
-    if (this.phase !== 'playing') throw new Error('NOT_PLAYING');
+    if (this.phase !== 'playing' || now >= this.roundEndsAt) throw new Error('NOT_PLAYING');
     this.expireTimedEffects(now);
 
     const caster = this.requirePlayer(playerId);
@@ -186,9 +211,7 @@ export class RoomSession {
         timedEffectExpiresAt = expiresAt;
 
         if (!target.board.canMove()) {
-          this.phase = 'finished';
-          this.winnerId = caster.id;
-          this.endReason = 'petrified_lock';
+          this.finishMatch('petrified_lock', caster.id, null, now);
         }
       }
     }
@@ -198,6 +221,26 @@ export class RoomSession {
     caster.lastSkillSequence = sequence;
 
     return { event, timedEffectExpiresAt };
+  }
+
+  resolveTimeLimit(now = Date.now()): boolean {
+    if (this.phase !== 'playing' || this.roundEndsAt <= 0 || now < this.roundEndsAt) return false;
+
+    this.expireTimedEffects(now);
+    const [first, second] = [...this.players.values()];
+    if (!first?.board || !second?.board) return false;
+
+    const firstStanding = this.standing(first);
+    const secondStanding = this.standing(second);
+    const resolution = resolveTimeLimitStandings(firstStanding, secondStanding);
+
+    this.finishMatch(
+      'time_limit',
+      resolution.winnerId,
+      resolution.tieBreaker,
+      this.roundEndsAt,
+    );
+    return true;
   }
 
   expireTimedEffects(now = Date.now()): boolean {
@@ -225,16 +268,18 @@ export class RoomSession {
     player.connectionId = null;
   }
 
-  removePlayer(playerId: string): void {
+  removePlayer(playerId: string, now = Date.now()): void {
+    const leaving = this.players.get(playerId);
+    if (!leaving) return;
+
+    if (this.phase === 'playing') {
+      const survivor = this.opponentOf(playerId);
+      this.finishMatch('opponent_left', survivor?.id ?? null, null, now);
+    }
+
     this.players.delete(playerId);
     if (this.hostId === playerId) {
       this.hostId = this.players.keys().next().value ?? null;
-    }
-    if (this.phase === 'playing' && this.players.size < 2) {
-      const survivor = [...this.players.values()][0];
-      this.phase = 'finished';
-      this.winnerId = survivor?.id ?? null;
-      this.endReason = 'opponent_left';
     }
   }
 
@@ -252,6 +297,7 @@ export class RoomSession {
         name: player.name,
         theme: player.theme,
         ready: player.ready,
+        rematchReady: player.rematchReady,
         connected: player.connected,
         isHost: player.id === this.hostId,
       })),
@@ -260,6 +306,7 @@ export class RoomSession {
 
   matchSnapshot(now = Date.now()): MatchSnapshot {
     if (!this.matchId) throw new Error('NOT_PLAYING');
+    this.resolveTimeLimit(now);
     this.expireTimedEffects(now);
 
     return {
@@ -267,8 +314,12 @@ export class RoomSession {
       roomCode: this.code,
       phase: this.phase === 'finished' ? 'finished' : 'playing',
       serverTime: now,
+      roundStartedAt: this.roundStartedAt,
+      roundEndsAt: this.roundEndsAt,
+      durationMs: MATCH_DURATION_MS,
       winnerId: this.winnerId,
       endReason: this.endReason,
+      result: this.result,
       players: [...this.players.values()].map((player) => {
         if (!player.board) throw new Error('NOT_PLAYING');
         return {
@@ -300,20 +351,29 @@ export class RoomSession {
     if (player?.connected && player.connectionId) this.send(player.connectionId, message);
   }
 
-  private tryStart(): boolean {
+  private tryStart(now: number): boolean {
     if (this.players.size !== 2) return false;
     if ([...this.players.values()].some((player) => !player.ready || !player.connected)) return false;
+    this.startMatch(now);
+    return true;
+  }
 
+  private startMatch(now: number): void {
     this.phase = 'playing';
     this.matchId = randomUUID();
     this.winnerId = null;
     this.endReason = null;
+    this.result = null;
+    this.roundStartedAt = now;
+    this.roundEndsAt = now + MATCH_DURATION_MS;
 
     const baseSeed = randomUint32();
     [...this.players.values()].forEach((player, index) => {
       const seed = (baseSeed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
       player.board = new Board2048(new SeededRandom(seed));
       player.board.reset();
+      player.ready = false;
+      player.rematchReady = false;
       player.energy = 0;
       player.shieldActive = false;
       player.petrifyExpiresAt = 0;
@@ -321,7 +381,64 @@ export class RoomSession {
       player.lastSequence = -1;
       player.lastSkillSequence = -1;
     });
-    return true;
+  }
+
+  private finishMatch(
+    reason: MatchEndReason,
+    winnerId: string | null,
+    tieBreaker: TimeLimitTieBreaker | null,
+    finishedAt: number,
+  ): void {
+    if (this.phase !== 'playing') return;
+
+    this.phase = 'finished';
+    this.winnerId = winnerId;
+    this.endReason = reason;
+    this.result = {
+      winnerId,
+      reason,
+      tieBreaker,
+      finishedAt,
+      players: [...this.players.values()]
+        .map((player) => this.resultPlayer(player)),
+    };
+
+    for (const player of this.players.values()) {
+      player.rematchReady = false;
+    }
+  }
+
+  private standing(player: RoomPlayerRecord) {
+    if (!player.board) throw new Error('NOT_PLAYING');
+    const board = player.board.publicState();
+    return {
+      playerId: player.id,
+      score: board.score,
+      highest: board.highest,
+      usableEmptyCells: player.board.emptyCells().length,
+    };
+  }
+
+  private resultPlayer(player: RoomPlayerRecord): MatchResultPlayer {
+    if (!player.board) {
+      return {
+        playerId: player.id,
+        name: player.name,
+        theme: player.theme,
+        score: 0,
+        highest: 2,
+        usableEmptyCells: 0,
+      };
+    }
+    const board = player.board.publicState();
+    return {
+      playerId: player.id,
+      name: player.name,
+      theme: player.theme,
+      score: board.score,
+      highest: board.highest,
+      usableEmptyCells: player.board.emptyCells().length,
+    };
   }
 
   private opponentOf(playerId: string): RoomPlayerRecord | null {
