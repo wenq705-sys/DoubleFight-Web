@@ -15,7 +15,7 @@ Read in order:
 
 ## 2. Current milestone
 
-**M2.0 / M2.1 — real server-based Online Duel.**
+**M2.1 / M2.2 — live server-based Online Duel and battle energy.**
 
 "Double player" means two separate devices connected through the game server. Do not implement shared-phone/local same-screen controls.
 
@@ -36,7 +36,9 @@ Priority:
 - never trust a client-provided board/score
 - protocol changes live in `shared/protocol`
 - reconnect must restore state from server snapshots
-- M2.1 client prediction is presentation latency hiding, not authority
+- client prediction is presentation latency hiding, not authority
+- stable tile ids in authoritative snapshots are part of the duel animation/reconciliation contract
+- prediction must never invent the authoritative random spawn
 - themes are cosmetic/presentation only; they cannot change competitive rules
 - do not put secrets in browser/client code
 - production browser WebSocket must use TLS (`wss://`)
@@ -73,4 +75,4 @@ For meaningful changes:
 - Redis/distributed rooms
 - third theme
 
-M2.1 must first prove a smooth two-device live duel.
+M2.2 should add merge-driven server-authoritative energy without destabilizing the M2.1 duel path.
