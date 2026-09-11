@@ -32,9 +32,10 @@ export class RoomSession {
   winnerId: string | null = null;
   endReason: 'board_locked' | 'opponent_left' | null = null;
 
+  private hostId: string | null = null;
+
   constructor(
     readonly code: string,
-    private readonly hostId: string,
     private readonly send: Send,
   ) {}
 
@@ -54,6 +55,7 @@ export class RoomSession {
       lastSequence: -1,
     };
     this.players.set(player.id, player);
+    if (!this.hostId) this.hostId = player.id;
     return player;
   }
 
@@ -110,6 +112,9 @@ export class RoomSession {
 
   removePlayer(playerId: string): void {
     this.players.delete(playerId);
+    if (this.hostId === playerId) {
+      this.hostId = this.players.keys().next().value ?? null;
+    }
     if (this.phase === 'playing' && this.players.size < 2) {
       const survivor = [...this.players.values()][0];
       this.phase = 'finished';
