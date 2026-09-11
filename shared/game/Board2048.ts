@@ -16,6 +16,7 @@ type RandomInput = (() => number) | RandomSource;
 
 export class Board2048 {
   private grid: Cell[][] = this.emptyGrid();
+  private blocked = new Set<string>();
   private nextId = 1;
   private _score = 0;
   private readonly random: () => number;
@@ -30,6 +31,7 @@ export class Board2048 {
 
   reset(): BoardTile[] {
     this.grid = this.emptyGrid();
+    this.blocked.clear();
     this._score = 0;
     this.nextId = 1;
     const first = this.spawnRandom();
@@ -46,6 +48,7 @@ export class Board2048 {
     return {
       cells: this.snapshot().map((row) => [...row]),
       tiles: tiles.map((tile) => ({ ...tile })),
+      blockedCells: this.blockedCells(),
       score: this._score,
       highest: Math.max(2, ...tiles.map((tile) => tile.value)),
       canMove: this.canMove(),
@@ -56,6 +59,50 @@ export class Board2048 {
     return this.grid.flatMap((row) => row.filter((cell): cell is BoardTile => cell !== null));
   }
 
+  blockedCells(): CellPosition[] {
+    return [...this.blocked]
+      .map((key) => {
+        const [row, col] = key.split(':').map(Number);
+        return { row, col };
+      })
+      .sort((a, b) => a.row - b.row || a.col - b.col);
+  }
+
+  setBlockedCells(cells: readonly CellPosition[]): void {
+    const next = new Set<string>();
+    for (const cell of cells) {
+      if (!this.inBounds(cell)) continue;
+      if (this.grid[cell.row][cell.col] !== null) {
+        throw new Error('Cannot block an occupied 2048 cell.');
+      }
+      next.add(this.key(cell));
+    }
+    this.blocked = next;
+  }
+
+  blockRandomEmpty(): CellPosition | null {
+    const empty = this.emptyCells();
+    if (empty.length === 0) return null;
+    const position = empty[Math.min(empty.length - 1, Math.floor(this.random() * empty.length))];
+    this.blocked.add(this.key(position));
+    return { ...position };
+  }
+
+  clearBlockedCells(): void {
+    this.blocked.clear();
+  }
+
+  emptyCells(): CellPosition[] {
+    const empty: CellPosition[] = [];
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const position = { row, col };
+        if (!this.grid[row][col] && !this.isBlocked(position)) empty.push(position);
+      }
+    }
+    return empty;
+  }
+
   move(direction: Direction): MoveResult {
     const before = this.serialize();
     const next = this.emptyGrid();
@@ -63,7 +110,7 @@ export class Board2048 {
     const merges: MergeEvent[] = [];
     let scoreDelta = 0;
 
-    for (const line of this.lines(direction)) {
+    for (const line of this.segments(direction)) {
       const active = line
         .map((position) => ({ position, tile: this.grid[position.row][position.col] }))
         .filter((entry): entry is { position: CellPosition; tile: BoardTile } => entry.tile !== null);
@@ -170,13 +217,28 @@ export class Board2048 {
   }
 
   canMove(): boolean {
-    if (this.grid.some((row) => row.some((cell) => cell === null))) return true;
+    if (this.emptyCells().length > 0) return true;
 
     for (let row = 0; row < SIZE; row += 1) {
       for (let col = 0; col < SIZE; col += 1) {
+        const current = { row, col };
+        if (this.isBlocked(current)) continue;
         const value = this.grid[row][col]?.value;
-        if (col + 1 < SIZE && this.grid[row][col + 1]?.value === value) return true;
-        if (row + 1 < SIZE && this.grid[row + 1][col]?.value === value) return true;
+        if (value === undefined) continue;
+
+        const right = { row, col: col + 1 };
+        if (
+          col + 1 < SIZE &&
+          !this.isBlocked(right) &&
+          this.grid[row][col + 1]?.value === value
+        ) return true;
+
+        const down = { row: row + 1, col };
+        if (
+          row + 1 < SIZE &&
+          !this.isBlocked(down) &&
+          this.grid[row + 1][col]?.value === value
+        ) return true;
       }
     }
     return false;
@@ -188,6 +250,7 @@ export class Board2048 {
       throw new Error('Board2048.load expects a 4x4 matrix.');
     }
 
+    this.blocked.clear();
     this.grid = values.map((row, rowIndex) =>
       row.map((value, colIndex) =>
         value
@@ -198,13 +261,7 @@ export class Board2048 {
   }
 
   private spawnRandom(): BoardTile | null {
-    const empty: CellPosition[] = [];
-    for (let row = 0; row < SIZE; row += 1) {
-      for (let col = 0; col < SIZE; col += 1) {
-        if (!this.grid[row][col]) empty.push({ row, col });
-      }
-    }
-
+    const empty = this.emptyCells();
     if (empty.length === 0) return null;
     const position = empty[Math.floor(this.random() * empty.length)];
     const value = this.random() < 0.9 ? 2 : 4;
@@ -216,6 +273,25 @@ export class Board2048 {
     };
     this.grid[position.row][position.col] = tile;
     return tile;
+  }
+
+  private segments(direction: Direction): CellPosition[][] {
+    const segments: CellPosition[][] = [];
+
+    for (const line of this.lines(direction)) {
+      let segment: CellPosition[] = [];
+      for (const position of line) {
+        if (this.isBlocked(position)) {
+          if (segment.length > 0) segments.push(segment);
+          segment = [];
+        } else {
+          segment.push(position);
+        }
+      }
+      if (segment.length > 0) segments.push(segment);
+    }
+
+    return segments;
   }
 
   private lines(direction: Direction): CellPosition[][] {
@@ -231,6 +307,18 @@ export class Board2048 {
       lines.push(line);
     }
     return lines;
+  }
+
+  private isBlocked(position: CellPosition): boolean {
+    return this.blocked.has(this.key(position));
+  }
+
+  private key(position: CellPosition): string {
+    return `${position.row}:${position.col}`;
+  }
+
+  private inBounds(position: CellPosition): boolean {
+    return position.row >= 0 && position.row < SIZE && position.col >= 0 && position.col < SIZE;
   }
 
   private emptyGrid(): Cell[][] {
