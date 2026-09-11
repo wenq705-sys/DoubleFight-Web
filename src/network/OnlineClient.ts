@@ -5,6 +5,7 @@ import {
   type NetworkThemeId,
   type RoomState,
   type ServerMessage,
+  type SkillId,
 } from '../../shared/index';
 
 export type OnlineStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed';
@@ -29,6 +30,7 @@ export class OnlineClient {
   private reconnectTimer: number | null = null;
   private intentionalClose = false;
   private sequence = 0;
+  private skillSequence = 0;
 
   private state: OnlineClientState = {
     status: 'idle',
@@ -135,9 +137,16 @@ export class OnlineClient {
     return sequence;
   }
 
+  castSkill(skillId: SkillId): number {
+    const sequence = this.skillSequence++;
+    this.send({ type: 'cast_skill', skillId, sequence });
+    return sequence;
+  }
+
   leaveRoom(): void {
     this.send({ type: 'leave_room' });
     this.sequence = 0;
+    this.skillSequence = 0;
     this.patch({
       playerId: null,
       reconnectToken: null,
@@ -180,6 +189,7 @@ export class OnlineClient {
         this.patch({ match: message.snapshot }, message);
         break;
       case 'move_ack':
+      case 'skill_event':
         this.emit(message);
         break;
       case 'error':

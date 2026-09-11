@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone: M2.2 — Server-Authoritative Battle Energy.**
+**Milestone: M2.3 — First Server-Authoritative PvP Skills.**
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
@@ -138,6 +138,42 @@ Two merges in one swipe add +2 combo energy; larger multi-merge swipes receive l
 - the relevant duel board glow pulses more strongly for bigger gains
 - full energy has a distinct ready-state glow
 
+## M2.3 implemented
+
+### Shared skill contract
+- `shared/battle/skills.ts`
+- Random Clear: 35 energy / 6s cooldown
+- Shield: 45 energy / 10s cooldown
+- Petrify: 50 energy / 8s cooldown / 6s block duration
+- skill ids, costs, cooldowns and duration are shared constants; server remains authority
+
+### Server skill engine
+- `RoomSession.castSkill()`
+- independent ordered `lastSkillSequence`
+- energy/cooldown/target validation before effects
+- Random Clear removes two server-selected own tiles
+- Shield remains active until one hostile Petrify consumes it
+- Petrify selects an authoritative empty opponent cell and blocks it for 6 seconds
+- if Petrify seals the last usable space, the attacker can win by `petrified_lock`
+- timed Petrify expiry is broadcast back to both clients
+- protocol advanced to v3 with `cast_skill` and `skill_event`
+
+### Real board barriers
+- `Board2048` now owns blocked-cell state
+- blocked cells cannot receive spawned tiles
+- blocked cells split movement lines into independent segments
+- `canMove()` accounts for blocked cells
+- authoritative snapshots expose `blockedCells`
+- client prediction uses the same segmented movement semantics
+
+### Duel client
+- three skill buttons with live cost/cooldown/availability
+- shield/petrify status labels
+- pooled Three.js petrify blocker visuals on both boards
+- cross-board skill travel feedback
+- server errors surface as compact skill feedback
+- client never spends energy or applies a competitive effect as authority
+
 ## Deployment state
 
 The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
@@ -167,20 +203,20 @@ Remote test:
 - Online Duel uses a lightweight duel render, not two complete Solo environments.
 - first release target remains Douyin mini-game, followed by WeChat, then iOS.
 
-## Next exact task — M2.3
+## Next exact task — M2.4
 
-Implement the first server-authoritative PvP skills:
+Complete the competitive match loop:
 
-1. Random Clear — self recovery, initial target cost 35 energy
-2. Shield — self defense, initial target cost 45 energy
-3. Petrify — opponent pressure, initial target cost 50 energy
-4. all costs/cooldowns/effects validated on the server
-5. skill commands added to the shared protocol
-6. skill effects included in authoritative snapshots/events
-7. themes may change skill visuals, never skill balance
-8. build readable cross-board skill travel without loading two full Solo worlds
+1. authoritative round timer (initial target 180s)
+2. board-lock instant loss remains
+3. time-limit score comparison
+4. tie breakers: highest tile, then usable empty cells
+5. full result payload and clearer result UI
+6. rematch flow without leaving the private room
+7. reconnect during timed matches preserves remaining time
+8. prepare the room lifecycle for later public matchmaking
 
-Energy tuning remains provisional until real two-phone playtests are possible.
+Skill and energy numbers remain provisional until real two-phone playtests are possible.
 
 ## Real-device validation still required
 

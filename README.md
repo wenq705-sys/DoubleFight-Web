@@ -13,7 +13,7 @@ Current themes:
 
 ## Current milestone
 
-**M2.0 — Shared Online Core + WebSocket Rooms**
+**M2.3 — Live Online Duel + Energy + First PvP Skills**
 
 Implemented:
 - Three.js mobile solo game
@@ -29,10 +29,16 @@ Implemented:
 - move validation / server board snapshots
 - heartbeat and 30-second reconnect identity
 - browser online lobby
+- lightweight live dual-board battle screen
+- client prediction + server reconciliation
+- authoritative battle energy
+- Random Clear / Shield / Petrify PvP skills
+- real petrified movement/spawn barriers
+- skill cooldown/status/cross-board feedback
 - Docker server image
 - CI server smoke test
 
-M2.1 will add the actual dual-board battle screen and client prediction/reconciliation.
+M2.4 will add the authoritative round timer, full winner/tie-break logic and rematch flow.
 
 ## Tech stack
 
@@ -119,6 +125,7 @@ docker run --rm -p 8787:8787 doublefight-server
 ```text
 shared/
   game/          authoritative cross-platform Board2048 + RNG
+  battle/        energy + PvP skill tuning
   protocol/      versioned client/server protocol
 
 src/

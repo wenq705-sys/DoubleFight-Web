@@ -76,15 +76,19 @@
 - authoritative energy gains pulse the board and show +N feedback
 - first skill-cost tuning contract reserved for M2.3
 
-### M2.3 first PvP skills ← NEXT
+### M2.3 first PvP skills ← IMPLEMENTED, PUBLIC SERVER TEST PENDING
 
-- Random Clear: self recovery
-- Petrify: opponent spatial pressure
-- Shield: defensive counter
-- server-authoritative costs/cooldowns/effects
-- theme-specific visuals with identical gameplay rules
+- Random Clear: self recovery, 35 energy, 6s cooldown
+- Shield: one-hit defensive counter, 45 energy, 10s cooldown
+- Petrify: opponent cell blocker, 50 energy, 8s cooldown, 6s duration
+- server validates energy, cooldown, target and ordered skill sequence
+- Shield consumes the next hostile Petrify instead of allowing the block
+- petrified cells are real shared-core movement/spawn barriers
+- client prediction respects authoritative blocked cells
+- lightweight duel skill dock, cooldown UI, status labels and cross-board feedback
+- protocol v3 skill commands/events
 
-### M2.4 complete match loop
+### M2.4 complete match loop ← NEXT
 
 - timed rounds
 - board-lock instant loss
