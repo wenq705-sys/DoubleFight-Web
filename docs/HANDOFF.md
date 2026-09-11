@@ -34,10 +34,12 @@ The game is still a single-board 3D 2048 prototype, but this milestone deliberat
 - Palace 4 = warm yellow/orange + twin buns + large fan
 - Palace 8 = purple + tall central bun + lateral hairpins + open fan
 - Palace 16 = coral/red + wide sleeves/shoulders + ceremonial back fan
-- numbers now use a centered front-facing, gold-rimmed, high-contrast plate instead of a tiny corner medallion
-- the same larger number-plate treatment is applied to Miniature Kingdom
-- palace rank name remains in HUD instead of covering the character
-- high tiers continue crown/cape/halo/throne escalation
+- all gameplay-piece number plates/badges have now been removed in both Palace and Kingdom
+- Palace tiers use discrete hue families instead of repeated light/dark reds
+- Miniature Kingdom uses the same discrete tier-color rule
+- Palace rank/Kingdom landmark names remain in HUD rather than on pieces
+- a shared `tierProgression` helper enforces monotonic physical growth for every current and future theme
+- high tiers continue crown/cape/halo/throne or landmark-complexity escalation
 
 ### Performance architecture
 - adaptive DPR starts higher for clarity and reduces only if measured FPS requires it
@@ -58,7 +60,7 @@ The game is still a single-board 3D 2048 prototype, but this milestone deliberat
 - Mobile portrait is primary.
 - Screen directions must match swipe directions.
 - Visual identity comes primarily from models/silhouettes, not giant labels.
-- Numbers may remain as small secondary badges for 2048 clarity.
+- Gameplay pieces must not display numeric/rank labels. Recognition comes from size + silhouette + hue + accessories.
 - Palace characters are original; do not copy named TV characters or actor likenesses.
 - Environment participates in gameplay feedback.
 - Themes are first-class worlds surfaced from the home screen.
@@ -79,8 +81,8 @@ The game is still a single-board 3D 2048 prototype, but this milestone deliberat
 On iPhone Safari:
 1. compare sharpness versus previous 1.25 DPR build
 2. play at least 10–20 minutes and watch for progressive lag
-3. judge whether Palace 2/4/8/16 can be identified without reading the number
-4. confirm the new centered number plate is readable instantly without hiding the model
+3. judge whether Palace 2/4/8/16/32/64 can be identified with no numbers at all
+4. confirm adjacent tier colors are clearly different hue families and sizes strictly increase
 5. test the new Theme Islands home flow
 6. optionally open with `?debug=1` and capture the telemetry after a long session
 
