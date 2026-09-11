@@ -15,4 +15,13 @@ describe('Board2048',()=>{
   it('recognizes a locked board',()=>{
     const board=new Board2048(deterministicRandom);board.load([[2,4,2,4],[4,2,4,2],[2,4,2,4],[4,2,4,2]]);expect(board.canMove()).toBe(false);
   });
+  it('random-clear removes occupied tiles without spawning replacements',()=>{
+    const board=new Board2048(deterministicRandom);
+    board.load([[2,4,8,16],[32,64,0,0],[0,0,0,0],[0,0,0,0]]);
+    const before=board.tiles().length;
+    const result=board.clearRandom(2);
+    expect(result.removed).toHaveLength(2);
+    expect(board.tiles()).toHaveLength(before-2);
+    expect(result.removed.map(tile=>tile.value)).toEqual([2,4]);
+  });
 });

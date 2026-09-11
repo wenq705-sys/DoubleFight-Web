@@ -12,3 +12,7 @@ export interface MoveResult {
   spawned: BoardTile | null;
   gameOver: boolean;
 }
+export interface ClearResult {
+  removed: BoardTile[];
+  gameOver: boolean;
+}
