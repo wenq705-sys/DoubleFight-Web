@@ -14,6 +14,9 @@ import {
   resolveTimeLimitStandings,
 } from '../shared/battle/match';
 import { parseClientMessage } from '../shared/protocol/messages';
+import type { ServerMessage } from '../shared/protocol/messages';
+import { MatchmakingQueue } from '../server/MatchmakingQueue';
+import { RoomManager } from '../server/RoomManager';
 import { RoomSession } from '../server/RoomSession';
 
 describe('shared online game core', () => {
@@ -117,6 +120,16 @@ describe('shared online game core', () => {
     }))).toEqual({ type: 'set_rematch_ready', ready: true });
 
     expect(parseClientMessage(JSON.stringify({
+      type: 'join_matchmaking',
+      playerName: 'A',
+      theme: 'palace',
+    }))).toEqual({ type: 'join_matchmaking', playerName: 'A', theme: 'palace' });
+
+    expect(parseClientMessage(JSON.stringify({
+      type: 'cancel_matchmaking',
+    }))).toEqual({ type: 'cancel_matchmaking' });
+
+    expect(parseClientMessage(JSON.stringify({
       type: 'move',
       direction: 'diagonal',
       sequence: 7,
@@ -129,6 +142,85 @@ describe('shared online game core', () => {
     }))).toBeNull();
 
     expect(parseClientMessage('{broken')).toBeNull();
+  });
+
+  it('keeps public matchmaking FIFO and removes cancelled connections cleanly', () => {
+    const queue = new MatchmakingQueue();
+    queue.enqueue({ connectionId: 'a', playerName: 'A', theme: 'kingdom', joinedAt: 1 });
+    queue.enqueue({ connectionId: 'b', playerName: 'B', theme: 'palace', joinedAt: 2 });
+    queue.enqueue({ connectionId: 'c', playerName: 'C', theme: 'kingdom', joinedAt: 3 });
+
+    expect(queue.size).toBe(3);
+    expect(queue.remove('b')?.playerName).toBe('B');
+    expect(queue.snapshot().map((entry) => entry.connectionId)).toEqual(['a', 'c']);
+    expect(queue.takePair()?.map((entry) => entry.connectionId)).toEqual(['a', 'c']);
+    expect(queue.size).toBe(0);
+  });
+
+  it('pairs two queued clients into the normal authoritative RoomSession and auto-starts', () => {
+    const manager = new RoomManager();
+    const aMessages: ServerMessage[] = [];
+    const bMessages: ServerMessage[] = [];
+    const a = manager.register((message) => aMessages.push(message));
+    const b = manager.register((message) => bMessages.push(message));
+
+    manager.handle(a.id, {
+      type: 'join_matchmaking',
+      playerName: 'King',
+      theme: 'kingdom',
+    });
+    expect(manager.stats().queued).toBe(1);
+    expect(aMessages.some((message) =>
+      message.type === 'matchmaking_state' && message.state.status === 'searching'
+    )).toBe(true);
+
+    manager.handle(b.id, {
+      type: 'join_matchmaking',
+      playerName: 'Palace',
+      theme: 'palace',
+    });
+
+    expect(manager.stats().queued).toBe(0);
+    expect(manager.stats().rooms).toBe(1);
+    expect(manager.stats().playing).toBe(1);
+
+    const aJoined = aMessages.find((message) => message.type === 'room_joined');
+    const bJoined = bMessages.find((message) => message.type === 'room_joined');
+    expect(aJoined?.type).toBe('room_joined');
+    expect(bJoined?.type).toBe('room_joined');
+    if (aJoined?.type !== 'room_joined' || bJoined?.type !== 'room_joined') {
+      throw new Error('Expected both clients to join a matched room.');
+    }
+    expect(aJoined.room.code).toBe(bJoined.room.code);
+
+    const aStart = aMessages.find((message) => message.type === 'match_start');
+    const bStart = bMessages.find((message) => message.type === 'match_start');
+    expect(aStart?.type).toBe('match_start');
+    expect(bStart?.type).toBe('match_start');
+    if (aStart?.type !== 'match_start') throw new Error('Expected auto-started match.');
+
+    expect(aStart.snapshot.players.map((player) => player.theme).sort()).toEqual(['kingdom', 'palace']);
+    expect(aStart.snapshot.durationMs).toBe(MATCH_DURATION_MS);
+  });
+
+  it('lets a queued player cancel without creating a room', () => {
+    const manager = new RoomManager();
+    const messages: ServerMessage[] = [];
+    const connection = manager.register((message) => messages.push(message));
+
+    manager.handle(connection.id, {
+      type: 'join_matchmaking',
+      playerName: 'Solo',
+      theme: 'kingdom',
+    });
+    expect(manager.stats().queued).toBe(1);
+
+    manager.handle(connection.id, { type: 'cancel_matchmaking' });
+    expect(manager.stats().queued).toBe(0);
+    expect(manager.stats().rooms).toBe(0);
+    expect(messages.some((message) =>
+      message.type === 'matchmaking_state' && message.state.status === 'idle'
+    )).toBe(true);
   });
 
   it('resolves the time limit by score, highest tile, usable space, then draw', () => {
