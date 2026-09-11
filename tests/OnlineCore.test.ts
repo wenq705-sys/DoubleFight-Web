@@ -9,6 +9,10 @@ import {
   energyForMergeValue,
   energyForMerges,
 } from '../shared/battle/energy';
+import {
+  MATCH_DURATION_MS,
+  resolveTimeLimitStandings,
+} from '../shared/battle/match';
 import { parseClientMessage } from '../shared/protocol/messages';
 import { RoomSession } from '../server/RoomSession';
 
@@ -108,6 +112,11 @@ describe('shared online game core', () => {
     }))).toEqual({ type: 'cast_skill', skillId: 'petrify', sequence: 3 });
 
     expect(parseClientMessage(JSON.stringify({
+      type: 'set_rematch_ready',
+      ready: true,
+    }))).toEqual({ type: 'set_rematch_ready', ready: true });
+
+    expect(parseClientMessage(JSON.stringify({
       type: 'move',
       direction: 'diagonal',
       sequence: 7,
@@ -120,6 +129,28 @@ describe('shared online game core', () => {
     }))).toBeNull();
 
     expect(parseClientMessage('{broken')).toBeNull();
+  });
+
+  it('resolves the time limit by score, highest tile, usable space, then draw', () => {
+    expect(resolveTimeLimitStandings(
+      { playerId: 'a', score: 120, highest: 32, usableEmptyCells: 2 },
+      { playerId: 'b', score: 100, highest: 64, usableEmptyCells: 8 },
+    )).toEqual({ winnerId: 'a', tieBreaker: 'score' });
+
+    expect(resolveTimeLimitStandings(
+      { playerId: 'a', score: 100, highest: 128, usableEmptyCells: 2 },
+      { playerId: 'b', score: 100, highest: 64, usableEmptyCells: 8 },
+    )).toEqual({ winnerId: 'a', tieBreaker: 'highest' });
+
+    expect(resolveTimeLimitStandings(
+      { playerId: 'a', score: 100, highest: 64, usableEmptyCells: 5 },
+      { playerId: 'b', score: 100, highest: 64, usableEmptyCells: 3 },
+    )).toEqual({ winnerId: 'a', tieBreaker: 'usable_space' });
+
+    expect(resolveTimeLimitStandings(
+      { playerId: 'a', score: 100, highest: 64, usableEmptyCells: 3 },
+      { playerId: 'b', score: 100, highest: 64, usableEmptyCells: 3 },
+    )).toEqual({ winnerId: null, tieBreaker: 'draw' });
   });
 
   it('starts an authoritative room only when both players are ready', () => {
@@ -242,6 +273,90 @@ describe('shared online game core', () => {
     room.castSkill(host.id, 'shield', 0);
     host.energy = 100;
     expect(() => room.castSkill(host.id, 'shield', 1)).toThrow('SKILL_ALREADY_ACTIVE');
+  });
+
+  it('keeps one authoritative 180-second deadline and resolves it on the server', () => {
+    const room = new RoomSession('222222', () => undefined);
+    const host = room.addPlayer('connection-a', 'A', 'kingdom');
+    const guest = room.addPlayer('connection-b', 'B', 'palace');
+    const startedAt = 10_000;
+
+    expect(room.setReady(host.id, true, startedAt)).toBe(false);
+    expect(room.setReady(guest.id, true, startedAt)).toBe(true);
+
+    const matchId = room.matchId;
+    expect(room.roundStartedAt).toBe(startedAt);
+    expect(room.roundEndsAt).toBe(startedAt + MATCH_DURATION_MS);
+    expect(room.matchSnapshot(startedAt + 50_000).roundEndsAt).toBe(startedAt + MATCH_DURATION_MS);
+
+    host.board!.load([
+      [64, 32, 16, 8],
+      [4, 2, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ], 500);
+    guest.board!.load([
+      [128, 64, 32, 16],
+      [8, 4, 2, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ], 450);
+
+    expect(room.resolveTimeLimit(room.roundEndsAt - 1)).toBe(false);
+    expect(room.phase).toBe('playing');
+    expect(room.resolveTimeLimit(room.roundEndsAt)).toBe(true);
+    expect(room.phase).toBe('finished');
+    expect(room.matchId).toBe(matchId);
+    expect(room.winnerId).toBe(host.id);
+
+    const result = room.matchSnapshot(room.roundEndsAt).result;
+    expect(result?.reason).toBe('time_limit');
+    expect(result?.tieBreaker).toBe('score');
+    expect(result?.winnerId).toBe(host.id);
+    expect(result?.finishedAt).toBe(startedAt + MATCH_DURATION_MS);
+    expect(result?.players).toHaveLength(2);
+  });
+
+  it('starts a fresh authoritative match only after both players request a rematch', () => {
+    const room = new RoomSession('333333', () => undefined);
+    const host = room.addPlayer('connection-a', 'A', 'kingdom');
+    const guest = room.addPlayer('connection-b', 'B', 'palace');
+    const startedAt = 20_000;
+
+    room.setReady(host.id, true, startedAt);
+    room.setReady(guest.id, true, startedAt);
+    const previousMatchId = room.matchId;
+
+    host.board!.load([
+      [64, 32, 16, 8],
+      [4, 2, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ], 300);
+    guest.board!.load([
+      [32, 16, 8, 4],
+      [2, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ], 200);
+
+    room.resolveTimeLimit(room.roundEndsAt);
+    host.energy = 99;
+    guest.energy = 88;
+
+    expect(room.setRematchReady(host.id, true, 500_000)).toBe(false);
+    expect(room.state().players.find((player) => player.id === host.id)?.rematchReady).toBe(true);
+    expect(room.setRematchReady(guest.id, true, 500_000)).toBe(true);
+
+    expect(room.phase).toBe('playing');
+    expect(room.matchId).not.toBe(previousMatchId);
+    expect(room.roundStartedAt).toBe(500_000);
+    expect(room.roundEndsAt).toBe(500_000 + MATCH_DURATION_MS);
+    expect(room.result).toBeNull();
+    expect(host.energy).toBe(0);
+    expect(guest.energy).toBe(0);
+    expect(room.state().players.every((player) => !player.rematchReady)).toBe(true);
+    expect(room.matchSnapshot(500_000).players.every((player) => player.board.tiles.length === 2)).toBe(true);
   });
 
   it('preserves a player identity across reconnect', () => {
