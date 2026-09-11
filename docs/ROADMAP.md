@@ -88,16 +88,19 @@
 - lightweight duel skill dock, cooldown UI, status labels and cross-board feedback
 - protocol v3 skill commands/events
 
-### M2.4 complete match loop ← NEXT
+### M2.4 complete match loop ← IMPLEMENTED, PUBLIC SERVER TEST PENDING
 
-- timed rounds
-- board-lock instant loss
-- score / highest / empty-cell tie breakers
-- results screen
-- rematch
-- reconnect UX
+- authoritative 180-second server round clock
+- reconnect preserves the same round deadline; the clock never restarts client-side
+- board-lock and petrified-lock remain instant-loss conditions
+- time limit resolves by score → highest tile → usable empty cells → draw
+- immutable server result payload records both final standings and the tie-break reason
+- richer mobile result screen explains why the player won/lost
+- both players can request a rematch without leaving the private room
+- a rematch creates a fresh match id, fresh boards, zero energy and a new 180s deadline
+- protocol v4 adds round/result/rematch state
 
-### M2.5 matchmaking
+### M2.5 matchmaking ← NEXT
 
 - queue
 - automatic opponent matching
