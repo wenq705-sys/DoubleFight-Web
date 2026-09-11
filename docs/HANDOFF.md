@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone: M2.0 — Real Online Duel Foundation.**
+**Milestone: M2.1 — Live Dual-Board Online Client.**
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
@@ -69,7 +69,35 @@ The online lobby supports:
 - ready/cancel ready
 - connection/reconnect status
 
-When both players ready, the server already creates a real authoritative match. M2.0 deliberately stops before rendering/controlling the dual-board battle scene.
+When both players ready, the server creates a real authoritative match and the client now transitions into the M2.1 dual-board battle scene.
+
+## M2.1 implemented
+
+### Duel Lite renderer
+- `src/rendering/DuelScene.ts`
+- one WebGL scene renders both players instead of creating two complete Solo environments
+- own board is larger; opponent board is compact
+- existing cached Kingdom/Palace piece factories are reused
+- repeated board cells use InstancedMesh
+- authoritative stable tile ids drive movement interpolation
+- both players can render different themes in the same match
+
+### Client prediction / reconciliation
+- `shared/game/predictMove.ts`
+- local swipes immediately compute movement/merges without inventing a spawn
+- server remains authoritative over the real spawned tile
+- up to a small bounded number of local commands may be pending
+- each fresh authoritative snapshot filters acknowledged sequences and replays only unacknowledged commands
+- this preserves responsive input while correcting naturally to server truth
+
+### Battle UI
+- `src/ui/DuelScreen.ts`
+- own/opponent names, themes and scores
+- 6-digit room display
+- live latency
+- connection/reconnect overlay
+- lower-board swipe input zone
+- server-driven win/loss result overlay
 
 ## Deployment state
 
@@ -100,21 +128,23 @@ Remote test:
 - Online Duel uses a lightweight duel render, not two complete Solo environments.
 - first release target remains Douyin mini-game, followed by WeChat, then iOS.
 
-## Next exact task — M2.1
+## Next exact task — M2.2
 
-Build the actual online battle client:
+Build the server-authoritative battle energy loop:
 
-1. one large local 4×4 board
-2. one compact live opponent board
-3. both themes rendered independently
-4. own swipe sends sequence-numbered MOVE
-5. immediate local movement presentation / prediction
-6. server move acknowledgement and reconciliation
-7. remote board updates
-8. connection/latency/reconnect overlay
-9. keep Solo mode unchanged
+1. derive energy from successful merges / merge value
+2. add energy to MatchPlayerState / snapshots
+3. server owns all energy truth
+4. client predicts only presentation, never authoritative energy
+5. Duel HUD gets a clear energy bar
+6. high merges and combo timing should feel substantially more rewarding
+7. no PvP skill effects yet; first validate the economy and pacing
 
-No PvP skills yet. First prove two real phones can play simultaneous authoritative 2048 smoothly.
+After M2.2, implement the first three skills: Random Clear, Petrify and Shield.
+
+## Real-device validation still required
+
+The code path is complete, but a public `wss://` game server is still required before two separate phones can validate real network latency, prediction/reconciliation feel and disconnect recovery.
 
 ## Validation
 
