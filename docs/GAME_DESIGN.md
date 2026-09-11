@@ -98,18 +98,26 @@ The browser may animate confirmed energy gain but never owns energy truth.
 
 The first M2.3 skill set is implemented with the costs/cooldowns above. These values are tuning starting points, not final balance. Themes can replace the visual motif (for example an imperial seal versus a magic crystal) but cannot alter competitive behavior.
 
-## Match direction
+## Match rules
 
-Initial tuning target: approximately 2–3 minute rounds.
+The first online ruleset is now implemented as a **180-second server-timed round**.
 
-Win hierarchy is expected to use:
-1. board lock / inability to move,
-2. score at time limit,
-3. highest tier,
-4. remaining free space,
-5. draw only if all tie breakers remain equal.
+Immediate endings:
+1. a player's board has no legal move → that player loses
+2. Petrify removes the final legal space/move → the petrified player loses
+3. a player leaves after reconnect grace → remaining player wins
 
-Exact numbers remain subject to playtesting.
+If both survive to 180 seconds, the server compares:
+1. **Score**
+2. if tied, **highest tile**
+3. if still tied, **usable empty cells**
+4. if all are equal, **draw**
+
+The timer never pauses for client backgrounding or a temporary disconnect. A reconnect resumes the same server deadline.
+
+After a result, both players can opt into **再来一局** in the same private room. A rematch is a fresh competitive state but preserves players, themes and room code.
+
+The 180-second duration and all balance numbers remain subject to real-device playtesting.
 
 ## Theme strategy
 
