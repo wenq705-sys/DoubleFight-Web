@@ -124,6 +124,22 @@ export class RoomManager {
             }
           });
           return;
+        case 'cast_skill':
+          this.withRoom(connectionId, (room, player) => {
+            const cast = room.castSkill(player.id, message.skillId, message.sequence);
+            room.broadcast({ type: 'skill_event', event: cast.event });
+
+            if (room.phase === 'finished') {
+              room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });
+            } else {
+              room.broadcast({ type: 'match_state', snapshot: room.matchSnapshot() });
+            }
+
+            if (cast.timedEffectExpiresAt > 0) {
+              this.scheduleEffectExpiry(room, cast.timedEffectExpiresAt);
+            }
+          });
+          return;
         case 'leave_room':
           this.leaveRoom(connectionId);
           return;
@@ -252,6 +268,11 @@ export class RoomManager {
       NOT_READY: 'NOT_READY',
       INVALID_RECONNECT: 'INVALID_RECONNECT',
       STALE_SEQUENCE: 'STALE_SEQUENCE',
+      STALE_SKILL_SEQUENCE: 'STALE_SKILL_SEQUENCE',
+      INSUFFICIENT_ENERGY: 'INSUFFICIENT_ENERGY',
+      SKILL_COOLDOWN: 'SKILL_COOLDOWN',
+      SKILL_ALREADY_ACTIVE: 'SKILL_ALREADY_ACTIVE',
+      SKILL_NO_TARGET: 'SKILL_NO_TARGET',
     };
     const mapped = known[code] ?? 'BAD_MESSAGE';
     this.error(connectionId, mapped, errorMessage(mapped));
@@ -263,6 +284,16 @@ export class RoomManager {
       if (!this.rooms.has(code)) return code;
     }
     throw new Error('BAD_MESSAGE');
+  }
+
+  private scheduleEffectExpiry(room: RoomSession, expiresAt: number): void {
+    const delay = Math.max(0, expiresAt - Date.now()) + 40;
+    const timer = setTimeout(() => {
+      if (room.phase !== 'playing') return;
+      if (!room.expireTimedEffects(Date.now())) return;
+      room.broadcast({ type: 'match_state', snapshot: room.matchSnapshot() });
+    }, delay);
+    timer.unref?.();
   }
 
   private timerKey(roomCode: string, playerId: string): string {
@@ -285,7 +316,12 @@ function errorMessage(code: ErrorCode): string {
     NOT_PLAYING: '比赛尚未开始。',
     NOT_READY: '玩家尚未准备。',
     INVALID_RECONNECT: '重连凭证无效。',
-    STALE_SEQUENCE: '该操作序号已经处理过。',
+    STALE_SEQUENCE: '该移动操作已经处理过。',
+    STALE_SKILL_SEQUENCE: '该技能操作已经处理过。',
+    INSUFFICIENT_ENERGY: '战斗能量不足。',
+    SKILL_COOLDOWN: '技能仍在冷却中。',
+    SKILL_ALREADY_ACTIVE: '该技能效果已经处于激活状态。',
+    SKILL_NO_TARGET: '当前没有可用的技能目标。',
   };
   return messages[code];
 }
