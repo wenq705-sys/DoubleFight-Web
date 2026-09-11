@@ -7,6 +7,8 @@ import {
 } from '../shared/index';
 import { RoomSession, type RoomPlayerRecord } from './RoomSession';
 
+type ErrorCode = Extract<ServerMessage, { type: 'error' }>['code'];
+
 export interface ConnectionTransport {
   id: string;
   send(message: ServerMessage): void;
@@ -144,20 +146,12 @@ export class RoomManager {
   private createRoom(connectionId: string, playerName: string, theme: NetworkThemeId): void {
     this.leaveRoom(connectionId);
     const code = this.generateRoomCode();
-    let host!: RoomPlayerRecord;
-    const room = new RoomSession(code, '', (target, message) => this.send(target, message));
-    host = room.addPlayer(connectionId, playerName, theme);
+    const room = new RoomSession(code, (target, message) => this.send(target, message));
+    const host = room.addPlayer(connectionId, playerName, theme);
 
-    // RoomSession needs the host player id for state projection, so recreate with the actual id.
-    const actual = new RoomSession(code, host.id, (target, message) => this.send(target, message));
-    const actualHost = actual.addPlayer(connectionId, playerName, theme);
-    // Preserve the externally assigned host identity by replacing the generated record.
-    actual.players.delete(actualHost.id);
-    actual.players.set(host.id, { ...actualHost, id: host.id, reconnectToken: host.reconnectToken });
-
-    this.rooms.set(code, actual);
+    this.rooms.set(code, room);
     this.memberships.set(connectionId, { roomCode: code, playerId: host.id });
-    this.sendJoined(connectionId, actual, actual.players.get(host.id)!);
+    this.sendJoined(connectionId, room, host);
   }
 
   private joinRoom(connectionId: string, roomCode: string, playerName: string, theme: NetworkThemeId): void {
@@ -242,16 +236,12 @@ export class RoomManager {
     this.connections.get(connectionId)?.send(message);
   }
 
-  private error(connectionId: string, code: ServerMessage extends infer _ ? string : never, message: string): void {
-    this.send(connectionId, {
-      type: 'error',
-      code: code as Extract<ServerMessage, { type: 'error' }>['code'],
-      message,
-    });
+  private error(connectionId: string, code: ErrorCode, message: string): void {
+    this.send(connectionId, { type: 'error', code, message });
   }
 
   private mapError(connectionId: string, code: string): void {
-    const known: Record<string, Extract<ServerMessage, { type: 'error' }>['code']> = {
+    const known: Record<string, ErrorCode> = {
       ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
       ROOM_FULL: 'ROOM_FULL',
       ROOM_ALREADY_PLAYING: 'ROOM_ALREADY_PLAYING',
@@ -282,7 +272,7 @@ function normalizeRoomCode(value: string): string {
   return value.replace(/\D/g, '').slice(0, 6);
 }
 
-function errorMessage(code: Extract<ServerMessage, { type: 'error' }>['code']): string {
+function errorMessage(code: ErrorCode): string {
   const messages: Record<typeof code, string> = {
     BAD_MESSAGE: '请求格式不正确。',
     PROTOCOL_MISMATCH: '客户端与服务器版本不一致，请刷新游戏。',
