@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { PALACE_RANKS } from '../../config/themes';
 import type { TileVisual } from './TileFactory';
 
 const gradient = (() => {
@@ -23,6 +22,7 @@ const C = {
   hair: 0x241719,
   skin: 0xffd8c5,
   white: 0xfff1dd,
+  black: 0x25191b,
 };
 
 type Palette = {
@@ -30,6 +30,18 @@ type Palette = {
   robeLight: number;
   accent: number;
   metal: number;
+};
+
+type TierProfile = {
+  scale: number;
+  skirtWidth: number;
+  torsoWidth: number;
+  sleeve: number;
+  crown: number;
+  cape: boolean;
+  halo: boolean;
+  throne: boolean;
+  prop: 'tray' | 'fan' | 'openFan' | 'scepter' | 'none';
 };
 
 const PALETTES: Record<number, Palette> = {
@@ -44,6 +56,20 @@ const PALETTES: Record<number, Palette> = {
   512: { robe: 0x9b1828, robeLight: 0xd33839, accent: 0x1c1a2d, metal: 0xffd251 },
   1024: { robe: 0x51182a, robeLight: 0x9b2444, accent: 0x18182d, metal: 0xffd65e },
   2048: { robe: 0xc0262d, robeLight: 0xf05a43, accent: 0x16151d, metal: 0xffde6b },
+};
+
+const PROFILES: Record<number, TierProfile> = {
+  2: { scale: 0.78, skirtWidth: 0.46, torsoWidth: 0.48, sleeve: 0.18, crown: 0, cape: false, halo: false, throne: false, prop: 'tray' },
+  4: { scale: 0.81, skirtWidth: 0.49, torsoWidth: 0.5, sleeve: 0.2, crown: 1, cape: false, halo: false, throne: false, prop: 'fan' },
+  8: { scale: 0.85, skirtWidth: 0.53, torsoWidth: 0.52, sleeve: 0.22, crown: 2, cape: false, halo: false, throne: false, prop: 'openFan' },
+  16: { scale: 0.9, skirtWidth: 0.57, torsoWidth: 0.55, sleeve: 0.26, crown: 2, cape: false, halo: false, throne: false, prop: 'openFan' },
+  32: { scale: 0.96, skirtWidth: 0.62, torsoWidth: 0.58, sleeve: 0.3, crown: 3, cape: false, halo: false, throne: false, prop: 'scepter' },
+  64: { scale: 1.0, skirtWidth: 0.66, torsoWidth: 0.6, sleeve: 0.32, crown: 4, cape: false, halo: true, throne: false, prop: 'scepter' },
+  128: { scale: 1.04, skirtWidth: 0.7, torsoWidth: 0.62, sleeve: 0.34, crown: 5, cape: true, halo: true, throne: false, prop: 'openFan' },
+  256: { scale: 1.08, skirtWidth: 0.74, torsoWidth: 0.64, sleeve: 0.36, crown: 6, cape: true, halo: true, throne: false, prop: 'scepter' },
+  512: { scale: 1.12, skirtWidth: 0.78, torsoWidth: 0.67, sleeve: 0.38, crown: 7, cape: true, halo: true, throne: false, prop: 'scepter' },
+  1024: { scale: 1.17, skirtWidth: 0.82, torsoWidth: 0.7, sleeve: 0.4, crown: 8, cape: true, halo: true, throne: true, prop: 'none' },
+  2048: { scale: 1.22, skirtWidth: 0.86, torsoWidth: 0.72, sleeve: 0.42, crown: 9, cape: true, halo: true, throne: true, prop: 'none' },
 };
 
 const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
@@ -79,7 +105,13 @@ function rounded(
   );
 }
 
-function sphere(parent: THREE.Object3D, radius: number, color: number, position: [number, number, number], segments = 14): THREE.Mesh {
+function sphere(
+  parent: THREE.Object3D,
+  radius: number,
+  color: number,
+  position: [number, number, number],
+  segments = 12,
+): THREE.Mesh {
   return mesh(parent, new THREE.SphereGeometry(radius, segments, Math.max(8, segments - 4)), toon(color), position);
 }
 
@@ -90,7 +122,7 @@ function cylinder(
   height: number,
   color: number,
   position: [number, number, number],
-  segments = 16,
+  segments = 14,
   metallic = false,
 ): THREE.Mesh {
   return mesh(
@@ -101,41 +133,30 @@ function cylinder(
   );
 }
 
-function cone(parent: THREE.Object3D, radius: number, height: number, color: number, position: [number, number, number], segments = 14): THREE.Mesh {
-  return mesh(parent, new THREE.ConeGeometry(radius, height, segments), toon(color), position);
-}
-
-function plaqueTexture(rank: string, value: number, prestige: boolean): THREE.CanvasTexture {
+function numberTexture(value: number, prestige: boolean): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 300;
+  canvas.width = 192;
+  canvas.height = 192;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas2D is required for palace rank plaques.');
+  if (!context) throw new Error('Canvas2D is required for palace number badges.');
 
-  const background = prestige ? '#8c192b' : '#fff0c5';
-  const border = prestige ? '#f6c84b' : '#9f5b28';
-  const ink = prestige ? '#fff3c1' : '#4d2818';
-
-  context.fillStyle = background;
-  context.strokeStyle = border;
-  context.lineWidth = 18;
+  context.clearRect(0, 0, 192, 192);
   context.beginPath();
-  context.roundRect(18, 18, 476, 264, 44);
+  context.arc(96, 96, 78, 0, Math.PI * 2);
+  context.fillStyle = prestige ? '#8e2025' : '#fff0c5';
   context.fill();
+  context.lineWidth = 12;
+  context.strokeStyle = prestige ? '#ffd45e' : '#9c5a2d';
   context.stroke();
 
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.font = '900 68px "PingFang SC","Microsoft YaHei",sans-serif';
-  context.fillStyle = ink;
-  context.fillText(rank, 256, 92);
-
-  context.font = `1000 ${value >= 1024 ? 82 : 108}px ui-rounded,"Arial Rounded MT Bold",sans-serif`;
-  context.lineWidth = 13;
-  context.strokeStyle = prestige ? '#6d1222' : '#fff7dc';
-  context.strokeText(String(value), 256, 205);
-  context.fillStyle = prestige ? '#ffd86a' : '#5a2f1b';
-  context.fillText(String(value), 256, 205);
+  context.font = `1000 ${value >= 1024 ? 66 : value >= 128 ? 78 : 88}px ui-rounded,"Arial Rounded MT Bold",sans-serif`;
+  context.lineWidth = 8;
+  context.strokeStyle = prestige ? '#5a1019' : '#fff8e1';
+  context.strokeText(String(value), 96, 101);
+  context.fillStyle = prestige ? '#ffe07b' : '#542d1c';
+  context.fillText(String(value), 96, 101);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -143,111 +164,209 @@ function plaqueTexture(rank: string, value: number, prestige: boolean): THREE.Ca
   return texture;
 }
 
-function addRankPlaque(parent: THREE.Object3D, value: number, y: number): void {
+function addNumberMedallion(parent: THREE.Object3D, value: number): void {
   const prestige = value >= 32;
-  rounded(parent, [1.26, 0.7, 0.09], prestige ? C.lacquer : C.ivory, [0, y, 0.77], 0.14, prestige);
-  const material = new THREE.MeshBasicMaterial({
-    map: plaqueTexture(PALACE_RANKS[value] ?? '凤仪', value, prestige),
-    transparent: true,
-    depthWrite: false,
-  });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.69), material);
-  label.position.set(0, y, 0.825);
+  const base = cylinder(
+    parent,
+    0.2,
+    0.23,
+    0.07,
+    prestige ? C.goldDeep : C.ivory,
+    [0.48, 0.42, 0.48],
+    18,
+    prestige,
+  );
+  base.rotation.x = Math.PI / 2;
+
+  const label = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.38, 0.38),
+    new THREE.MeshBasicMaterial({
+      map: numberTexture(value, prestige),
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+  label.position.set(0.48, 0.42, 0.523);
   label.renderOrder = 30;
   parent.add(label);
 }
 
-function addHairOrnaments(parent: THREE.Object3D, palette: Palette, tier: number, animated: THREE.Object3D[]): void {
-  const count = tier >= 8 ? 5 : tier >= 5 ? 3 : tier >= 3 ? 2 : 1;
-  for (let index = 0; index < count; index += 1) {
-    const x = (index - (count - 1) / 2) * 0.13;
+function addFace(parent: THREE.Object3D): void {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 96;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, 128, 96);
+  ctx.fillStyle = '#281718';
+  ctx.beginPath();
+  ctx.arc(42, 42, 8, 0, Math.PI * 2);
+  ctx.arc(86, 42, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#b35b5f';
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(64, 62, 16, 0.15, Math.PI - 0.15);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const plane = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.34, 0.25),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }),
+  );
+  plane.position.set(0, 1.5, 0.272);
+  plane.renderOrder = 20;
+  parent.add(plane);
+}
+
+function addCrown(parent: THREE.Object3D, palette: Palette, profile: TierProfile, animated: THREE.Object3D[]): void {
+  if (profile.crown <= 0) return;
+
+  const width = 0.3 + profile.crown * 0.055;
+  const bar = rounded(parent, [width, 0.075, 0.08], palette.metal, [0, 1.83 + profile.crown * 0.012, 0.015], 0.025, true);
+  if (profile.crown >= 5) {
+    bar.userData.tileAnimated = true;
+    animated.push(bar);
+  }
+
+  const gemCount = Math.min(5, 1 + Math.floor(profile.crown / 2));
+  for (let index = 0; index < gemCount; index += 1) {
+    const x = (index - (gemCount - 1) / 2) * 0.13;
     const gem = mesh(
       parent,
-      new THREE.OctahedronGeometry(tier >= 7 ? 0.07 : 0.05, 0),
-      metal(index % 2 ? palette.metal : C.gold),
-      [x, 1.73 + (index % 2) * 0.045, 0.02],
+      new THREE.OctahedronGeometry(0.045 + profile.crown * 0.004, 0),
+      metal(index % 2 ? C.gold : palette.metal),
+      [x, 1.9 + (index % 2) * 0.055 + profile.crown * 0.008, 0.02],
     );
-    gem.rotation.z = index * 0.22;
-    if (tier >= 7 && index % 2 === 0) {
+    if (profile.crown >= 6 && index % 2 === 0) {
       gem.userData.tileAnimated = true;
       animated.push(gem);
     }
   }
-}
 
-function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Object3D[]): void {
-  const tier = Math.max(1, Math.min(11, Math.round(Math.log2(value))));
-  const palette = PALETTES[value] ?? PALETTES[2048];
-
-  // Skirt and torso: exaggerated toy proportions for phone readability.
-  cylinder(parent, 0.3, 0.55, 0.66, palette.robe, [0, 0.75, 0], 18);
-  rounded(parent, [0.56, 0.5, 0.42], palette.robeLight, [0, 1.14, 0], 0.14);
-  rounded(parent, [0.6, 0.11, 0.45], palette.accent, [0, 0.96, 0.02], 0.04);
-
-  // Sleeves.
-  const leftSleeve = cylinder(parent, 0.11, 0.18, 0.54, palette.robeLight, [-0.37, 1.08, 0.02], 12);
-  leftSleeve.rotation.z = -0.42;
-  const rightSleeve = cylinder(parent, 0.11, 0.18, 0.54, palette.robeLight, [0.37, 1.08, 0.02], 12);
-  rightSleeve.rotation.z = 0.42;
-
-  // Head / hair.
-  sphere(parent, 0.28, C.skin, [0, 1.5, 0.02], 16);
-  sphere(parent, 0.292, C.hair, [0, 1.58, -0.06], 16);
-  // Face patch hides front of full hair sphere.
-  sphere(parent, 0.245, C.skin, [0, 1.49, 0.12], 16);
-  // Fringe.
-  rounded(parent, [0.42, 0.12, 0.12], C.hair, [0, 1.68, 0.18], 0.055);
-
-  // Hair buns become increasingly elaborate.
-  sphere(parent, tier >= 6 ? 0.16 : 0.12, C.hair, [-0.18, 1.78, -0.02], 12);
-  if (tier >= 3) sphere(parent, 0.14, C.hair, [0.18, 1.8, -0.02], 12);
-  if (tier >= 7) {
-    sphere(parent, 0.13, C.hair, [0, 1.9, -0.04], 12);
-    const crownBar = rounded(parent, [0.72, 0.08, 0.1], palette.metal, [0, 1.84, 0.02], 0.03, true);
-    crownBar.userData.tileAnimated = true;
-    animated.push(crownBar);
-  }
-  addHairOrnaments(parent, palette, tier, animated);
-
-  // Tiny eyes for character readability.
-  for (const x of [-0.09, 0.09]) {
-    const eye = sphere(parent, 0.026, 0x241313, [x, 1.52, 0.345], 8);
-    eye.castShadow = false;
-  }
-
-  // Rank props.
-  if (tier <= 3) {
-    // Fan / broom silhouette.
-    const prop = rounded(parent, [0.32, 0.22, 0.035], tier === 1 ? 0xb78c58 : C.ivory, [0.39, 1.0, 0.28], 0.05);
-    prop.rotation.z = -0.25;
-  } else if (tier <= 6) {
-    const fan = new THREE.Group();
-    fan.position.set(0.38, 1.02, 0.28);
-    parent.add(fan);
-    for (let i = 0; i < 5; i += 1) {
-      const blade = rounded(fan, [0.08, 0.36, 0.025], i % 2 ? C.ivory : palette.metal, [(i - 2) * 0.052, 0, 0], 0.025);
-      blade.rotation.z = (i - 2) * 0.13;
-    }
-  } else {
-    // High ranks get shoulder ornaments and hanging beads.
-    for (const x of [-0.43, 0.43]) {
-      sphere(parent, 0.08, palette.metal, [x, 1.33, 0], 10);
-      const tassel = cylinder(parent, 0.025, 0.035, 0.38, C.gold, [x, 1.12, 0.04], 8, true);
+  if (profile.crown >= 7) {
+    for (const x of [-width * 0.42, width * 0.42]) {
+      const tassel = cylinder(parent, 0.018, 0.024, 0.32, C.gold, [x, 1.72, 0.025], 7, true);
       tassel.userData.tileAnimated = true;
       animated.push(tassel);
     }
   }
+}
 
-  // Embroidery/gem center.
+function addProp(parent: THREE.Object3D, profile: TierProfile, palette: Palette): void {
+  if (profile.prop === 'tray') {
+    const tray = cylinder(parent, 0.22, 0.22, 0.035, 0xb98d56, [0.34, 1.0, 0.25], 12);
+    tray.rotation.z = -0.18;
+    return;
+  }
+
+  if (profile.prop === 'fan') {
+    const fan = rounded(parent, [0.3, 0.24, 0.035], C.ivory, [0.36, 1.05, 0.26], 0.05);
+    fan.rotation.z = -0.3;
+    return;
+  }
+
+  if (profile.prop === 'openFan') {
+    const fan = new THREE.Group();
+    fan.position.set(0.38, 1.03, 0.28);
+    parent.add(fan);
+    for (let i = 0; i < 4; i += 1) {
+      const blade = rounded(fan, [0.07, 0.34, 0.025], i % 2 ? C.ivory : palette.metal, [(i - 1.5) * 0.052, 0, 0], 0.022);
+      blade.rotation.z = (i - 1.5) * 0.16;
+    }
+    return;
+  }
+
+  if (profile.prop === 'scepter') {
+    const staff = cylinder(parent, 0.025, 0.035, 0.58, C.goldDeep, [0.36, 1.04, 0.25], 8, true);
+    staff.rotation.z = -0.28;
+    mesh(parent, new THREE.OctahedronGeometry(0.08, 0), metal(palette.metal), [0.49, 1.3, 0.29]);
+  }
+}
+
+function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Object3D[]): void {
+  const palette = PALETTES[value] ?? PALETTES[2048];
+  const profile = PROFILES[value] ?? PROFILES[2048];
+  const character = new THREE.Group();
+  character.scale.setScalar(profile.scale);
+  character.position.y = 0.02;
+  parent.add(character);
+
+  if (profile.throne) {
+    rounded(character, [1.0, 0.13, 0.7], C.goldDeep, [0, 0.41, -0.08], 0.07, true);
+    rounded(character, [0.82, 0.92, 0.12], palette.accent, [0, 1.05, -0.26], 0.08);
+    for (const x of [-0.42, 0.42]) {
+      cylinder(character, 0.055, 0.07, 1.15, C.gold, [x, 1.15, -0.24], 9, true);
+    }
+  }
+
+  if (profile.cape) {
+    const cape = rounded(character, [0.9, 0.88, 0.1], palette.accent, [0, 1.0, -0.22], 0.12);
+    cape.rotation.x = -0.12;
+  }
+
+  cylinder(character, 0.3, profile.skirtWidth, 0.72, palette.robe, [0, 0.77, 0], 16);
+  rounded(character, [profile.torsoWidth, 0.52, 0.42], palette.robeLight, [0, 1.16, 0], 0.14);
+  rounded(character, [profile.torsoWidth + 0.05, 0.1, 0.43], palette.accent, [0, 0.98, 0.02], 0.04);
+
+  const leftSleeve = cylinder(character, 0.1, profile.sleeve, 0.58, palette.robeLight, [-0.38, 1.09, 0.02], 12);
+  leftSleeve.rotation.z = -0.46;
+  const rightSleeve = cylinder(character, 0.1, profile.sleeve, 0.58, palette.robeLight, [0.38, 1.09, 0.02], 12);
+  rightSleeve.rotation.z = 0.46;
+
+  sphere(character, 0.28, C.skin, [0, 1.52, 0.02], 14);
+  sphere(character, 0.292, C.hair, [0, 1.61, -0.065], 14);
+  sphere(character, 0.245, C.skin, [0, 1.51, 0.13], 14);
+  rounded(character, [0.42, 0.11, 0.11], C.hair, [0, 1.7, 0.18], 0.05);
+
+  const bunSize = profile.crown >= 6 ? 0.16 : 0.12;
+  sphere(character, bunSize, C.hair, [-0.19, 1.8, -0.02], 10);
+  if (value >= 4) sphere(character, bunSize, C.hair, [0.19, 1.82, -0.02], 10);
+  if (value >= 64) sphere(character, 0.13, C.hair, [0, 1.92, -0.04], 10);
+
+  addFace(character);
+  addCrown(character, palette, profile, animated);
+  addProp(character, profile, palette);
+
+  if (value >= 32) {
+    for (const x of [-0.43, 0.43]) {
+      sphere(character, 0.075 + Math.min(0.04, Math.log2(value) * 0.004), palette.metal, [x, 1.34, 0], 9);
+    }
+  }
+
   const chestGem = mesh(
-    parent,
-    new THREE.OctahedronGeometry(tier >= 8 ? 0.11 : 0.075, 0),
+    character,
+    new THREE.OctahedronGeometry(value >= 256 ? 0.1 : 0.07, 0),
     metal(palette.metal),
-    [0, 1.18, 0.24],
+    [0, 1.2, 0.24],
   );
-  if (tier >= 6) {
+  if (value >= 64) {
     chestGem.userData.tileAnimated = true;
     animated.push(chestGem);
+  }
+
+  if (profile.halo) {
+    const halo = mesh(character, new THREE.TorusGeometry(value >= 512 ? 0.72 : 0.62, 0.025, 8, 32), metal(C.gold), [0, 1.28, -0.18]);
+    halo.rotation.x = Math.PI / 2;
+    halo.userData.tileAnimated = true;
+    animated.push(halo);
+  }
+
+  if (value >= 1024) {
+    for (const side of [-1, 1]) {
+      const wing = rounded(character, [0.62, 0.08, 0.22], C.gold, [side * 0.58, 1.58, -0.1], 0.03, true);
+      wing.rotation.z = side * 0.42;
+      wing.userData.tileAnimated = true;
+      animated.push(wing);
+    }
+  }
+
+  if (value >= 2048) {
+    const crownHalo = mesh(character, new THREE.TorusGeometry(0.83, 0.045, 8, 36), metal(C.gold), [0, 1.95, -0.16]);
+    crownHalo.rotation.x = Math.PI / 2;
+    crownHalo.userData.tileAnimated = true;
+    animated.push(crownHalo);
   }
 }
 
@@ -272,24 +391,27 @@ export class PalaceTileFactory {
     return { root, animatedParts };
   }
 
+  warmup(values: number[]): void {
+    values.forEach((value) => {
+      if (!this.templates.has(value)) {
+        const built = this.build(value);
+        built.animatedParts.forEach((part) => { part.userData.tileAnimated = true; });
+        this.templates.set(value, built.root);
+      }
+    });
+  }
+
   private build(value: number): TileVisual {
     const root = new THREE.Group();
     const animatedParts: THREE.Object3D[] = [];
     const prestige = value >= 32;
 
-    cylinder(root, 0.83, 0.9, 0.15, prestige ? C.goldDeep : C.lacquerDark, [0, 0.08, 0], 20, prestige);
-    cylinder(root, 0.76, 0.82, 0.1, prestige ? C.lacquer : C.jadeDark, [0, 0.2, 0], 20);
-    rounded(root, [1.42, 0.11, 1.28], prestige ? C.lacquer : C.jade, [0, 0.29, 0], 0.14);
+    cylinder(root, 0.78, 0.86, 0.13, prestige ? C.goldDeep : C.lacquerDark, [0, 0.07, 0], 18, prestige);
+    cylinder(root, 0.71, 0.78, 0.09, prestige ? C.lacquer : C.jadeDark, [0, 0.18, 0], 18);
+    rounded(root, [1.34, 0.09, 1.24], prestige ? C.lacquer : C.jade, [0, 0.27, 0], 0.12);
 
     addCharacter(root, value, animatedParts);
-    addRankPlaque(root, value, 0.56);
-
-    if (value >= 64) {
-      const halo = mesh(root, new THREE.TorusGeometry(0.7, 0.025, 8, 36), metal(C.gold), [0, 1.26, -0.08]);
-      halo.rotation.x = Math.PI / 2;
-      halo.userData.tileAnimated = true;
-      animatedParts.push(halo);
-    }
+    addNumberMedallion(root, value);
 
     return { root, animatedParts };
   }
