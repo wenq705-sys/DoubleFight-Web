@@ -28,6 +28,8 @@ export type {
   RoomPlayerState,
   RoomState,
   ServerMessage,
+  SkillEvent,
+  SkillOutcome,
 } from './protocol/messages';
 
 export {
@@ -39,3 +41,16 @@ export {
   energyForMerges,
 } from './battle/energy';
 export type { EnergyGainBreakdown } from './battle/energy';
+
+export {
+  PETRIFY_DURATION_MS,
+  SKILL_DEFINITIONS,
+  emptySkillCooldowns,
+  isSkillId,
+} from './battle/skills';
+export type {
+  SkillCooldowns,
+  SkillDefinition,
+  SkillId,
+  SkillTarget,
+} from './battle/skills';
