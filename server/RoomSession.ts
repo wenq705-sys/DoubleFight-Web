@@ -144,8 +144,8 @@ export class RoomSession {
 
     const definition = SKILL_DEFINITIONS[skillId];
     if (caster.energy < definition.cost) throw new Error('INSUFFICIENT_ENERGY');
-    if (caster.skillCooldowns[skillId] > now) throw new Error('SKILL_COOLDOWN');
     if (skillId === 'shield' && caster.shieldActive) throw new Error('SKILL_ALREADY_ACTIVE');
+    if (caster.skillCooldowns[skillId] > now) throw new Error('SKILL_COOLDOWN');
 
     const event: SkillEvent = {
       sequence,
