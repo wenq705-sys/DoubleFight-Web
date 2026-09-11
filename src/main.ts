@@ -7,6 +7,7 @@ import { GameScene } from './rendering/GameScene';
 import { Hud } from './ui/Hud';
 import { HomeScreen } from './ui/HomeScreen';
 import { OnlineLobby } from './ui/OnlineLobby';
+import { DuelScreen } from './ui/DuelScreen';
 import { OnlineClient } from './network/OnlineClient';
 import { SoundDesign } from './audio/SoundDesign';
 
@@ -37,6 +38,7 @@ const home = new HomeScreen(app, theme);
 const onlineEndpoint = resolveOnlineEndpoint();
 const onlineClient = new OnlineClient(onlineEndpoint);
 const onlineLobby = new OnlineLobby(app, onlineClient, Boolean(onlineEndpoint));
+const duelScreen = new DuelScreen(app, onlineClient);
 
 const highest = () => Math.max(2, ...board.tiles().map((tile) => tile.value));
 
@@ -232,6 +234,20 @@ home.onOnline((nextTheme) => {
 onlineLobby.onClose(() => {
   onlineLobby.setTheme(theme);
   home.show(theme);
+});
+
+duelScreen.onEnter(() => {
+  inGame = false;
+  inputLocked = false;
+  pointerStart = null;
+  onlineLobby.hideForMatch();
+  home.hide();
+  hud.setVisible(false);
+  scene.setHomeMode(true);
+});
+
+duelScreen.onExit(() => {
+  onlineLobby.show(theme);
 });
 
 home.onPreview((nextTheme) => {

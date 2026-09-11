@@ -43,6 +43,7 @@ export interface ClearResult {
 
 export interface BoardPublicState {
   cells: number[][];
+  tiles: BoardTile[];
   score: number;
   highest: number;
   canMove: boolean;

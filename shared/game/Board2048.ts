@@ -45,6 +45,7 @@ export class Board2048 {
     const tiles = this.tiles();
     return {
       cells: this.snapshot().map((row) => [...row]),
+      tiles: tiles.map((tile) => ({ ...tile })),
       score: this._score,
       highest: Math.max(2, ...tiles.map((tile) => tile.value)),
       canMove: this.canMove(),

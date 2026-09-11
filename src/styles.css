@@ -887,3 +887,259 @@ body[data-theme="palace"] .hud__hint{
   .online-lobby{place-items:center}
   .online-lobby__sheet{border-bottom:2px solid rgba(255,218,133,.62);border-radius:28px}
 }
+
+
+/* === M2.1 live online duel === */
+.duel{
+  position:fixed;
+  inset:0;
+  z-index:58;
+  overflow:hidden;
+  color:#f9efcf;
+  background:#15252f;
+  opacity:1;
+  visibility:visible;
+  transition:opacity .24s ease,visibility .24s ease;
+  touch-action:none;
+}
+.duel--hidden{opacity:0;visibility:hidden;pointer-events:none}
+.duel__background{
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(circle at 50% 22%,rgba(206,116,94,.22),transparent 28%),
+    radial-gradient(circle at 50% 76%,rgba(70,153,185,.24),transparent 30%),
+    linear-gradient(180deg,#352329 0%,#263a42 45%,#14364b 100%);
+}
+.duel__stage{position:absolute;inset:0;overflow:hidden}
+.duel-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+
+.duel__header{
+  position:absolute;
+  z-index:5;
+  top:max(8px,env(safe-area-inset-top));
+  left:10px;
+  right:10px;
+  display:grid;
+  grid-template-columns:72px 1fr 72px;
+  align-items:start;
+  gap:8px;
+  pointer-events:none;
+}
+.duel__exit{
+  pointer-events:auto;
+  border:1px solid rgba(255,225,168,.26);
+  border-radius:12px;
+  padding:7px 8px;
+  color:#ffedbc;
+  background:rgba(27,31,37,.56);
+  backdrop-filter:blur(10px);
+  font-size:10px;
+  font-weight:900;
+}
+.duel__brand{text-align:center;filter:drop-shadow(0 5px 10px rgba(0,0,0,.24))}
+.duel__brand strong{
+  display:block;
+  color:#ffe19a;
+  font-size:24px;
+  line-height:1;
+  font-weight:1000;
+  letter-spacing:-.05em;
+  -webkit-text-stroke:1.2px #572f1d;
+  text-shadow:0 3px 0 #b45b35;
+}
+.duel__brand span{
+  display:inline-block;
+  margin-top:5px;
+  padding:3px 8px;
+  border:1px solid rgba(255,224,153,.22);
+  border-radius:999px;
+  background:rgba(24,31,36,.5);
+  color:#dceef0;
+  font-size:7px;
+  font-weight:950;
+  letter-spacing:.18em;
+}
+.duel__net{
+  justify-self:end;
+  text-align:right;
+  padding:6px 7px;
+  border-radius:10px;
+  background:rgba(24,31,36,.48);
+  border:1px solid rgba(255,255,255,.1);
+  backdrop-filter:blur(8px);
+}
+.duel__net span,.duel__net b{display:block}
+.duel__net span{color:#8fe6a9;font-size:8px;font-weight:950}
+.duel__net b{margin-top:1px;color:#d8ebed;font-size:8px}
+
+.duel-player{
+  position:absolute;
+  z-index:5;
+  left:14px;
+  right:14px;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  pointer-events:none;
+}
+.duel-player>div{
+  max-width:68%;
+  padding:7px 10px;
+  border:1px solid rgba(255,236,191,.18);
+  border-radius:13px;
+  background:rgba(29,31,36,.42);
+  backdrop-filter:blur(8px);
+}
+.duel-player>div small,.duel-player>div strong,.duel-player>div span{display:block}
+.duel-player>div small{font-size:7px;font-weight:900;letter-spacing:.12em;color:#cdbd9d}
+.duel-player>div strong{margin-top:1px;font-size:13px;font-weight:1000;color:#fff0c3}
+.duel-player>div span{margin-top:2px;font-size:8px;font-weight:850;color:#b9dfe0}
+.duel-player>b{
+  min-width:74px;
+  padding:6px 9px;
+  border:1px solid rgba(255,232,180,.18);
+  border-radius:12px;
+  background:rgba(21,27,32,.52);
+  text-align:right;
+  backdrop-filter:blur(8px);
+}
+.duel-player>b small,.duel-player>b strong{display:block}
+.duel-player>b small{font-size:7px;letter-spacing:.12em;color:#bdad91}
+.duel-player>b strong{font-size:16px;color:#ffe49e}
+.duel-player--remote{top:max(62px,calc(env(safe-area-inset-top) + 52px))}
+.duel-player--local{bottom:max(68px,calc(env(safe-area-inset-bottom) + 58px))}
+
+.duel__versus{
+  position:absolute;
+  z-index:5;
+  left:50%;
+  top:48.5%;
+  width:min(88%,430px);
+  transform:translate(-50%,-50%);
+  display:grid;
+  grid-template-columns:1fr auto auto 1fr;
+  align-items:center;
+  gap:8px;
+  pointer-events:none;
+}
+.duel__versus i{height:1px;background:linear-gradient(90deg,transparent,rgba(255,223,142,.48))}
+.duel__versus i:last-child{transform:scaleX(-1)}
+.duel__versus>strong{
+  display:grid;
+  place-items:center;
+  width:37px;
+  height:37px;
+  border:2px solid #e7bb58;
+  border-radius:50%;
+  color:#fff0b1;
+  background:linear-gradient(#a33e37,#5e252d);
+  box-shadow:0 0 22px rgba(237,179,70,.22),0 4px 0 #421c25;
+  font-size:14px;
+  font-weight:1000;
+}
+.duel__versus>span{
+  padding:5px 8px;
+  border-radius:999px;
+  background:rgba(24,29,34,.54);
+  color:#c9d9d8;
+  border:1px solid rgba(255,255,255,.08);
+  font-size:7px;
+  font-weight:850;
+  white-space:nowrap;
+}
+.duel__versus>span b{color:#ffe09a;letter-spacing:.08em}
+
+.duel__input-zone{
+  position:absolute;
+  z-index:4;
+  left:4%;
+  right:4%;
+  top:51%;
+  bottom:5%;
+  touch-action:none;
+  pointer-events:auto;
+}
+.duel__hint{
+  position:absolute;
+  z-index:6;
+  left:50%;
+  bottom:max(16px,calc(env(safe-area-inset-bottom) + 8px));
+  transform:translateX(-50%);
+  padding:6px 10px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:999px;
+  color:#cde5e6;
+  background:rgba(18,28,34,.52);
+  backdrop-filter:blur(8px);
+  font-size:8px;
+  font-weight:850;
+  white-space:nowrap;
+  pointer-events:none;
+}
+
+.duel__reconnect{
+  position:absolute;
+  z-index:12;
+  inset:0;
+  display:grid;
+  place-content:center;
+  justify-items:center;
+  gap:7px;
+  color:#fff1c4;
+  background:rgba(18,23,29,.64);
+  backdrop-filter:blur(8px);
+  transition:opacity .18s ease,visibility .18s ease;
+}
+.duel__reconnect--hidden{opacity:0;visibility:hidden;pointer-events:none}
+.duel__reconnect strong{font-size:20px}
+.duel__reconnect span{font-size:10px;color:#d3e1e2}
+.duel__spinner{
+  width:34px;height:34px;border:3px solid rgba(255,238,191,.18);border-top-color:#f2c85b;border-radius:50%;
+  animation:duel-spin .8s linear infinite
+}
+@keyframes duel-spin{to{transform:rotate(360deg)}}
+
+.duel-result{
+  position:absolute;
+  z-index:16;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(19,24,29,.68);
+  backdrop-filter:blur(10px);
+  opacity:1;
+  visibility:visible;
+  transition:opacity .2s ease,visibility .2s ease;
+}
+.duel-result--hidden{opacity:0;visibility:hidden;pointer-events:none}
+.duel-result__card{
+  width:min(86vw,340px);
+  padding:24px 20px 22px;
+  border:2px solid #e6b851;
+  border-radius:25px;
+  background:linear-gradient(180deg,#fff0c5,#dba95d);
+  color:#55301f;
+  text-align:center;
+  box-shadow:0 22px 60px rgba(0,0,0,.35);
+}
+.duel-result__crest{font-size:38px}
+.duel-result h2{margin:4px 0 8px;font-size:30px}
+.duel-result p{margin:0 0 18px;font-size:11px;font-weight:750;line-height:1.55;color:#78513a}
+.duel-result button{
+  width:100%;min-height:46px;border:2px solid #ffd66e;border-radius:15px;background:linear-gradient(#d85b48,#a52d32);
+  color:#fff0bb;box-shadow:0 4px 0 #70202a;font-weight:1000
+}
+
+@media(max-width:390px){
+  .duel__header{grid-template-columns:66px 1fr 66px}
+  .duel__brand strong{font-size:21px}
+  .duel-player--remote{top:max(57px,calc(env(safe-area-inset-top) + 48px))}
+  .duel-player--local{bottom:max(61px,calc(env(safe-area-inset-bottom) + 51px))}
+  .duel-player>div{padding:6px 8px}
+  .duel-player>div strong{font-size:12px}
+  .duel-player>b{min-width:65px}
+  .duel-player>b strong{font-size:14px}
+  .duel__hint{font-size:7px}
+}

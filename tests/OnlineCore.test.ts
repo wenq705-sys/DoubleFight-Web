@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Board2048 } from '../shared/game/Board2048';
 import { SeededRandom } from '../shared/game/SeededRandom';
+import { predictMoveTiles } from '../shared/game/predictMove';
 import { parseClientMessage } from '../shared/protocol/messages';
 import { RoomSession } from '../server/RoomSession';
 
@@ -19,6 +20,32 @@ describe('shared online game core', () => {
       b.move(direction);
       expect(a.publicState()).toEqual(b.publicState());
     }
+  });
+
+  it('predicts movement immediately without inventing a server spawn', () => {
+    const tiles = [
+      { id: 1, value: 2, row: 0, col: 0 },
+      { id: 2, value: 2, row: 0, col: 1 },
+      { id: 3, value: 8, row: 1, col: 3 },
+    ];
+
+    const prediction = predictMoveTiles(tiles, 'left');
+    expect(prediction.changed).toBe(true);
+    expect(prediction.scoreDelta).toBe(4);
+    expect(prediction.tiles).toEqual([
+      { id: 1, value: 4, row: 0, col: 0 },
+      { id: 3, value: 8, row: 1, col: 0 },
+    ]);
+    expect(prediction.tiles.some((tile) => tile.id > 3)).toBe(false);
+  });
+
+  it('exposes stable tile ids in authoritative public snapshots', () => {
+    const board = new Board2048(new SeededRandom(42));
+    board.reset();
+    const state = board.publicState();
+    expect(state.tiles).toHaveLength(2);
+    expect(state.tiles.map((tile) => tile.id)).toEqual([1, 2]);
+    expect(state.cells.flat().filter(Boolean)).toHaveLength(2);
   });
 
   it('parses only known versioned protocol messages', () => {

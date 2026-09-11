@@ -51,16 +51,20 @@
 - browser online-room lobby
 - CI server smoke test
 
-### M2.1 dual-board battle client
+### M2.1 dual-board battle client ← IMPLEMENTED, PUBLIC SERVER TEST PENDING
 
 - real match screen on both devices
+- one shared lightweight Three.js DuelScene instead of two full Solo worlds
 - large own board + compact live opponent board
-- server snapshots rendered in real time
-- client prediction for own movement feel
-- reconciliation with server results
-- opponent board interpolation / readable remote merge feedback
+- both players render their independently selected themes
+- authoritative snapshots include stable tile ids for animation
+- spawn-free local prediction for immediate swipe response
+- pending-command replay on fresh server snapshots for reconciliation
+- opponent board movement interpolates from authoritative tile ids
+- connection / latency / reconnect overlays
+- match-end win/loss overlay
 
-### M2.2 energy system
+### M2.2 energy system ← NEXT
 
 - merge value/combos generate battle energy
 - server owns energy truth

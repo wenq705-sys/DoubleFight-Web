@@ -67,7 +67,7 @@ export class OnlineLobby {
             <div class="online-room__players" id="online-players"></div>
             <button class="online-room__ready" id="online-ready" type="button">准备</button>
             <button class="online-room__leave" id="online-leave" type="button">退出房间</button>
-            <p class="online-room__note">双方准备后由服务器创建权威 2048 对局。M2.1 将接入双棋盘实时战斗界面。</p>
+            <p class="online-room__note">双方准备后立即进入实时双棋盘对决。每个人只操作自己的棋盘。</p>
           </div>
         </div>
       </section>`);
@@ -128,9 +128,13 @@ export class OnlineLobby {
   }
 
   close(): void {
+    this.hideForMatch();
+    this.onCloseHandler?.();
+  }
+
+  hideForMatch(): void {
     this.root.classList.add('online-lobby--hidden');
     this.root.setAttribute('aria-hidden', 'true');
-    this.onCloseHandler?.();
   }
 
   onClose(handler: () => void): void {
@@ -172,7 +176,7 @@ export class OnlineLobby {
     this.readyButton.disabled = room.phase !== 'lobby';
 
     if (state.match?.phase === 'playing') {
-      this.status.textContent = '服务器已创建权威对局 · 双棋盘界面将在 M2.1 接入';
+      this.status.textContent = '比赛进行中';
       this.readyButton.textContent = '比赛已开始';
     }
   }
