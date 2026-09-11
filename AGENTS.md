@@ -34,9 +34,10 @@ Do **not** add multiplayer, backend, matchmaking, accounts, ads or unrelated mod
 
 - premium stylized miniature 3D
 - no generic cyber-neon drift
-- no giant text plaques covering pieces
-- model silhouette is primary; number is secondary
-- adjacent tiers must differ in silhouette, not only color
+- no numbers, rank text, plaques or badges attached to gameplay pieces
+- identity priority is size > silhouette > discrete hue > accessories
+- adjacent tiers must use different hue families, never only lighter/darker variants
+- every theme must use the shared monotonic tier-growth rule
 - high-tier spectacle scales up aggressively but stays readable
 - palace theme uses original characters only
 
