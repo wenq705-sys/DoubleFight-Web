@@ -3,6 +3,9 @@ import {
   Board2048,
   SeededRandom,
   randomUint32,
+  MAX_BATTLE_ENERGY,
+  clampBattleEnergy,
+  energyForMerges,
   type Direction,
   type MatchSnapshot,
   type NetworkThemeId,
@@ -20,6 +23,7 @@ export interface RoomPlayerRecord {
   reconnectToken: string;
   connectionId: string | null;
   board: Board2048 | null;
+  energy: number;
   lastSequence: number;
 }
 
@@ -52,6 +56,7 @@ export class RoomSession {
       reconnectToken: randomBytes(24).toString('base64url'),
       connectionId,
       board: null,
+      energy: 0,
       lastSequence: -1,
     };
     this.players.set(player.id, player);
@@ -84,6 +89,7 @@ export class RoomSession {
   move(playerId: string, direction: Direction, sequence: number): {
     player: RoomPlayerRecord;
     result: ReturnType<Board2048['move']>;
+    energyGain: number;
   } {
     if (this.phase !== 'playing') throw new Error('NOT_PLAYING');
     const player = this.requirePlayer(playerId);
@@ -92,6 +98,10 @@ export class RoomSession {
 
     player.lastSequence = sequence;
     const result = player.board.move(direction);
+    const breakdown = energyForMerges(result.merges);
+    const beforeEnergy = player.energy;
+    player.energy = clampBattleEnergy(player.energy + breakdown.total);
+    const energyGain = player.energy - beforeEnergy;
 
     if (result.gameOver) {
       const opponent = [...this.players.values()].find((entry) => entry.id !== player.id);
@@ -100,7 +110,7 @@ export class RoomSession {
       this.endReason = 'board_locked';
     }
 
-    return { player, result };
+    return { player, result, energyGain };
   }
 
   disconnect(playerId: string): void {
@@ -158,6 +168,8 @@ export class RoomSession {
           name: player.name,
           theme: player.theme,
           board: player.board.publicState(),
+          energy: player.energy,
+          maxEnergy: MAX_BATTLE_ENERGY,
           lastSequence: player.lastSequence,
           connected: player.connected,
         };
@@ -190,6 +202,7 @@ export class RoomSession {
       const seed = (baseSeed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
       player.board = new Board2048(new SeededRandom(seed));
       player.board.reset();
+      player.energy = 0;
       player.lastSequence = -1;
     });
     return true;

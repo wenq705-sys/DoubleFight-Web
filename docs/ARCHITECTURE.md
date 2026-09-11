@@ -172,6 +172,30 @@ On each fresh server snapshot:
 
 This keeps swipe response immediate while the server remains the only authority over spawn RNG and competitive truth.
 
+## M2.2 Battle energy
+
+Battle energy is competitive state and therefore server-authoritative.
+
+`shared/battle/energy.ts` contains the common tuning curve and future skill costs, but the browser uses it only for presentation/reference. The server is the only place that mutates player energy.
+
+```text
+authoritative MOVE
+      ↓
+Board2048 MoveResult.merges
+      ↓
+energyForMerges()
+      ↓
+RoomPlayerRecord.energy
+      ↓
+move_ack + MatchSnapshot
+      ↓
+Duel HUD / board pulse
+```
+
+Energy is capped at 100. Rewards rise with merge value, and multiple merges in one swipe earn a deterministic combo bonus. Combo calculation intentionally does not depend on wall-clock timing so latency cannot affect competitive rewards.
+
+The local prediction path predicts board motion/score feel only. It does **not** predict authoritative energy.
+
 ## Future platform layer
 
 Direct uses of browser-only APIs should progressively move behind platform adapters before Douyin packaging:

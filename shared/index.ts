@@ -29,3 +29,13 @@ export type {
   RoomState,
   ServerMessage,
 } from './protocol/messages';
+
+export {
+  MAX_BATTLE_ENERGY,
+  FUTURE_SKILL_ENERGY_COSTS,
+  clampBattleEnergy,
+  comboBonusForMergeCount,
+  energyForMergeValue,
+  energyForMerges,
+} from './battle/energy';
+export type { EnergyGainBreakdown } from './battle/energy';

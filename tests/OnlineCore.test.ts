@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { Board2048 } from '../shared/game/Board2048';
 import { SeededRandom } from '../shared/game/SeededRandom';
 import { predictMoveTiles } from '../shared/game/predictMove';
+import {
+  MAX_BATTLE_ENERGY,
+  clampBattleEnergy,
+  comboBonusForMergeCount,
+  energyForMergeValue,
+  energyForMerges,
+} from '../shared/battle/energy';
 import { parseClientMessage } from '../shared/protocol/messages';
 import { RoomSession } from '../server/RoomSession';
 
@@ -48,6 +55,23 @@ describe('shared online game core', () => {
     expect(state.cells.flat().filter(Boolean)).toHaveLength(2);
   });
 
+  it('rewards stronger merges and multi-merge planning with more battle energy', () => {
+    expect(energyForMergeValue(4)).toBe(2);
+    expect(energyForMergeValue(64)).toBe(8);
+    expect(energyForMergeValue(512)).toBe(20);
+    expect(energyForMergeValue(2048)).toBe(34);
+    expect(comboBonusForMergeCount(1)).toBe(0);
+    expect(comboBonusForMergeCount(2)).toBe(2);
+    expect(comboBonusForMergeCount(4)).toBe(9);
+
+    const breakdown = energyForMerges([
+      { survivorId: 1, consumedId: 2, value: 4, at: { row: 0, col: 0 } },
+      { survivorId: 3, consumedId: 4, value: 8, at: { row: 0, col: 1 } },
+    ]);
+    expect(breakdown).toEqual({ mergeEnergy: 5, comboBonus: 2, total: 7 });
+    expect(clampBattleEnergy(999)).toBe(MAX_BATTLE_ENERGY);
+  });
+
   it('parses only known versioned protocol messages', () => {
     expect(parseClientMessage(JSON.stringify({
       type: 'move',
@@ -85,8 +109,18 @@ describe('shared online game core', () => {
     expect(snapshot.players[1].board.cells).toHaveLength(4);
     expect(snapshot.players.map((player) => player.theme)).toEqual(['kingdom', 'palace']);
 
+    host.board!.load([
+      [2, 2, 4, 4],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
     const move = room.move(host.id, 'left', 0);
     expect(move.player.id).toBe(host.id);
+    expect(move.energyGain).toBe(7);
+    expect(host.energy).toBe(7);
+    expect(room.matchSnapshot().players.find((player) => player.playerId === host.id)?.energy).toBe(7);
+    expect(room.matchSnapshot().players.find((player) => player.playerId === host.id)?.maxEnergy).toBe(100);
     expect(() => room.move(host.id, 'left', 0)).toThrow('STALE_SEQUENCE');
     expect(sent).toEqual([]);
   });

@@ -107,13 +107,15 @@ export class RoomManager {
           return;
         case 'move':
           this.withRoom(connectionId, (room, player) => {
-            const { result } = room.move(player.id, message.direction, message.sequence);
+            const { result, energyGain } = room.move(player.id, message.direction, message.sequence);
             room.sendTo(player.id, {
               type: 'move_ack',
               playerId: player.id,
               sequence: message.sequence,
               result,
               board: player.board!.publicState(),
+              energy: player.energy,
+              energyGain,
             });
             if (room.phase === 'finished') {
               room.broadcast({ type: 'match_end', snapshot: room.matchSnapshot() });

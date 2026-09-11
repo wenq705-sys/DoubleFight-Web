@@ -1,5 +1,5 @@
 import type { BoardTile, Direction, MatchSnapshot, ServerMessage } from '../../shared/index';
-import { predictMoveTiles } from '../../shared/index';
+import { MAX_BATTLE_ENERGY, predictMoveTiles } from '../../shared/index';
 import { THEMES, type ThemeId } from '../config/themes';
 import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 import { DuelScene } from '../rendering/DuelScene';
@@ -19,6 +19,14 @@ export class DuelScreen {
   private readonly remoteName: HTMLElement;
   private readonly remoteTheme: HTMLElement;
   private readonly remoteScore: HTMLElement;
+  private readonly localEnergy: HTMLElement;
+  private readonly localEnergyFill: HTMLElement;
+  private readonly localEnergyValue: HTMLElement;
+  private readonly localEnergyGain: HTMLElement;
+  private readonly remoteEnergy: HTMLElement;
+  private readonly remoteEnergyFill: HTMLElement;
+  private readonly remoteEnergyValue: HTMLElement;
+  private readonly remoteEnergyGain: HTMLElement;
   private readonly roomCode: HTMLElement;
   private readonly latency: HTMLElement;
   private readonly connection: HTMLElement;
@@ -33,6 +41,7 @@ export class DuelScreen {
   private predictedScore = 0;
   private pointerStart: { x: number; y: number; at: number } | null = null;
   private currentMatchId: string | null = null;
+  private readonly lastEnergyByPlayer = new Map<string, number>();
   private pingTimer: number | null = null;
   private active = false;
 
@@ -69,6 +78,12 @@ export class DuelScreen {
           <b><small>SCORE</small><strong id="duel-remote-score">0</strong></b>
         </section>
 
+        <div class="duel-energy duel-energy--remote" id="duel-remote-energy">
+          <div class="duel-energy__label"><span>ENERGY</span><b id="duel-remote-energy-value">0 / 100</b></div>
+          <div class="duel-energy__track"><i id="duel-remote-energy-fill"></i></div>
+          <em id="duel-remote-energy-gain"></em>
+        </div>
+
         <div class="duel__versus">
           <i></i>
           <strong>VS</strong>
@@ -84,6 +99,12 @@ export class DuelScreen {
           </div>
           <b><small>SCORE</small><strong id="duel-local-score">0</strong></b>
         </section>
+
+        <div class="duel-energy duel-energy--local" id="duel-local-energy">
+          <div class="duel-energy__label"><span>BATTLE ENERGY</span><b id="duel-local-energy-value">0 / 100</b></div>
+          <div class="duel-energy__track"><i id="duel-local-energy-fill"></i></div>
+          <em id="duel-local-energy-gain"></em>
+        </div>
 
         <div class="duel__input-zone" id="duel-input-zone" aria-label="我的棋盘操作区"></div>
         <div class="duel__hint">在下方自己的棋盘滑动 · 对手棋盘实时同步</div>
@@ -113,6 +134,14 @@ export class DuelScreen {
     this.remoteName = container.querySelector('#duel-remote-name') as HTMLElement;
     this.remoteTheme = container.querySelector('#duel-remote-theme') as HTMLElement;
     this.remoteScore = container.querySelector('#duel-remote-score') as HTMLElement;
+    this.localEnergy = container.querySelector('#duel-local-energy') as HTMLElement;
+    this.localEnergyFill = container.querySelector('#duel-local-energy-fill') as HTMLElement;
+    this.localEnergyValue = container.querySelector('#duel-local-energy-value') as HTMLElement;
+    this.localEnergyGain = container.querySelector('#duel-local-energy-gain') as HTMLElement;
+    this.remoteEnergy = container.querySelector('#duel-remote-energy') as HTMLElement;
+    this.remoteEnergyFill = container.querySelector('#duel-remote-energy-fill') as HTMLElement;
+    this.remoteEnergyValue = container.querySelector('#duel-remote-energy-value') as HTMLElement;
+    this.remoteEnergyGain = container.querySelector('#duel-remote-energy-gain') as HTMLElement;
     this.roomCode = container.querySelector('#duel-room-code') as HTMLElement;
     this.latency = container.querySelector('#duel-latency') as HTMLElement;
     this.connection = container.querySelector('#duel-connection') as HTMLElement;
@@ -178,11 +207,22 @@ export class DuelScreen {
       this.currentMatchId = state.match.matchId;
       this.pending = [];
       this.predictedTiles = [];
+      this.lastEnergyByPlayer.clear();
       this.result.classList.add('duel-result--hidden');
     }
 
     if (message?.type === 'match_start' || state.match.phase === 'playing') {
       this.show();
+    }
+
+    if (message?.type === 'move_ack' && message.playerId === state.playerId) {
+      this.updateEnergy(
+        'local',
+        message.playerId,
+        message.energy,
+        MAX_BATTLE_ENERGY,
+        message.energyGain,
+      );
     }
 
     this.reconcile(state.match, state.playerId);
@@ -220,6 +260,9 @@ export class DuelScreen {
     this.remoteTheme.textContent = THEMES[opponent.theme].label;
     this.remoteScore.textContent = opponent.board.score.toLocaleString('zh-CN');
 
+    this.updateEnergy('local', me.playerId, me.energy, me.maxEnergy);
+    this.updateEnergy('remote', opponent.playerId, opponent.energy, opponent.maxEnergy);
+
     this.roomCode.textContent = snapshot.roomCode;
 
     this.scene.setBoard('local', predicted, me.theme as ThemeId);
@@ -249,6 +292,44 @@ export class DuelScreen {
     }
 
     navigator.vibrate?.(8);
+  }
+
+  private updateEnergy(
+    role: 'local' | 'remote',
+    playerId: string,
+    energy: number,
+    maxEnergy: number,
+    explicitGain?: number,
+  ): void {
+    const safeMax = Math.max(1, maxEnergy);
+    const clamped = Math.max(0, Math.min(safeMax, energy));
+    const previous = this.lastEnergyByPlayer.get(playerId);
+    const inferredGain = previous === undefined ? 0 : Math.max(0, clamped - previous);
+    const gain = explicitGain ?? inferredGain;
+    this.lastEnergyByPlayer.set(playerId, clamped);
+
+    const root = role === 'local' ? this.localEnergy : this.remoteEnergy;
+    const fill = role === 'local' ? this.localEnergyFill : this.remoteEnergyFill;
+    const value = role === 'local' ? this.localEnergyValue : this.remoteEnergyValue;
+    const gainLabel = role === 'local' ? this.localEnergyGain : this.remoteEnergyGain;
+    const ratio = clamped / safeMax;
+
+    fill.style.width = `${(ratio * 100).toFixed(1)}%`;
+    value.textContent = `${clamped} / ${safeMax}`;
+    root.classList.toggle('duel-energy--full', clamped >= safeMax);
+
+    if (gain > 0 && this.active) {
+      gainLabel.textContent = `+${gain}`;
+      gainLabel.classList.remove('duel-energy__gain--show');
+      void gainLabel.offsetWidth;
+      gainLabel.classList.add('duel-energy__gain--show');
+
+      root.classList.remove('duel-energy--pulse');
+      void root.offsetWidth;
+      root.classList.add('duel-energy--pulse');
+      this.scene.pulseEnergy(role, gain);
+      navigator.vibrate?.(gain >= 20 ? [10, 8, 18] : gain >= 8 ? 12 : 7);
+    }
   }
 
   private bindInput(): void {
@@ -303,6 +384,7 @@ export class DuelScreen {
     this.currentMatchId = null;
     this.pending = [];
     this.predictedTiles = [];
+    this.lastEnergyByPlayer.clear();
     this.scene.clear();
     this.hide();
     this.result.classList.add('duel-result--hidden');

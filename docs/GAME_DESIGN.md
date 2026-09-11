@@ -63,7 +63,7 @@ Skills must amplify 2048 tension rather than replace the 2048 loop.
 
 ## Energy
 
-The planned PvP economy is:
+The PvP economy is now implemented as server-authoritative competitive state:
 
 ```text
 better / higher merges
@@ -75,7 +75,33 @@ more skill opportunities
 pressure / recovery / counters
 ```
 
-Skills should therefore reward strong core play, not operate as an unrelated timer.
+Energy starts at **0** and caps at **100**.
+
+Initial reward curve:
+
+| Merge result | Energy |
+| ---: | ---: |
+| 4 | +2 |
+| 8 | +3 |
+| 16 | +4 |
+| 32 | +6 |
+| 64 | +8 |
+| 128 | +11 |
+| 256 | +15 |
+| 512 | +20 |
+| 1024 | +26 |
+| 2048 | +34 |
+
+Multiple merges in one swipe earn an additional deterministic combo bonus. This is deliberately based on one authoritative move result rather than wall-clock speed so latency cannot change the reward.
+
+The browser may animate confirmed energy gain but never owns energy truth.
+
+Initial M2.3 skill-cost targets:
+- Random Clear: 35
+- Shield: 45
+- Petrify: 50
+
+These costs are tuning starting points, not final balance.
 
 ## Match direction
 
