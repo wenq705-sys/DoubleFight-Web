@@ -95,61 +95,6 @@ function crystal(parent: THREE.Object3D, color: number, position: [number, numbe
   return value;
 }
 
-function numberTexture(value: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 208;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas2D is required for number labels.');
-
-  const fontSize = value >= 1024 ? 104 : value >= 128 ? 122 : 142;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.font = `1000 ${fontSize}px ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",sans-serif`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.lineJoin = 'round';
-
-  context.lineWidth = 20;
-  context.strokeStyle = '#3f2718';
-  context.strokeText(String(value), 192, 108);
-  context.lineWidth = 8;
-  context.strokeStyle = value >= 128 ? '#a8651d' : '#fff0bd';
-  context.strokeText(String(value), 192, 108);
-  context.fillStyle = value >= 512 ? '#fff7d1' : '#ffffff';
-  context.fillText(String(value), 192, 108);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
-}
-
-function addNumberBadge(parent: THREE.Object3D, value: number, y: number, z: number, scale = 1): void {
-  const prestige = value >= 128;
-  const width = (value >= 1024 ? 0.90 : value >= 128 ? 0.82 : 0.72) * scale;
-  const badgeY = Math.min(y, 0.45);
-  const badgeZ = Math.max(z, 0.74);
-
-  roundedBox(parent, [width + 0.10, 0.42 * scale, 0.07], C.gold, [0, badgeY, badgeZ], 0.10, true);
-  roundedBox(
-    parent,
-    [width, 0.32 * scale, 0.078],
-    prestige ? C.woodDark : C.royalBlue,
-    [0, badgeY, badgeZ + 0.038],
-    0.08,
-  );
-
-  const material = new THREE.MeshBasicMaterial({
-    map: numberTexture(value),
-    transparent: true,
-    depthWrite: false,
-  });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.88, 0.29 * scale), material);
-  label.position.set(0, badgeY, badgeZ + 0.081);
-  label.renderOrder = 40;
-  parent.add(label);
-}
-
 function flag(parent: THREE.Object3D, color: number, x: number, z: number, height: number): THREE.Object3D {
   cylinder(parent, 0.035, height, C.woodDark, [x, height / 2, z], 8);
   const cloth = roundedBox(parent, [0.52, 0.3, 0.035], color, [x + 0.25, height - 0.24, z], 0.05);
@@ -175,6 +120,56 @@ function crenels(parent: THREE.Object3D, radius: number, y: number, color: numbe
       0.05,
     );
   }
+}
+
+type TierStyle = {
+  primary: number;
+  light: number;
+  dark: number;
+  scale: number;
+};
+
+const TIER_STYLES: Record<number, TierStyle> = {
+  // Deliberately discrete hue families. Adjacent tiers must never be light/dark
+  // variants of the same hue.
+  2: { primary: 0x43b9a7, light: 0x9be1d5, dark: 0x236f68, scale: 0.82 },       // turquoise
+  4: { primary: 0xf0c64a, light: 0xffe59a, dark: 0xb87822, scale: 0.86 },       // amber
+  8: { primary: 0x8d68d8, light: 0xcab8ef, dark: 0x553b9c, scale: 0.90 },       // violet
+  16: { primary: 0xf08a3c, light: 0xffbf82, dark: 0xb54c22, scale: 0.94 },      // orange
+  32: { primary: 0xd8414d, light: 0xf18a90, dark: 0x8a2435, scale: 0.98 },      // red
+  64: { primary: 0x3d78d5, light: 0x92b7ef, dark: 0x234a98, scale: 1.02 },      // sapphire
+  128: { primary: 0x3da568, light: 0x8bd1a3, dark: 0x216a45, scale: 1.06 },     // emerald
+  256: { primary: 0xcf52a4, light: 0xe99dcc, dark: 0x782b77, scale: 1.10 },     // magenta
+  512: { primary: 0x323946, light: 0x737d8d, dark: 0x171c25, scale: 1.14 },     // obsidian
+  1024: { primary: 0xeaf4f7, light: 0xffffff, dark: 0x5aa4b7, scale: 1.18 },    // ivory / cyan
+  2048: { primary: 0xeec644, light: 0xffe991, dark: 0xa9681e, scale: 1.22 },     // sacred gold
+};
+
+function applyTierIdentity(root: THREE.Group, value: number): void {
+  const style = TIER_STYLES[value] ?? TIER_STYLES[2048];
+  root.scale.setScalar(style.scale);
+
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+
+    materials.forEach((material) => {
+      if (!(material instanceof THREE.MeshToonMaterial || material instanceof THREE.MeshStandardMaterial)) return;
+
+      // Keep strongly metallic gold trim as prestige trim. Everything else receives
+      // the tier hue so color alone remains a dependable gameplay identifier.
+      if (material instanceof THREE.MeshStandardMaterial && material.metalness > 0.4) return;
+
+      const hsl = { h: 0, s: 0, l: 0 };
+      material.color.getHSL(hsl);
+      const next = hsl.l > 0.72 ? style.light : hsl.l < 0.36 ? style.dark : style.primary;
+      material.color.setHex(next);
+
+      if (material instanceof THREE.MeshStandardMaterial && material.emissive.getHex() !== 0) {
+        material.emissive.setHex(style.primary);
+      }
+    });
+  });
 }
 
 export interface TileVisual {
@@ -226,13 +221,11 @@ export class TileFactory {
       roundedBox(root, [1.3, 0.12, 1.3], blue ? C.royalBlueLight : C.coralLight, [0, 0.84, 0], 0.08);
       for (const x of [-0.57, 0.57]) for (const z of [-0.57, 0.57]) sphere(root, 0.075, C.gold, [x, 0.84, z]);
       animatedParts.push(flag(root, blue ? C.royalBlue : C.coral, -0.45, -0.43, 1.18));
-      addNumberBadge(root, value, 0.5, 0.765, 0.92);
     } else if (value === 8) {
       cylinder(root, 0.7, 0.78, C.stone, [0, 0.55, 0], 22);
       roundedBox(root, [1.48, 0.12, 1.48], C.stoneShade, [0, 0.94, 0], 0.06);
       cone(root, 0.84, 0.72, C.royalBlueLight, [0, 1.34, 0], 22);
       animatedParts.push(flag(root, C.royalBlue, 0, 0, 1.88));
-      addNumberBadge(root, value, 0.61, 0.72, 0.88);
     } else if (value === 16) {
       roundedBox(root, [1.43, 0.86, 1.43], C.stone, [0, 0.58, 0], 0.14);
       for (const x of [-0.56, 0.56]) for (const z of [-0.56, 0.56]) {
@@ -240,33 +233,28 @@ export class TileFactory {
         cone(root, 0.22, 0.28, z > 0 ? C.coralLight : C.royalBlueLight, [x, 1.24, z], 14);
       }
       roundedBox(root, [0.58, 0.58, 0.09], C.coral, [0, 0.69, 0.74], 0.07);
-      addNumberBadge(root, value, 0.68, 0.805, 0.78);
     } else if (value === 32) {
       cylinder(root, 0.76, 0.9, C.wood, [0, 0.59, 0], 22);
       crenels(root, 0.66, 1.06, C.stone, 8);
       cone(root, 0.64, 0.6, C.royalBlue, [0, 1.42, 0], 20);
       sphere(root, 0.1, C.gold, [0, 1.75, 0]);
-      addNumberBadge(root, value, 0.64, 0.79, 0.8);
     } else if (value === 64) {
       cylinder(root, 0.77, 0.96, C.stone, [0, 0.62, 0], 24);
       cylinder(root, 0.82, 0.13, C.gold, [0, 1.02, 0], 24, true);
       crenels(root, 0.68, 1.15, C.cream, 10);
       cone(root, 0.72, 0.67, C.royalBlue, [0, 1.55, 0], 22);
       animatedParts.push(flag(root, C.goldDeep, 0, 0, 2.08));
-      addNumberBadge(root, value, 0.68, 0.8, 0.77);
     } else if (value === 128) {
       cylinder(root, 0.79, 0.77, C.cream, [0, 0.5, 0], 24);
       cylinder(root, 0.85, 0.14, C.gold, [0, 0.92, 0], 26, true);
       roundedBox(root, [1.35, 0.16, 1.35], C.royalBlueLight, [0, 1.04, 0], 0.07);
       animatedParts.push(crystal(root, C.crystalBlue, [0, 1.47, 0], 0.4));
       for (const x of [-0.52, 0.52]) sphere(root, 0.1, C.gold, [x, 1.14, 0]);
-      addNumberBadge(root, value, 0.58, 0.81, 0.73);
     } else if (value === 256) {
       roundedBox(root, [1.56, 0.77, 1.56], C.purple, [0, 0.54, 0], 0.17);
       for (const x of [-0.58, 0.58]) for (const z of [-0.58, 0.58]) cylinder(root, 0.17, 0.84, C.goldDeep, [x, 0.72, z], 14, true);
       cylinder(root, 0.65, 0.13, C.gold, [0, 0.98, 0], 24, true);
       animatedParts.push(crystal(root, 0xdca0ff, [0, 1.48, 0], 0.43));
-      addNumberBadge(root, value, 0.63, 0.83, 0.68);
     } else if (value === 512) {
       roundedBox(root, [1.62, 0.73, 1.62], C.stone, [0, 0.51, 0], 0.16);
       for (const x of [-0.59, 0.59]) for (const z of [-0.59, 0.59]) {
@@ -275,7 +263,6 @@ export class TileFactory {
       }
       roundedBox(root, [1.18, 0.24, 1.18], C.royalBlue, [0, 1.04, 0], 0.08);
       crown(root, 1.29);
-      addNumberBadge(root, value, 0.62, 0.86, 0.64);
     } else if (value === 1024) {
       roundedBox(root, [1.68, 0.82, 1.68], C.cream, [0, 0.56, 0], 0.18);
       for (const x of [-0.62, 0.62]) for (const z of [-0.62, 0.62]) {
@@ -285,7 +272,6 @@ export class TileFactory {
       cylinder(root, 0.49, 0.82, C.royalBlue, [0, 1.04, 0], 18);
       cone(root, 0.56, 0.5, C.royalBlueLight, [0, 1.66, 0], 18);
       animatedParts.push(crystal(root, C.crystalBlue, [0, 2.0, 0], 0.28));
-      addNumberBadge(root, value, 0.65, 0.89, 0.58);
     } else {
       cylinder(root, 0.88, 0.32, C.goldDeep, [0, 0.32, 0], 28, true);
       roundedBox(root, [1.72, 0.72, 1.72], C.gold, [0, 0.72, 0], 0.2, true);
@@ -300,8 +286,9 @@ export class TileFactory {
       ring.position.y = 2.13;
       ring.rotation.x = Math.PI / 2;
       animatedParts.push(ring);
-      addNumberBadge(root, value, 0.83, 0.9, 0.58);
     }
+
+    applyTierIdentity(root, value);
 
     root.traverse((node: THREE.Object3D) => {
       if (node instanceof THREE.Mesh) node.frustumCulled = true;
