@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import type { BoardTile } from '../../shared/index';
+import type { BoardTile, CellPosition } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
 import { PalaceTileFactory } from './tiles/PalaceTileFactory';
 import { TileFactory } from './tiles/TileFactory';
@@ -22,6 +22,7 @@ interface BoardLayer {
   group: THREE.Group;
   pieces: THREE.Group;
   tiles: Map<number, VisualTile>;
+  blockers: THREE.Mesh[];
   cellMaterial: THREE.MeshStandardMaterial;
   frameMaterial: THREE.MeshStandardMaterial;
   glowMaterial: THREE.MeshStandardMaterial;
@@ -167,6 +168,22 @@ export class DuelScene {
     }
   }
 
+  setBlockedCells(role: BoardRole, cells: readonly CellPosition[]): void {
+    const layer = role === 'local' ? this.local : this.remote;
+    const blocked = new Set(cells.map((cell) => `${cell.row}:${cell.col}`));
+
+    layer.blockers.forEach((mesh, index) => {
+      const row = Math.floor(index / 4);
+      const col = index % 4;
+      const visible = blocked.has(`${row}:${col}`);
+      mesh.visible = visible;
+      if (visible) {
+        const position = this.positionFor(row, col);
+        mesh.position.set(position.x, 0.48, position.z);
+      }
+    });
+  }
+
   pulseEnergy(role: BoardRole, gain: number): void {
     const layer = role === 'local' ? this.local : this.remote;
     layer.pulse = Math.max(layer.pulse, Math.min(1, 0.18 + gain / 28));
@@ -251,10 +268,32 @@ export class DuelScene {
     cells.receiveShadow = true;
     group.add(cells);
 
+    const blockerGeometry = new THREE.OctahedronGeometry(0.42, 0);
+    const blockerMaterial = new THREE.MeshStandardMaterial({
+      color: 0x9edcf2,
+      emissive: 0x2b90ba,
+      emissiveIntensity: 0.42,
+      roughness: 0.16,
+      metalness: 0.04,
+      transparent: true,
+      opacity: 0.82,
+    });
+    const blockers: THREE.Mesh[] = [];
+    for (let index = 0; index < 16; index += 1) {
+      const blocker = new THREE.Mesh(blockerGeometry, blockerMaterial);
+      blocker.visible = false;
+      blocker.castShadow = false;
+      blocker.receiveShadow = false;
+      blocker.rotation.set(0.18, 0.45, 0.08);
+      blockers.push(blocker);
+      group.add(blocker);
+    }
+
     return {
       group,
       pieces,
       tiles: new Map(),
+      blockers,
       cellMaterial,
       frameMaterial,
       glowMaterial,
@@ -307,6 +346,12 @@ export class DuelScene {
     for (const layer of [this.local, this.remote]) {
       layer.pulse = Math.max(0, layer.pulse - delta * 1.8);
       layer.glowMaterial.emissiveIntensity = layer.glowBase + layer.pulse * 0.9;
+      layer.blockers.forEach((blocker, index) => {
+        if (!blocker.visible) return;
+        blocker.rotation.y += delta * (index % 2 ? 0.7 : -0.7);
+        blocker.scale.setScalar(0.92 + Math.sin(time * 4 + index) * 0.06);
+      });
+
       for (const visual of layer.tiles.values()) {
         const progress = THREE.MathUtils.clamp((now - visual.startedAt) / visual.duration, 0, 1);
         const eased = 1 - (1 - progress) ** 3;
