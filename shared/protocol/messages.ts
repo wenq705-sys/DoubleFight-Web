@@ -1,6 +1,8 @@
-import type { BoardPublicState, Direction, MoveResult } from '../game/types';
+import type { BoardPublicState, BoardTile, CellPosition, Direction, MoveResult } from '../game/types';
+import type { SkillCooldowns, SkillId } from '../battle/skills';
+import { isSkillId } from '../battle/skills';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 export type NetworkThemeId = 'kingdom' | 'palace';
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
@@ -28,7 +30,11 @@ export interface MatchPlayerState {
   board: BoardPublicState;
   energy: number;
   maxEnergy: number;
+  shieldActive: boolean;
+  petrifyExpiresAt: number;
+  skillCooldowns: SkillCooldowns;
   lastSequence: number;
+  lastSkillSequence: number;
   connected: boolean;
 }
 
@@ -36,9 +42,24 @@ export interface MatchSnapshot {
   matchId: string;
   roomCode: string;
   phase: 'playing' | 'finished';
+  serverTime: number;
   players: MatchPlayerState[];
   winnerId: string | null;
-  endReason: 'board_locked' | 'opponent_left' | null;
+  endReason: 'board_locked' | 'opponent_left' | 'petrified_lock' | null;
+}
+
+export type SkillOutcome = 'applied' | 'shielded';
+
+export interface SkillEvent {
+  sequence: number;
+  skillId: SkillId;
+  casterId: string;
+  targetId: string;
+  outcome: SkillOutcome;
+  energySpent: number;
+  removedTiles: BoardTile[];
+  blockedCell: CellPosition | null;
+  petrifyExpiresAt: number;
 }
 
 export type ClientMessage =
@@ -49,6 +70,7 @@ export type ClientMessage =
   | { type: 'set_theme'; theme: NetworkThemeId }
   | { type: 'set_ready'; ready: boolean }
   | { type: 'move'; direction: Direction; sequence: number }
+  | { type: 'cast_skill'; skillId: SkillId; sequence: number }
   | { type: 'leave_room' }
   | { type: 'ping'; sentAt: number };
 
@@ -76,6 +98,7 @@ export type ServerMessage =
       energy: number;
       energyGain: number;
     }
+  | { type: 'skill_event'; event: SkillEvent }
   | {
       type: 'match_end';
       snapshot: MatchSnapshot;
@@ -92,7 +115,12 @@ export type ServerMessage =
         | 'NOT_PLAYING'
         | 'NOT_READY'
         | 'INVALID_RECONNECT'
-        | 'STALE_SEQUENCE';
+        | 'STALE_SEQUENCE'
+        | 'STALE_SKILL_SEQUENCE'
+        | 'INSUFFICIENT_ENERGY'
+        | 'SKILL_COOLDOWN'
+        | 'SKILL_ALREADY_ACTIVE'
+        | 'SKILL_NO_TARGET';
       message: string;
     }
   | { type: 'pong'; sentAt: number; serverAt: number };
@@ -148,6 +176,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   if (type === 'move' && isDirection(message.direction) && Number.isInteger(message.sequence)) {
     return { type, direction: message.direction, sequence: Number(message.sequence) };
+  }
+
+  if (type === 'cast_skill' && isSkillId(message.skillId) && Number.isInteger(message.sequence)) {
+    return { type, skillId: message.skillId, sequence: Number(message.sequence) };
   }
 
   if (type === 'leave_room') return { type };
