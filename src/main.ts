@@ -5,6 +5,7 @@ import { ART } from './config/artDirection';
 import { THEMES, type ThemeId } from './config/themes';
 import { GameScene } from './rendering/GameScene';
 import { Hud } from './ui/Hud';
+import { HomeScreen } from './ui/HomeScreen';
 import { SoundDesign } from './audio/SoundDesign';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -14,7 +15,7 @@ app.innerHTML = `
   <div class="loading" id="loading-screen">
     <div class="loading__content">
       <div class="loading__crest"><span>2</span><span>4</span><span>8</span></div>
-      <div class="loading__title">正在开启宫廷棋局</div>
+      <div class="loading__title">正在开启双数世界</div>
       <div class="loading__sub">DOUBLE FIGHT · 3D 2048</div>
     </div>
   </div>`;
@@ -25,16 +26,29 @@ const hud = new Hud(app);
 const sound = new SoundDesign();
 
 let inputLocked = false;
+let inGame = false;
 let pointerStart: { x: number; y: number; time: number } | null = null;
 let skillCharges = 3;
 let theme: ThemeId = localStorage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
 
+const home = new HomeScreen(app, theme);
+
 const highest = () => Math.max(2, ...board.tiles().map((tile) => tile.value));
+
+const persistThemeRecord = (): void => {
+  const scoreKey = `doublefight-best-${theme}`;
+  const highestKey = `doublefight-highest-${theme}`;
+  const best = Math.max(board.score, Number(localStorage.getItem(scoreKey) ?? 0));
+  const maxTile = Math.max(highest(), Number(localStorage.getItem(highestKey) ?? 2));
+  localStorage.setItem(scoreKey, String(best));
+  localStorage.setItem(highestKey, String(maxTile));
+};
 
 const refresh = () => {
   hud.setScore(board.score);
   hud.setHighest(highest());
   hud.setSkillCharges(skillCharges);
+  persistThemeRecord();
 };
 
 function applyTheme(nextTheme: ThemeId): void {
@@ -53,8 +67,27 @@ function reset(): void {
   inputLocked = false;
 }
 
+function openHome(): void {
+  inGame = false;
+  inputLocked = false;
+  pointerStart = null;
+  scene.setHomeMode(true);
+  hud.setVisible(false);
+  home.refreshRecord();
+  home.show(theme);
+}
+
+function startGame(nextTheme: ThemeId): void {
+  applyTheme(nextTheme);
+  reset();
+  inGame = true;
+  scene.setHomeMode(false);
+  hud.setVisible(true);
+  home.hide();
+}
+
 async function useRandomClear(): Promise<void> {
-  if (inputLocked) return;
+  if (!inGame || inputLocked) return;
   if (skillCharges <= 0) {
     hud.showSkillEmpty();
     navigator.vibrate?.(8);
@@ -81,6 +114,7 @@ async function useRandomClear(): Promise<void> {
 }
 
 async function move(direction: Direction): Promise<void> {
+  if (!inGame) return;
   if (inputLocked) {
     scene.clearGesture();
     return;
@@ -117,7 +151,7 @@ async function move(direction: Direction): Promise<void> {
 }
 
 scene.canvas.addEventListener('pointerdown', (event) => {
-  if (!event.isPrimary) return;
+  if (!inGame || !event.isPrimary) return;
   pointerStart = { x: event.clientX, y: event.clientY, time: performance.now() };
   scene.canvas.setPointerCapture?.(event.pointerId);
 });
@@ -125,7 +159,7 @@ scene.canvas.addEventListener('pointerdown', (event) => {
 scene.canvas.addEventListener(
   'pointermove',
   (event) => {
-    if (!pointerStart) return;
+    if (!inGame || !pointerStart) return;
     event.preventDefault();
     scene.setGesture(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
   },
@@ -133,7 +167,7 @@ scene.canvas.addEventListener(
 );
 
 scene.canvas.addEventListener('pointerup', (event) => {
-  if (!pointerStart) return;
+  if (!inGame || !pointerStart) return;
   const dx = event.clientX - pointerStart.x;
   const dy = event.clientY - pointerStart.y;
   const elapsed = performance.now() - pointerStart.time;
@@ -157,6 +191,7 @@ scene.canvas.addEventListener('pointercancel', () => {
 scene.canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
 window.addEventListener('keydown', (event) => {
+  if (!inGame) return;
   const map: Record<string, Direction | undefined> = {
     ArrowLeft: 'left', a: 'left', A: 'left',
     ArrowRight: 'right', d: 'right', D: 'right',
@@ -173,17 +208,23 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault();
     void useRandomClear();
   }
+  if (event.key === 'Escape') openHome();
 });
 
 hud.onRestart(reset);
 hud.onSkill(() => { void useRandomClear(); });
-hud.onThemeToggle(() => {
-  if (inputLocked) return;
-  applyTheme(theme === 'palace' ? 'kingdom' : 'palace');
+hud.onHome(openHome);
+
+home.onPreview((nextTheme) => {
+  if (nextTheme === theme) return;
+  applyTheme(nextTheme);
+  scene.prewarmTheme(nextTheme);
 });
+home.onStart(startGame);
 
 reset();
 applyTheme(theme);
+openHome();
 
 requestAnimationFrame(() => {
   const loading = document.querySelector<HTMLElement>('#loading-screen');
