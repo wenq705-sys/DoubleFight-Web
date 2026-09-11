@@ -113,10 +113,13 @@ export class GameScene {
   prewarmTheme(theme: ThemeId): void {
     const factory = this.getFactory(theme);
     const run = () => factory.warmup([2, 4, 8, 16, 32, 64, 128]);
-    if ('requestIdleCallback' in window) {
-      window.requestIdleCallback(run, { timeout: 900 });
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    };
+    if (idleWindow.requestIdleCallback) {
+      idleWindow.requestIdleCallback(run, { timeout: 900 });
     } else {
-      window.setTimeout(run, 80);
+      setTimeout(run, 80);
     }
   }
 
