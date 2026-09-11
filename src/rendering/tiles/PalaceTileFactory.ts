@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { TileVisual } from './TileFactory';
+import { tierScale } from '../../config/tierProgression';
 
 const gradient = (() => {
   const data = new Uint8Array([38, 88, 154, 255]);
@@ -45,31 +46,34 @@ type TierProfile = {
 };
 
 const PALETTES: Record<number, Palette> = {
-  2: { robe: 0xb8d8cd, robeLight: 0xe7f3ec, accent: 0x4c7f76, metal: 0xb99a61 },
-  4: { robe: 0xf0c77c, robeLight: 0xffe4a9, accent: 0xc76a4f, metal: 0xd5a547 },
-  8: { robe: 0xb89adf, robeLight: 0xe0d1f5, accent: 0x7050a9, metal: 0xe0b552 },
-  16: { robe: 0xe66f68, robeLight: 0xf5a58e, accent: 0x9f2f3f, metal: 0xe4b44a },
-  32: { robe: 0xd85258, robeLight: 0xf08a79, accent: 0x9e2e3d, metal: 0xe9bd4b },
-  64: { robe: 0xc92535, robeLight: 0xe95e59, accent: 0x7d1830, metal: 0xf2c34c },
-  128: { robe: 0x8d3f9f, robeLight: 0xc174bd, accent: 0x612a78, metal: 0xf2c34c },
-  256: { robe: 0x253f75, robeLight: 0x597eb2, accent: 0x9b2237, metal: 0xf2c34c },
-  512: { robe: 0x9b1828, robeLight: 0xd33839, accent: 0x1c1a2d, metal: 0xffd251 },
-  1024: { robe: 0x51182a, robeLight: 0x9b2444, accent: 0x18182d, metal: 0xffd65e },
-  2048: { robe: 0xc0262d, robeLight: 0xf05a43, accent: 0x16151d, metal: 0xffde6b },
+  // Every tier uses a deliberately different hue family. Do not collapse these into
+  // light/dark variants of the same hue: color is a primary gameplay identifier.
+  2: { robe: 0x54c7b0, robeLight: 0xbce9dd, accent: 0x247b70, metal: 0xb99861 },       // mint / teal
+  4: { robe: 0xf2c94c, robeLight: 0xffe9a6, accent: 0xc97826, metal: 0xd8a63b },       // amber / yellow
+  8: { robe: 0x9a72df, robeLight: 0xd8c8f4, accent: 0x5d3ca7, metal: 0xd9b04c },       // violet
+  16: { robe: 0xf08a3e, robeLight: 0xffc08b, accent: 0xb64c24, metal: 0xe0b044 },      // orange
+  32: { robe: 0xd9414f, robeLight: 0xf28b91, accent: 0x8b2034, metal: 0xe8ba46 },      // true red
+  64: { robe: 0x3f78d7, robeLight: 0x93b5ef, accent: 0x234a99, metal: 0xf0c24d },      // sapphire blue
+  128: { robe: 0x3fa66a, robeLight: 0x8bd0a4, accent: 0x216b45, metal: 0xf1c44f },     // emerald green
+  256: { robe: 0xd052a5, robeLight: 0xea9dcc, accent: 0x792b78, metal: 0xf2c752 },     // magenta
+  512: { robe: 0x303744, robeLight: 0x68717f, accent: 0xc49a36, metal: 0xffd45a },     // obsidian / gold
+  1024: { robe: 0xf1eee2, robeLight: 0xffffff, accent: 0x59a7b8, metal: 0xf4cf62 },    // ivory / cyan
+  2048: { robe: 0xf0c642, robeLight: 0xffe991, accent: 0xb26b1e, metal: 0xffe06a },    // sacred gold
 };
 
 const PROFILES: Record<number, TierProfile> = {
+  // Size progression is a cross-theme gameplay rule: every higher tier is physically larger.
   2: { scale: 0.70, skirtWidth: 0.40, torsoWidth: 0.43, sleeve: 0.14, crown: 0, cape: false, halo: false, throne: false, prop: 'tray' },
-  4: { scale: 0.80, skirtWidth: 0.48, torsoWidth: 0.49, sleeve: 0.20, crown: 2, cape: false, halo: false, throne: false, prop: 'fan' },
-  8: { scale: 0.89, skirtWidth: 0.56, torsoWidth: 0.53, sleeve: 0.27, crown: 3, cape: false, halo: false, throne: false, prop: 'openFan' },
-  16: { scale: 0.97, skirtWidth: 0.64, torsoWidth: 0.58, sleeve: 0.34, crown: 4, cape: false, halo: false, throne: false, prop: 'openFan' },
-  32: { scale: 0.96, skirtWidth: 0.62, torsoWidth: 0.58, sleeve: 0.3, crown: 3, cape: false, halo: false, throne: false, prop: 'scepter' },
-  64: { scale: 1.0, skirtWidth: 0.66, torsoWidth: 0.6, sleeve: 0.32, crown: 4, cape: false, halo: true, throne: false, prop: 'scepter' },
-  128: { scale: 1.04, skirtWidth: 0.7, torsoWidth: 0.62, sleeve: 0.34, crown: 5, cape: true, halo: true, throne: false, prop: 'openFan' },
-  256: { scale: 1.08, skirtWidth: 0.74, torsoWidth: 0.64, sleeve: 0.36, crown: 6, cape: true, halo: true, throne: false, prop: 'scepter' },
-  512: { scale: 1.12, skirtWidth: 0.78, torsoWidth: 0.67, sleeve: 0.38, crown: 7, cape: true, halo: true, throne: false, prop: 'scepter' },
-  1024: { scale: 1.17, skirtWidth: 0.82, torsoWidth: 0.7, sleeve: 0.4, crown: 8, cape: true, halo: true, throne: true, prop: 'none' },
-  2048: { scale: 1.22, skirtWidth: 0.86, torsoWidth: 0.72, sleeve: 0.42, crown: 9, cape: true, halo: true, throne: true, prop: 'none' },
+  4: { scale: 0.79, skirtWidth: 0.47, torsoWidth: 0.48, sleeve: 0.20, crown: 2, cape: false, halo: false, throne: false, prop: 'fan' },
+  8: { scale: 0.88, skirtWidth: 0.54, torsoWidth: 0.52, sleeve: 0.26, crown: 3, cape: false, halo: false, throne: false, prop: 'openFan' },
+  16: { scale: 0.97, skirtWidth: 0.61, torsoWidth: 0.57, sleeve: 0.32, crown: 4, cape: false, halo: false, throne: false, prop: 'openFan' },
+  32: { scale: 1.04, skirtWidth: 0.66, torsoWidth: 0.60, sleeve: 0.35, crown: 5, cape: false, halo: false, throne: false, prop: 'scepter' },
+  64: { scale: 1.10, skirtWidth: 0.70, torsoWidth: 0.63, sleeve: 0.37, crown: 6, cape: false, halo: true, throne: false, prop: 'scepter' },
+  128: { scale: 1.16, skirtWidth: 0.74, torsoWidth: 0.66, sleeve: 0.39, crown: 7, cape: true, halo: true, throne: false, prop: 'openFan' },
+  256: { scale: 1.22, skirtWidth: 0.78, torsoWidth: 0.69, sleeve: 0.41, crown: 8, cape: true, halo: true, throne: false, prop: 'scepter' },
+  512: { scale: 1.28, skirtWidth: 0.82, torsoWidth: 0.72, sleeve: 0.43, crown: 9, cape: true, halo: true, throne: false, prop: 'scepter' },
+  1024: { scale: 1.34, skirtWidth: 0.86, torsoWidth: 0.75, sleeve: 0.45, crown: 10, cape: true, halo: true, throne: true, prop: 'none' },
+  2048: { scale: 1.40, skirtWidth: 0.90, torsoWidth: 0.78, sleeve: 0.47, crown: 11, cape: true, halo: true, throne: true, prop: 'none' },
 };
 
 const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
@@ -131,67 +135,6 @@ function cylinder(
     metallic ? metal(color) : toon(color),
     position,
   );
-}
-
-function numberTexture(value: number, prestige: boolean): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 208;
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas2D is required for palace number badges.');
-
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.lineJoin = 'round';
-
-  const fontSize = value >= 1024 ? 104 : value >= 128 ? 122 : 142;
-  context.font = `1000 ${fontSize}px ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",sans-serif`;
-
-  // Heavy outline survives the small phone-screen projection.
-  context.lineWidth = 20;
-  context.strokeStyle = prestige ? '#3b1018' : '#243c38';
-  context.strokeText(String(value), 192, 108);
-  context.lineWidth = 8;
-  context.strokeStyle = prestige ? '#8d2a30' : '#fff2c5';
-  context.strokeText(String(value), 192, 108);
-  context.fillStyle = prestige ? '#ffe27a' : '#fff7dc';
-  context.fillText(String(value), 192, 108);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
-}
-
-function addNumberMedallion(parent: THREE.Object3D, value: number): void {
-  const prestige = value >= 32;
-  const wide = value >= 1024;
-  const width = wide ? 0.88 : value >= 128 ? 0.82 : 0.72;
-  const y = 0.42;
-  const z = 0.73;
-
-  // Gold outer rim + dark inner face: readable without covering the character.
-  rounded(parent, [width + 0.10, 0.44, 0.07], C.gold, [0, y, z], 0.11, true);
-  rounded(
-    parent,
-    [width, 0.34, 0.078],
-    prestige ? C.lacquerDark : C.jadeDark,
-    [0, y, z + 0.038],
-    0.09,
-  );
-
-  const label = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * 0.88, 0.30),
-    new THREE.MeshBasicMaterial({
-      map: numberTexture(value, prestige),
-      transparent: true,
-      depthWrite: false,
-    }),
-  );
-  label.position.set(0, y, z + 0.081);
-  label.renderOrder = 40;
-  parent.add(label);
 }
 
 function addFace(parent: THREE.Object3D): void {
@@ -292,7 +235,7 @@ function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Obj
   const palette = PALETTES[value] ?? PALETTES[2048];
   const profile = PROFILES[value] ?? PROFILES[2048];
   const character = new THREE.Group();
-  character.scale.setScalar(profile.scale);
+  character.scale.setScalar(tierScale(value, 0.70, 1.40));
   character.position.y = 0.02;
   parent.add(character);
 
@@ -453,21 +396,27 @@ export class PalaceTileFactory {
     const root = new THREE.Group();
     const animatedParts: THREE.Object3D[] = [];
     const prestige = value >= 32;
+    const palette = PALETTES[value] ?? PALETTES[2048];
+    const profile = PROFILES[value] ?? PROFILES[2048];
+    const tier = Math.max(1, Math.log2(value));
+    const baseOuter = Math.min(0.87, 0.61 + tier * 0.026);
+    const baseSize = Math.min(1.50, 1.04 + tier * 0.043);
 
-    const baseOuter = value === 2 ? 0.68 : value === 4 ? 0.73 : value === 8 ? 0.77 : 0.80;
-    const baseAccent = value === 2 ? C.jadeDark : value === 4 ? 0xc76a4f : value === 8 ? 0x7050a9 : C.lacquer;
-    cylinder(root, baseOuter, baseOuter + 0.08, 0.13, prestige ? C.goldDeep : C.lacquerDark, [0, 0.07, 0], 18, prestige);
-    cylinder(root, baseOuter - 0.07, baseOuter, 0.09, prestige ? C.lacquer : baseAccent, [0, 0.18, 0], 18);
+    cylinder(root, baseOuter, baseOuter + 0.08, 0.13, prestige ? C.goldDeep : palette.accent, [0, 0.07, 0], 18, prestige);
+    cylinder(root, baseOuter - 0.07, baseOuter, 0.09, prestige ? palette.metal : palette.accent, [0, 0.18, 0], 18, prestige);
     rounded(
       root,
-      [value <= 4 ? 1.20 : value === 8 ? 1.30 : 1.38, 0.09, value <= 4 ? 1.12 : value === 8 ? 1.22 : 1.28],
-      prestige ? C.lacquer : value === 4 ? 0xf0c77c : value === 8 ? 0xb89adf : C.jade,
+      [baseSize, 0.09, baseSize * 0.93],
+      palette.robe,
       [0, 0.27, 0],
       0.12,
+      value >= 512,
     );
 
+    // The base grows more subtly than the character so pieces stay inside a 4x4 cell.
+    root.userData.tierScale = tierScale(value, 0.70, 1.40);
+
     addCharacter(root, value, animatedParts);
-    addNumberMedallion(root, value);
 
     return { root, animatedParts };
   }

@@ -37,7 +37,7 @@
 - environment instancing for major repeated props
 - template warmup and render-resource reuse
 - silhouette-first Palace piece hierarchy
-- small secondary number badges
+- numberless gameplay pieces with size/silhouette/discrete-hue identification
 - theme-island home / chapter shell
 - per-theme progress records
 - real-device long-session validation

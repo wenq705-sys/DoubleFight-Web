@@ -35,3 +35,18 @@ export const PALACE_RANKS: Record<number, string> = {
   1024: '凤仪之主',
   2048: '母仪天下',
 };
+
+
+export const KINGDOM_RANKS: Record<number, string> = {
+  2: '边境营地',
+  4: '强化营地',
+  8: '瞭望塔',
+  16: '石堡',
+  32: '王家箭塔',
+  64: '黄金塔',
+  128: '晶能塔',
+  256: '秘法堡垒',
+  512: '王城',
+  1024: '王家圣殿',
+  2048: '王国奇观',
+};

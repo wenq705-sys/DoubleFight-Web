@@ -1,4 +1,4 @@
-import { PALACE_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
+import { KINGDOM_RANKS, PALACE_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
 
 export class Hud {
   readonly root: HTMLElement;
@@ -93,8 +93,8 @@ export class Hud {
 
   setHighest(value: number, theme: ThemeId): void {
     this.highestValue.textContent = theme === 'palace'
-      ? `${PALACE_RANKS[value] ?? '凤仪'} · ${value}`
-      : String(value);
+      ? (PALACE_RANKS[value] ?? '凤仪')
+      : (KINGDOM_RANKS[value] ?? '王国奇观');
   }
 
   setTheme(theme: ThemeMeta): void {
