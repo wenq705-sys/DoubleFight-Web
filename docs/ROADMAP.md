@@ -6,74 +6,111 @@
 - strict TypeScript/Vite foundation
 - deterministic board tests
 - CI and Pages deployment
-- Codex/AI operating docs
+- AI/Codex operating docs
 
-## M1 — 3D 2048 production-quality foundation ← CURRENT
+## M1 — 3D 2048 production-quality foundation ✅ / ongoing polish
 
 ### M1.1 mobile/art polish ✅
-- portrait rendering
-- toy-diorama language
-- differentiated landmark progression
-- first tiered feedback pass
-
 ### M1.2 living-world / control pass ✅
-- screen-aligned mobile camera
-- drag steering
-- environment feedback
-- richer VFX/audio
-
 ### M1.3 themes + first skill ✅
-- Palace Rank theme
-- runtime theme selection
-- random-clear skill
-- first late-game performance pass
-
-### M1.4 production foundation ← VALIDATE ON DEVICE
-
-- adaptive resolution instead of permanently low DPR
-- performance telemetry / quality tiers
-- pooled merge/skill VFX
-- pooled environment transient effects
-- environment instancing for major repeated props
-- template warmup and render-resource reuse
-- silhouette-first Palace piece hierarchy
-- numberless gameplay pieces with size/silhouette/discrete-hue identification
-- theme-island home / chapter shell
-- per-theme progress records
-- real-device long-session validation
+### M1.4 production foundation ✅
+- adaptive resolution / performance telemetry
+- pooled VFX and environment effects
+- instancing and template reuse
+- numberless gameplay pieces
+- discrete tier colors and monotonic physical growth
+- theme-island home
 
 ### M1.5 legendary 2048 pass
-
-- dedicated 1024→2048 anticipation / freeze / birth sequence
-- theme-specific legendary event
+- dedicated 1024→2048 theme-specific event
 - higher-fidelity major-merge audio
-- final real-device fixes from M1.4
 
 ### M1.6 authored asset migration pilot
+- GLB asset contract
+- Palace 2/4/8 stylized low-poly pilot
+- compare visual quality, draw calls, package size and loading
 
-- define GLB asset contract
-- replace 2/4/8 Palace pieces with authored stylized low-poly assets
-- validate load/cache/material budget
-- compare draw calls, visual quality and package size against procedural blockouts
+## M2 — Real online duel ← CURRENT
 
-## M2 — Same-screen duel prototype
+**Definition:** two players on two devices connect through a server. Each device ultimately shows both boards; each player controls only their own board. Players may choose different visual themes.
 
-- two independent 4×4 boards
-- opposite physical orientation for Player 2
-- independent multi-touch zones
-- timer/score rules
-- local two-player UX
+### M2.0 shared core + rooms ← IMPLEMENTED, SERVER DEPLOYMENT PENDING
 
-## M3 — Skill duel
+- shared TypeScript Board2048 used by client and server
+- deterministic seeded RNG
+- versioned client/server protocol
+- Node.js + TypeScript WebSocket server
+- 6-digit private rooms
+- create / join / theme / ready
+- authoritative server-side 2048 boards
+- authoritative MOVE validation and sequence protection
+- 30-second reconnect identity
+- WebSocket heartbeat
+- health endpoint
+- Docker server image
+- browser online-room lobby
+- CI server smoke test
 
-- skills earned through strong 2048 play
-- self-recovery + opponent interaction
-- readable cross-board skill travel
-- anti-frustration/counterplay
+### M2.1 dual-board battle client
 
-## M4 — Theme production pipeline
+- real match screen on both devices
+- large own board + compact live opponent board
+- server snapshots rendered in real time
+- client prediction for own movement feel
+- reconciliation with server results
+- opponent board interpolation / readable remote merge feedback
 
-- formal theme asset/data contract
-- additional themes
-- authored VFX/audio/asset packs
-- Douyin mini-game packaging/performance budget
+### M2.2 energy system
+
+- merge value/combos generate battle energy
+- server owns energy truth
+- energy HUD and charge feedback
+
+### M2.3 first PvP skills
+
+- Random Clear: self recovery
+- Petrify: opponent spatial pressure
+- Shield: defensive counter
+- server-authoritative costs/cooldowns/effects
+- theme-specific visuals with identical gameplay rules
+
+### M2.4 complete match loop
+
+- timed rounds
+- board-lock instant loss
+- score / highest / empty-cell tie breakers
+- results screen
+- rematch
+- reconnect UX
+
+### M2.5 matchmaking
+
+- queue
+- automatic opponent matching
+- latency/region strategy
+- platform invite/share hooks later
+
+## M3 — Production assets
+
+- gradual procedural → stylized low-poly GLB migration
+- theme AssetManager / cache
+- authored Theme Islands
+- shared materials / atlases / instancing
+
+## M4 — Douyin mini-game release
+
+- platform adapter
+- lifecycle / storage / audio / haptics
+- account identity where required
+- share/invite
+- packaging/performance budget
+- production server deployment and observability
+
+## M5 — WeChat mini-game
+
+- WeChat platform adapter
+- reuse game core / network protocol / assets
+
+## M6 — iOS
+
+- package the same game/product core for iOS distribution
