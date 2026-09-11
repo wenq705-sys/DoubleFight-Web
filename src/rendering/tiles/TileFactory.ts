@@ -101,7 +101,7 @@ function numberTexture(value: number): THREE.CanvasTexture {
   canvas.height = 256;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas2D is required for number labels.');
-  const fontSize = value >= 1024 ? 88 : value >= 128 ? 108 : 132;
+  const fontSize = value >= 1024 ? 102 : value >= 128 ? 122 : 150;
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.font = `1000 ${fontSize}px ui-rounded, "Arial Rounded MT Bold", "Trebuchet MS", sans-serif`;
   context.textAlign = 'center';
@@ -120,10 +120,10 @@ function numberTexture(value: number): THREE.CanvasTexture {
 
 function addNumberBadge(parent: THREE.Object3D, value: number, y: number, z: number, scale = 1): void {
   const badgeColor = value >= 512 ? C.goldDeep : value >= 128 ? C.gold : C.cream;
-  const badge = cylinder(parent, 0.47 * scale, 0.08, badgeColor, [0, y, z], 28, value >= 128);
+  const badge = cylinder(parent, 0.56 * scale, 0.09, badgeColor, [0, y, z], 28, value >= 128);
   badge.rotation.x = Math.PI / 2;
   const material = new THREE.MeshBasicMaterial({ map: numberTexture(value), transparent: true, depthWrite: false });
-  const label = new THREE.Mesh(new THREE.PlaneGeometry(0.88 * scale, 0.46 * scale), material);
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(1.06 * scale, 0.55 * scale), material);
   label.position.set(0, y, z + 0.051);
   label.renderOrder = 20;
   parent.add(label);
