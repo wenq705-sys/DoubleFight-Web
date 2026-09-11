@@ -13,27 +13,25 @@ The board should feel like a premium miniature mobile game that the player wants
 1. Board / pieces are always the focal point.
 2. Screen directions visually match swipe directions.
 3. **Model silhouette is primary identification, but adjacent values must be distinguishable in under one second on a phone.**
-4. Numbers are secondary to the model but still mandatory gameplay information: they must remain immediately readable at normal phone viewing distance and must not block the model.
+4. **Do not render numbers or rank text on gameplay pieces.** Piece identity must come from size, silhouette, hue and structure. Numeric values may exist in score/debug/game logic, but not as labels attached to a tile model.
 5. Progression cannot be a color swap; silhouette/costume/architecture must evolve.
 6. Every tier should survive a "black silhouette test": adjacent tiers should still feel meaningfully different without color.
 7. Environment is part of feedback, not static wallpaper.
 8. Routine merges are juicy; prestige merges are spectacular.
 9. Mobile performance budget overrides decorative excess.
 
-## Number / label rule
+## Piece identity rule
 
-Do not attach a large plaque in front of the piece.
+Gameplay pieces use **no attached number plate, number badge, rank plaque or floating text**.
 
-Preferred hierarchy:
+Identification priority is permanently:
 
-```text
-80–90%  model / silhouette / costume / landmark
-10–20%  high-contrast front number plate / HUD information
-```
+1. physical size
+2. silhouette / structure
+3. discrete main hue
+4. accessories / materials / prestige effects
 
-Rank names belong in HUD/toasts/home progression screens rather than covering the character.
-
-A number badge that is technically present but reads as a tiny texture is a failure. On the 4×4 mobile board, use a consistent front-facing high-contrast plate with heavy outline and enough projected size to read 2/4/8/16 at a glance.
+Every future theme must use a strictly increasing physical-size envelope from low to high tier. Adjacent tiers must use different hue families, not lighter/darker variants of one hue.
 
 ## Theme 1 — Miniature Kingdom
 
@@ -74,6 +72,24 @@ Do not copy named TV characters, actor likenesses, official logos or specific co
 | 512 | 皇后 |
 | 1024 | 凤仪之主 |
 | 2048 | 母仪天下 |
+
+### Discrete palace hue system
+
+The Palace theme uses deliberately separated hue families:
+
+- 2 mint / teal
+- 4 amber / yellow
+- 8 violet
+- 16 orange
+- 32 true red
+- 64 sapphire blue
+- 128 emerald green
+- 256 magenta
+- 512 obsidian + gold
+- 1024 ivory + cyan
+- 2048 sacred gold
+
+Do not replace this with "light red / dark red" or other same-hue progressions.
 
 ### Silhouette escalation
 
@@ -125,6 +141,10 @@ Mobile portrait is primary.
 - screen up/down maps to board up/down
 - retain enough pitch for 3D depth
 - no strong 45° isometric yaw in normal play
+
+## Universal tier-growth rule
+
+All themes, including future themes, must implement monotonic physical growth across 2→2048. A theme may choose its own safe min/max scale envelope, but a higher tier may never be physically smaller than a lower tier. Use the shared `tierProgression` helper instead of inventing unrelated scaling rules.
 
 ## Performance art budget
 
