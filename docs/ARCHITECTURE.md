@@ -152,9 +152,25 @@ Existing M1 rules remain:
 - monotonic tier-size growth
 - optional `?debug=1` performance telemetry
 
-## Future M2.1
+## M2.1 Duel Lite client
 
-The next client layer must render one large local board and one compact opponent board while preserving the current performance budget. Do not instantiate two full Solo environments. Online Duel needs a lighter duel presentation.
+`DuelScene` owns one lightweight Three.js scene containing both boards. It reuses cached theme piece factories, uses InstancedMesh for board cells and intentionally omits full Solo environments.
+
+`DuelScreen` owns match presentation and input. It receives authoritative `MatchSnapshot` state from `OnlineClient`.
+
+### Prediction / reconciliation
+
+The server snapshot includes stable tile ids. A local swipe runs `predictMoveTiles`, which computes only slide/merge state and deliberately does **not** spawn a new tile. The client sends the ordered MOVE command immediately.
+
+On each fresh server snapshot:
+
+1. read the authoritative local board + `lastSequence`
+2. discard pending commands already acknowledged by sequence
+3. replay remaining pending commands with `predictMoveTiles`
+4. render the resulting predicted local board
+5. render opponent board directly from authoritative state
+
+This keeps swipe response immediate while the server remains the only authority over spawn RNG and competitive truth.
 
 ## Future platform layer
 
