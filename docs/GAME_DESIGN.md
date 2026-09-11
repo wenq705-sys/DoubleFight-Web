@@ -51,13 +51,13 @@ The client is responsible for responsive presentation and later uses prediction/
 ## First PvP skill set
 
 ### Random Clear
-Self-targeted recovery. Clears low-value/random own tiles according to final balance rules.
+Self-targeted recovery. Costs **35 energy**, has a **6s cooldown**, and removes two server-selected own tiles.
 
 ### Petrify
-Opponent-targeted pressure. Temporarily blocks a cell or otherwise reduces usable space.
+Opponent-targeted pressure. Costs **50 energy**, has an **8s cooldown**, and blocks one server-selected empty opponent cell for **6 seconds**. The blocked cell is a real movement/spawn barrier, not just a visual overlay.
 
 ### Shield
-Self-targeted defense. Negates or mitigates the next hostile control effect.
+Self-targeted defense. Costs **45 energy**, has a **10s cooldown**, and remains active until it absorbs one hostile Petrify. The absorbed Petrify still spends the attacker's energy/cooldown.
 
 Skills must amplify 2048 tension rather than replace the 2048 loop.
 
@@ -96,12 +96,7 @@ Multiple merges in one swipe earn an additional deterministic combo bonus. This 
 
 The browser may animate confirmed energy gain but never owns energy truth.
 
-Initial M2.3 skill-cost targets:
-- Random Clear: 35
-- Shield: 45
-- Petrify: 50
-
-These costs are tuning starting points, not final balance.
+The first M2.3 skill set is implemented with the costs/cooldowns above. These values are tuning starting points, not final balance. Themes can replace the visual motif (for example an imperial seal versus a magic crystal) but cannot alter competitive behavior.
 
 ## Match direction
 
