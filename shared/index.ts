@@ -21,7 +21,10 @@ export {
 } from './protocol/messages';
 export type {
   ClientMessage,
+  MatchEndReason,
   MatchPlayerState,
+  MatchResult,
+  MatchResultPlayer,
   MatchSnapshot,
   NetworkThemeId,
   RoomPhase,
@@ -54,3 +57,13 @@ export type {
   SkillId,
   SkillTarget,
 } from './battle/skills';
+
+export {
+  MATCH_DURATION_MS,
+  resolveTimeLimitStandings,
+} from './battle/match';
+export type {
+  MatchStanding,
+  TimeLimitResolution,
+  TimeLimitTieBreaker,
+} from './battle/match';
