@@ -12,8 +12,8 @@ The board should feel like a premium miniature mobile game that the player wants
 
 1. Board / pieces are always the focal point.
 2. Screen directions visually match swipe directions.
-3. **Model silhouette is primary identification.**
-4. Numbers are secondary 2048 information and must not block the model.
+3. **Model silhouette is primary identification, but adjacent values must be distinguishable in under one second on a phone.**
+4. Numbers are secondary to the model but still mandatory gameplay information: they must remain immediately readable at normal phone viewing distance and must not block the model.
 5. Progression cannot be a color swap; silhouette/costume/architecture must evolve.
 6. Every tier should survive a "black silhouette test": adjacent tiers should still feel meaningfully different without color.
 7. Environment is part of feedback, not static wallpaper.
@@ -27,11 +27,13 @@ Do not attach a large plaque in front of the piece.
 Preferred hierarchy:
 
 ```text
-90%  model / silhouette / costume / landmark
-10%  small number medallion or HUD information
+80–90%  model / silhouette / costume / landmark
+10–20%  high-contrast front number plate / HUD information
 ```
 
 Rank names belong in HUD/toasts/home progression screens rather than covering the character.
+
+A number badge that is technically present but reads as a tiny texture is a failure. On the 4×4 mobile board, use a consistent front-facing high-contrast plate with heavy outline and enough projected size to read 2/4/8/16 at a glance.
 
 ## Theme 1 — Miniature Kingdom
 

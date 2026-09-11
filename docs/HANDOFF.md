@@ -28,11 +28,16 @@ The game is still a single-board 3D 2048 prototype, but this milestone deliberat
 
 ### Piece readability
 - palace giant rank plaques removed
-- piece/model silhouette is now primary
-- number is a small corner medallion
-- palace rank name lives in HUD instead of covering the character
-- kingdom number badge follows the same secondary-information rule
-- palace procedural tiers have stronger size/costume/crown/cape/halo/throne progression
+- piece/model silhouette is primary
+- **mobile readability hotfix:** 2/4/8/16 Palace tiers now use much stronger size, palette, hair, prop, shoulder and base-shape differences
+- Palace 2 = small mint maid + tray + plain single bun
+- Palace 4 = warm yellow/orange + twin buns + large fan
+- Palace 8 = purple + tall central bun + lateral hairpins + open fan
+- Palace 16 = coral/red + wide sleeves/shoulders + ceremonial back fan
+- numbers now use a centered front-facing, gold-rimmed, high-contrast plate instead of a tiny corner medallion
+- the same larger number-plate treatment is applied to Miniature Kingdom
+- palace rank name remains in HUD instead of covering the character
+- high tiers continue crown/cape/halo/throne escalation
 
 ### Performance architecture
 - adaptive DPR starts higher for clarity and reduces only if measured FPS requires it
@@ -74,8 +79,8 @@ The game is still a single-board 3D 2048 prototype, but this milestone deliberat
 On iPhone Safari:
 1. compare sharpness versus previous 1.25 DPR build
 2. play at least 10–20 minutes and watch for progressive lag
-3. judge whether Palace 2/4/8/16/32 silhouettes are now easier to distinguish
-4. judge the smaller number medallion versus the removed rank plaque
+3. judge whether Palace 2/4/8/16 can be identified without reading the number
+4. confirm the new centered number plate is readable instantly without hiding the model
 5. test the new Theme Islands home flow
 6. optionally open with `?debug=1` and capture the telemetry after a long session
 
