@@ -1,4 +1,4 @@
-import { THEMES, type ThemeId } from '../config/themes';
+import type { ThemeId } from '../config/themes';
 
 type ThemeCard = {
   id: ThemeId | 'candy' | 'snow';
