@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone: M2.3 — First Server-Authoritative PvP Skills.**
+**Milestone: M2.4 — Complete Server-Authoritative Match Loop.**
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 
@@ -174,6 +174,51 @@ Two merges in one swipe add +2 combo energy; larger multi-merge swipes receive l
 - server errors surface as compact skill feedback
 - client never spends energy or applies a competitive effect as authority
 
+## M2.4 implemented
+
+### Authoritative round clock
+- `MATCH_DURATION_MS = 180000`
+- every match stores `roundStartedAt` and `roundEndsAt`
+- `RoomManager` schedules the deadline on the server
+- MOVE / CAST_SKILL reject late commands once the deadline has passed
+- reconnect snapshots carry the original deadline, so changing devices/connections never resets time
+- Duel HUD derives its countdown from server time + the authoritative deadline
+
+### Time-limit resolution
+At 180 seconds the server compares, in order:
+1. score
+2. highest tile
+3. usable empty cells
+4. draw if all three match
+
+`MatchResult` freezes:
+- winner id
+- end reason
+- exact tie breaker
+- finish time
+- both final score/highest/usable-space standings
+
+Instant endings still override the timer:
+- `board_locked`
+- `petrified_lock`
+- `opponent_left`
+
+### Same-room rematch
+- finished rooms remain alive
+- each player has `rematchReady`
+- both players must opt in
+- the server then creates a fresh match id and new 180-second deadline
+- boards / energy / shield / petrify / cooldowns / action sequences reset
+- theme/player identity/room code remain
+- result UI shows opponent rematch intent and supports canceling readiness
+
+### Protocol / UI
+- protocol advanced to v4
+- `set_rematch_ready`
+- round timestamps and full result payload in `MatchSnapshot`
+- visible mm:ss server timer with 10-second danger state
+- result panel shows both scores, highest tiles, usable spaces and the winning rule
+
 ## Deployment state
 
 The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
@@ -203,20 +248,19 @@ Remote test:
 - Online Duel uses a lightweight duel render, not two complete Solo environments.
 - first release target remains Douyin mini-game, followed by WeChat, then iOS.
 
-## Next exact task — M2.4
+## Next exact task — M2.5
 
-Complete the competitive match loop:
+Add public matchmaking without changing the private-room match engine:
 
-1. authoritative round timer (initial target 180s)
-2. board-lock instant loss remains
-3. time-limit score comparison
-4. tie breakers: highest tile, then usable empty cells
-5. full result payload and clearer result UI
-6. rematch flow without leaving the private room
-7. reconnect during timed matches preserves remaining time
-8. prepare the room lifecycle for later public matchmaking
+1. server queue join/leave
+2. pair two compatible waiting players into a normal RoomSession
+3. matchmaking state / cancel UI
+4. basic queue timeout and stale-connection cleanup
+5. preserve independent theme selection
+6. keep private six-digit rooms intact
+7. leave region/MMR sophistication until real concurrency data exists
 
-Skill and energy numbers remain provisional until real two-phone playtests are possible.
+Before production launch, the existing server still needs a public TLS `wss://` deployment for real two-phone latency and balance testing.
 
 ## Real-device validation still required
 
