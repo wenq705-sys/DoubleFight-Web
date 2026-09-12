@@ -133,10 +133,14 @@ Container:
 
 ```bash
 docker build -f Dockerfile.server -t doublefight-server .
-docker run --rm -p 8787:8787 doublefight-server
+docker run --rm -p 127.0.0.1:8787:8787 doublefight-server
 ```
 
 Production browser clients must use `wss://`. Configure `VITE_WS_URL=wss://host/ws`.
+
+M2.6 deployment uses `ops/compose.server.yml` and host Nginx on 443, with the
+game port published only on loopback. See `docs/SERVER_DEPLOYMENT.md` for the
+IP certificate, renewal, deployment, rollback and real-device acceptance process.
 
 For temporary testing the client also accepts a query override:
 `?ws=wss://host/ws`.
