@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   Board2048,
+  DEFAULT_SKILL_LOADOUT,
   SeededRandom,
   randomUint32,
   MATCH_DURATION_MS,
@@ -69,7 +70,12 @@ export class RoomSession {
     private readonly send: Send,
   ) {}
 
-  addPlayer(connectionId: string, name: string, theme: NetworkThemeId, loadout: SkillLoadout): RoomPlayerRecord {
+  addPlayer(
+    connectionId: string,
+    name: string,
+    theme: NetworkThemeId,
+    loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT],
+  ): RoomPlayerRecord {
     if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
     if (this.players.size >= 2) throw new Error('ROOM_FULL');
 
