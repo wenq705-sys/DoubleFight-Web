@@ -78,7 +78,7 @@ export class GameScene {
     this.boardView.reset(tiles);
     const presentation = this.boardView.presentation;
     this.scene.background = new THREE.Color(presentation.sky);
-    this.scene.fog = new THREE.Fog(presentation.fog, 18, 39);
+    this.scene.fog = new THREE.Fog(presentation.fog, this.cameraHome.distanceTo(this.cameraTarget) + 8, this.cameraHome.distanceTo(this.cameraTarget) + 28);
     this.renderer.toneMappingExposure = presentation.exposure;
     this.prewarmTheme(theme);
   }
@@ -131,19 +131,11 @@ export class GameScene {
     this.renderer.setSize(width, height);
     this.camera.aspect = ratio;
 
-    if (ratio < 0.58) {
-      this.camera.fov = 50;
-      this.cameraHome.set(0.28, 14.35, 17.35);
-      this.cameraTarget.set(0, 0.48, 0.02);
-    } else if (ratio < 0.82) {
-      this.camera.fov = 46;
-      this.cameraHome.set(0.55, 13.1, 15.85);
-      this.cameraTarget.set(0, 0.5, 0.08);
-    } else {
-      this.camera.fov = 39;
-      this.cameraHome.set(1.8, 11.7, 14.2);
-      this.cameraTarget.set(0, 0.52, 0.12);
-    }
+    this.camera.fov = 42;
+    this.cameraTarget.set(0, 0.6, ART.board.centerZ);
+    const distance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
+    this.cameraHome.copy(this.cameraTarget).add(new THREE.Vector3(0, 0.88, 0.475).multiplyScalar(distance));
+    this.scene.fog = new THREE.Fog(this.boardView.presentation.fog, distance + 8, distance + 28);
 
     this.camera.position.copy(this.cameraHome);
     this.camera.lookAt(this.cameraTarget);
