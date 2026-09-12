@@ -10,7 +10,7 @@ export class DuelScene {
   readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(38, 1, 0.1, 80);
+  private readonly camera = new THREE.PerspectiveCamera(39, 1, 0.1, 80);
   private readonly clock = new THREE.Clock();
   readonly local: BattleBoardView;
   readonly remote: BattleBoardView;
@@ -51,17 +51,19 @@ export class DuelScene {
     fill.position.set(6, 7, -8);
     this.scene.add(fill);
 
-    this.local = new BattleBoardView('kingdom', 'board', new BattleFeedback(), undefined, true);
-    this.remote = new BattleBoardView('kingdom', 'board', undefined, undefined, true);
-    // Viewport composition only: the same native board is fitted into two screen regions.
-    this.local.root.position.set(0, 0, 3.25);
-    this.local.root.scale.setScalar(4.25 / BOARD_PRESENTATION_WIDTH);
-    this.remote.root.position.set(0, 0, -3.5);
-    this.remote.root.scale.setScalar(3.05 / BOARD_PRESENTATION_WIDTH);
+    this.local = new BattleBoardView('kingdom', 'duel', new BattleFeedback(), undefined, true);
+    // Opponent uses the same sound language, but never vibrates the local device.
+    this.remote = new BattleBoardView('kingdom', 'duel', new BattleFeedback(undefined, () => {}), undefined, true);
+
+    // Portrait composition: the local arena owns the lower action zone, opponent stays readable above.
+    this.local.root.position.set(0, 0, 3.95);
+    this.local.root.scale.setScalar(4.55 / BOARD_PRESENTATION_WIDTH);
+    this.remote.root.position.set(0, 0, -4.25);
+    this.remote.root.scale.setScalar(3.45 / BOARD_PRESENTATION_WIDTH);
     this.scene.add(this.local.root, this.remote.root);
 
-    this.camera.position.set(0, 13.7, 12.6);
-    this.camera.lookAt(0, 0.2, -0.2);
+    this.camera.position.set(0, 15.4, 13.9);
+    this.camera.lookAt(0, 0.24, -0.35);
 
     this.local.prewarmTheme('kingdom');
     this.local.prewarmTheme('palace');
