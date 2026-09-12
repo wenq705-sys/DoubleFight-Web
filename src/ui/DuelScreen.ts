@@ -1,6 +1,5 @@
+import { OnlineController } from '../battle/OnlineController';
 import type {
-  BoardTile,
-  CellPosition,
   Direction,
   MatchPlayerState,
   MatchResultPlayer,
@@ -12,16 +11,10 @@ import type {
 import {
   MAX_BATTLE_ENERGY,
   SKILL_DEFINITIONS,
-  predictMoveTiles,
 } from '../../shared/index';
-import { THEMES, type ThemeId } from '../config/themes';
+import { THEMES } from '../config/themes';
 import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 import { DuelScene } from '../rendering/DuelScene';
-
-interface PendingMove {
-  sequence: number;
-  direction: Direction;
-}
 
 type SkillButtonView = {
   button: HTMLButtonElement;
@@ -66,13 +59,9 @@ export class DuelScreen {
   private readonly rematchStatus: HTMLElement;
   private readonly inputZone: HTMLElement;
   private readonly skillToast: HTMLElement;
-  private readonly skillFx: HTMLElement;
   private readonly skillButtons = new Map<SkillId, SkillButtonView>();
 
-  private pending: PendingMove[] = [];
-  private predictedTiles: BoardTile[] = [];
-  private predictedScore = 0;
-  private currentBlockedCells: CellPosition[] = [];
+  private readonly controller: OnlineController;
   private pointerStart: { x: number; y: number; at: number } | null = null;
   private currentMatchId: string | null = null;
   private readonly lastEnergyByPlayer = new Map<string, number>();
@@ -154,7 +143,6 @@ export class DuelScreen {
         <div class="duel__input-zone" id="duel-input-zone" aria-label="我的棋盘操作区"></div>
         <div class="duel__hint">滑动下方棋盘 · 合成攒能量 · 技能由服务器判定</div>
         <div class="duel-skill-toast" id="duel-skill-toast"></div>
-        <div class="duel-skill-fx" id="duel-skill-fx"><span></span></div>
 
         <div class="duel__reconnect duel__reconnect--hidden" id="duel-reconnect">
           <div class="duel__spinner"></div>
@@ -193,6 +181,7 @@ export class DuelScreen {
     this.root = container.querySelector('#duel-screen') as HTMLElement;
     this.stage = container.querySelector('#duel-stage') as HTMLElement;
     this.scene = new DuelScene(this.stage);
+    this.controller = new OnlineController(this.scene.local, this.scene.remote);
     this.roundTimer = container.querySelector('#duel-round-timer') as HTMLElement;
     this.localName = container.querySelector('#duel-local-name') as HTMLElement;
     this.localTheme = container.querySelector('#duel-local-theme') as HTMLElement;
@@ -226,7 +215,6 @@ export class DuelScreen {
     this.rematchStatus = container.querySelector('#duel-rematch-status') as HTMLElement;
     this.inputZone = container.querySelector('#duel-input-zone') as HTMLElement;
     this.skillToast = container.querySelector('#duel-skill-toast') as HTMLElement;
-    this.skillFx = container.querySelector('#duel-skill-fx') as HTMLElement;
 
     (Object.keys(SKILL_DEFINITIONS) as SkillId[]).forEach((skillId) => {
       const button = container.querySelector(`[data-skill="${skillId}"]`) as HTMLButtonElement;
@@ -295,6 +283,7 @@ export class DuelScreen {
       '离线';
 
     const reconnecting = this.active && state.status !== 'connected';
+    if (state.status !== 'connected') this.controller.suspend();
     this.reconnectOverlay.classList.toggle('duel__reconnect--hidden', !reconnecting);
 
     if (message?.type === 'error' && this.active) {
@@ -302,6 +291,7 @@ export class DuelScreen {
     }
 
     if (message?.type === 'skill_event' && state.playerId) {
+      this.controller.skill(message.event, state.playerId);
       this.playSkillEvent(message.event, state.playerId);
     }
 
@@ -310,13 +300,12 @@ export class DuelScreen {
       return;
     }
 
-    this.serverClockOffsetMs = state.match.serverTime - Date.now();
+    const authoritative = message?.type === 'match_start' || message?.type === 'match_state' || message?.type === 'match_end';
+    if (authoritative) this.serverClockOffsetMs = state.match.serverTime - Date.now();
 
     if (state.match.matchId !== this.currentMatchId) {
       this.currentMatchId = state.match.matchId;
-      this.pending = [];
-      this.predictedTiles = [];
-      this.currentBlockedCells = [];
+      this.controller.reset();
       this.lastEnergyByPlayer.clear();
       this.result.classList.add('duel-result--hidden');
       this.rematchStatus.textContent = '';
@@ -337,7 +326,8 @@ export class DuelScreen {
       );
     }
 
-    this.reconcile(state.match, state.playerId);
+    if (authoritative) this.controller.accept(state.match, state.playerId);
+    this.renderSnapshot(state.match, state.playerId);
     this.refreshRoundTimer();
 
     if (state.match.phase === 'finished') {
@@ -346,35 +336,14 @@ export class DuelScreen {
     }
   }
 
-  private reconcile(snapshot: MatchSnapshot, playerId: string): void {
+  private renderSnapshot(snapshot: MatchSnapshot, playerId: string): void {
     const me = snapshot.players.find((player) => player.playerId === playerId);
     const opponent = snapshot.players.find((player) => player.playerId !== playerId);
     if (!me) return;
 
-    this.pending = this.pending.filter((move) => move.sequence > me.lastSequence);
-
-    let predicted = me.board.tiles.map((tile) => ({ ...tile }));
-    let predictedScore = me.board.score;
-    const blocked = me.board.blockedCells.map((cell) => ({ ...cell }));
-
-    if (snapshot.phase === 'playing') {
-      for (const pending of this.pending) {
-        const result = predictMoveTiles(predicted, pending.direction, blocked);
-        if (!result.changed) continue;
-        predicted = result.tiles;
-        predictedScore += result.scoreDelta;
-      }
-    } else {
-      this.pending = [];
-    }
-
-    this.predictedTiles = predicted;
-    this.predictedScore = predictedScore;
-    this.currentBlockedCells = blocked;
-
     this.localName.textContent = me.name;
     this.localTheme.textContent = THEMES[me.theme].label;
-    this.localScore.textContent = predictedScore.toLocaleString('zh-CN');
+    this.localScore.textContent = this.controller.predictedScore.toLocaleString('zh-CN');
 
     if (opponent) {
       this.remoteName.textContent = opponent.name;
@@ -382,43 +351,22 @@ export class DuelScreen {
       this.remoteScore.textContent = opponent.board.score.toLocaleString('zh-CN');
       this.remoteStatus.textContent = statusText(opponent, this.serverNow());
       this.updateEnergy('remote', opponent.playerId, opponent.energy, opponent.maxEnergy);
-      this.scene.setBoard('remote', opponent.board.tiles, opponent.theme as ThemeId);
-      this.scene.setBlockedCells('remote', opponent.board.blockedCells);
     }
 
     this.localStatus.textContent = statusText(me, this.serverNow());
     this.updateEnergy('local', me.playerId, me.energy, me.maxEnergy);
     this.roomCode.textContent = snapshot.roomCode;
 
-    this.scene.setBoard('local', predicted, me.theme as ThemeId);
-    this.scene.setBlockedCells('local', blocked);
 
     this.refreshSkillButtons();
   }
 
   private attemptMove(direction: Direction): void {
     const state = this.client.snapshot();
-    if (!this.active || state.match?.phase !== 'playing' || this.pending.length >= 3) return;
-
-    const prediction = predictMoveTiles(this.predictedTiles, direction, this.currentBlockedCells);
-    if (!prediction.changed) {
-      this.scene.nudge(direction);
-      navigator.vibrate?.(6);
-      return;
+    if (!this.active || state.status !== 'connected' || state.match?.phase !== 'playing') return;
+    if (this.controller.move(direction, move => this.client.move(move))) {
+      this.localScore.textContent = this.controller.predictedScore.toLocaleString('zh-CN');
     }
-
-    const sequence = this.client.move(direction);
-    this.pending.push({ sequence, direction });
-    this.predictedTiles = prediction.tiles;
-    this.predictedScore += prediction.scoreDelta;
-
-    const me = state.match?.players.find((player) => player.playerId === state.playerId);
-    if (me) {
-      this.localScore.textContent = this.predictedScore.toLocaleString('zh-CN');
-      this.scene.setBoard('local', this.predictedTiles, me.theme as ThemeId);
-    }
-
-    navigator.vibrate?.(8);
   }
 
   private castSkill(skillId: SkillId): void {
@@ -544,22 +492,6 @@ export class DuelScreen {
       this.showSkillToast(casterIsLocal ? '清除两枚棋子' : '对手使用清块');
     }
 
-    this.skillFx.querySelector('span')!.textContent =
-      event.outcome === 'shielded' ? '◆' : definition.icon;
-    this.skillFx.className = 'duel-skill-fx';
-    void this.skillFx.offsetWidth;
-
-    if (event.skillId === 'petrify') {
-      this.skillFx.classList.add(casterIsLocal ? 'duel-skill-fx--up' : 'duel-skill-fx--down');
-    } else {
-      this.skillFx.classList.add(casterIsLocal ? 'duel-skill-fx--local' : 'duel-skill-fx--remote');
-    }
-
-    if (casterIsLocal) {
-      navigator.vibrate?.(event.skillId === 'petrify' ? [18, 10, 24] : [12, 7, 12]);
-    } else if (event.outcome !== 'shielded') {
-      navigator.vibrate?.([8, 8, 16]);
-    }
   }
 
   private showSkillToast(message: string, error = false): void {
@@ -581,12 +513,17 @@ export class DuelScreen {
       this.inputZone.setPointerCapture?.(event.pointerId);
     });
 
+    this.inputZone.addEventListener('pointermove', event => {
+      if (this.pointerStart && this.active) this.scene.local.setGesture(event.clientX - this.pointerStart.x, event.clientY - this.pointerStart.y);
+    });
+
     this.inputZone.addEventListener('pointerup', (event) => {
       if (!this.pointerStart || !this.active) return;
       const dx = event.clientX - this.pointerStart.x;
       const dy = event.clientY - this.pointerStart.y;
       const elapsed = performance.now() - this.pointerStart.at;
       this.pointerStart = null;
+      this.scene.local.clearGesture();
 
       const distance = Math.hypot(dx, dy);
       const threshold = elapsed < 180 ? 22 : 30;
@@ -665,9 +602,7 @@ export class DuelScreen {
   private exit(): void {
     this.client.leaveRoom();
     this.currentMatchId = null;
-    this.pending = [];
-    this.predictedTiles = [];
-    this.currentBlockedCells = [];
+    this.controller.reset();
     this.lastEnergyByPlayer.clear();
     this.scene.clear();
     this.hide();

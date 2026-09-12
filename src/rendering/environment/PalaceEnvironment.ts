@@ -110,8 +110,9 @@ export class PalaceEnvironment {
   private gestureStrength = 0;
   private impactEnergy = 0;
 
-  constructor() {
+  constructor(detail: 'full' | 'board' = 'full') {
     this.root.name = 'PalaceEnvironment';
+    if (detail === 'board') { this.createBoard(); this.createSparkPool(); return; }
     this.createFoundation();
     this.createBoard();
     this.createRails();

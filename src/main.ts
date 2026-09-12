@@ -1,5 +1,5 @@
 import './styles.css';
-import { Board2048 } from './game/board/Board2048';
+import { SoloController } from './battle/SoloController';
 import type { Direction } from './game/board/types';
 import { ART } from './config/artDirection';
 import { THEMES, type ThemeId } from './config/themes';
@@ -9,7 +9,6 @@ import { HomeScreen } from './ui/HomeScreen';
 import { OnlineLobby } from './ui/OnlineLobby';
 import { DuelScreen } from './ui/DuelScreen';
 import { OnlineClient } from './network/OnlineClient';
-import { SoundDesign } from './audio/SoundDesign';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('#app root was not found.');
@@ -23,10 +22,10 @@ app.innerHTML = `
     </div>
   </div>`;
 
-const board = new Board2048();
 const scene = new GameScene(app);
 const hud = new Hud(app);
-const sound = new SoundDesign();
+const solo = new SoloController(scene.boardView);
+const board = solo.board;
 
 let inputLocked = false;
 let inGame = false;
@@ -66,9 +65,8 @@ function applyTheme(nextTheme: ThemeId): void {
 }
 
 function reset(): void {
-  const initial = board.reset();
+  solo.reset();
   skillCharges = 3;
-  scene.reset(initial);
   hud.hideGameOver();
   refresh();
   inputLocked = false;
@@ -101,7 +99,8 @@ async function useRandomClear(): Promise<void> {
     return;
   }
 
-  const result = board.clearRandom(2);
+  const revision = solo.revision;
+  const result = solo.clearRandom(2);
   if (result.removed.length === 0) {
     hud.showSkillEmpty();
     return;
@@ -111,11 +110,10 @@ async function useRandomClear(): Promise<void> {
   skillCharges -= 1;
   hud.setSkillCharges(skillCharges);
   hud.playSkillFx(theme);
-  sound.skill();
-  navigator.vibrate?.([22, 18, 38, 20, 62]);
   hud.hideGameOver();
 
-  await scene.applyClearSkill(result.removed);
+  await result.finished;
+  if (revision !== solo.revision) return;
   refresh();
   inputLocked = false;
 }
@@ -127,29 +125,20 @@ async function move(direction: Direction): Promise<void> {
     return;
   }
 
-  const result = board.move(direction);
+  const revision = solo.revision;
+  const result = solo.move(direction);
   if (!result.changed) {
-    scene.rejectDirection(direction);
     navigator.vibrate?.(7);
     return;
   }
 
-  scene.commitDirection(direction);
   inputLocked = true;
-  sound.move();
-  await scene.applyMove(result);
+  await result.finished;
+  if (revision !== solo.revision) return;
 
   if (result.merges.length) {
-    result.merges.forEach((merge) => sound.merge(merge.value));
     const max = Math.max(...result.merges.map((merge) => merge.value));
-    if (max >= 2048) sound.legendary();
     hud.showMerge(max, result.merges.length, theme);
-    navigator.vibrate?.(
-      max >= 1024 ? [32, 22, 58] :
-      max >= 512 ? [26, 16, 42] :
-      max >= 128 ? [19, 9, 24] :
-      [11, 6, 14],
-    );
   }
 
   refresh();
