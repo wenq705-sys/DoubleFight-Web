@@ -6,6 +6,8 @@ export const FUTURE_SKILL_ENERGY_COSTS = {
   random_clear: 35,
   shield: 45,
   petrify: 50,
+  shuffle: 40,
+  purify: 30,
 } as const;
 
 export interface EnergyGainBreakdown {
