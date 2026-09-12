@@ -314,7 +314,7 @@ export class RoomManager {
       connectionId,
       playerName: sanitizeQueueName(playerName),
       theme,
-      loadout: [...loadout],
+      loadout: [...loadout] as SkillLoadout,
       joinedAt: Date.now(),
     };
     this.matchmaking.enqueue(entry);
