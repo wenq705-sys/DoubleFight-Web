@@ -1,9 +1,9 @@
 import type { BoardPublicState, BoardTile, CellPosition, Direction, MoveResult } from '../game/types';
 import type { TimeLimitTieBreaker } from '../battle/match';
-import type { SkillCooldowns, SkillId } from '../battle/skills';
-import { isSkillId } from '../battle/skills';
+import type { SkillCooldowns, SkillId, SkillLoadout } from '../battle/skills';
+import { isSkillId, isSkillLoadout } from '../battle/skills';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 export type NetworkThemeId = 'kingdom' | 'palace';
 export type RoomPhase = 'lobby' | 'playing' | 'finished';
@@ -20,6 +20,7 @@ export interface RoomPlayerState {
   id: string;
   name: string;
   theme: NetworkThemeId;
+  loadout: SkillLoadout;
   ready: boolean;
   rematchReady: boolean;
   connected: boolean;
@@ -37,6 +38,7 @@ export interface MatchPlayerState {
   playerId: string;
   name: string;
   theme: NetworkThemeId;
+  loadout: SkillLoadout;
   board: BoardPublicState;
   energy: number;
   maxEnergy: number;
@@ -91,16 +93,18 @@ export interface SkillEvent {
   removedTiles: BoardTile[];
   blockedCell: CellPosition | null;
   petrifyExpiresAt: number;
+  clearedBlockedCells: CellPosition[];
 }
 
 export type ClientMessage =
   | { type: 'hello'; protocolVersion: number }
-  | { type: 'create_room'; playerName: string; theme: NetworkThemeId }
-  | { type: 'join_room'; roomCode: string; playerName: string; theme: NetworkThemeId }
-  | { type: 'join_matchmaking'; playerName: string; theme: NetworkThemeId }
+  | { type: 'create_room'; playerName: string; theme: NetworkThemeId; loadout: SkillLoadout }
+  | { type: 'join_room'; roomCode: string; playerName: string; theme: NetworkThemeId; loadout: SkillLoadout }
+  | { type: 'join_matchmaking'; playerName: string; theme: NetworkThemeId; loadout: SkillLoadout }
   | { type: 'cancel_matchmaking' }
   | { type: 'reconnect'; roomCode: string; reconnectToken: string }
   | { type: 'set_theme'; theme: NetworkThemeId }
+  | { type: 'set_loadout'; loadout: SkillLoadout }
   | { type: 'set_ready'; ready: boolean }
   | { type: 'set_rematch_ready'; ready: boolean }
   | { type: 'move'; direction: Direction; sequence: number }
@@ -124,6 +128,17 @@ export type ServerMessage =
   | { type: 'matchmaking_state'; state: MatchmakingState }
   | { type: 'match_start'; snapshot: MatchSnapshot }
   | { type: 'match_state'; snapshot: MatchSnapshot }
+  | {
+      type: 'move_event';
+      playerId: string;
+      sequence: number;
+      direction: Direction;
+      result: MoveResult;
+      board: BoardPublicState;
+      energy: number;
+      energyGain: number;
+      serverAt: number;
+    }
   | {
       type: 'move_ack';
       sequence: number;
@@ -158,7 +173,8 @@ export type ServerMessage =
         | 'INSUFFICIENT_ENERGY'
         | 'SKILL_COOLDOWN'
         | 'SKILL_ALREADY_ACTIVE'
-        | 'SKILL_NO_TARGET';
+        | 'SKILL_NO_TARGET'
+        | 'SKILL_NOT_EQUIPPED';
       message: string;
     }
   | { type: 'pong'; sentAt: number; serverAt: number };
@@ -187,21 +203,32 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     return { type, protocolVersion: Number(message.protocolVersion) };
   }
 
-  if (type === 'create_room' && typeof message.playerName === 'string' && isNetworkThemeId(message.theme)) {
-    return { type, playerName: message.playerName, theme: message.theme };
+  if (
+    type === 'create_room' &&
+    typeof message.playerName === 'string' &&
+    isNetworkThemeId(message.theme) &&
+    isSkillLoadout(message.loadout)
+  ) {
+    return { type, playerName: message.playerName, theme: message.theme, loadout: message.loadout };
   }
 
   if (
     type === 'join_room' &&
     typeof message.roomCode === 'string' &&
     typeof message.playerName === 'string' &&
-    isNetworkThemeId(message.theme)
+    isNetworkThemeId(message.theme) &&
+    isSkillLoadout(message.loadout)
   ) {
-    return { type, roomCode: message.roomCode, playerName: message.playerName, theme: message.theme };
+    return { type, roomCode: message.roomCode, playerName: message.playerName, theme: message.theme, loadout: message.loadout };
   }
 
-  if (type === 'join_matchmaking' && typeof message.playerName === 'string' && isNetworkThemeId(message.theme)) {
-    return { type, playerName: message.playerName, theme: message.theme };
+  if (
+    type === 'join_matchmaking' &&
+    typeof message.playerName === 'string' &&
+    isNetworkThemeId(message.theme) &&
+    isSkillLoadout(message.loadout)
+  ) {
+    return { type, playerName: message.playerName, theme: message.theme, loadout: message.loadout };
   }
 
   if (type === 'cancel_matchmaking') return { type };
@@ -212,6 +239,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   if (type === 'set_theme' && isNetworkThemeId(message.theme)) {
     return { type, theme: message.theme };
+  }
+
+  if (type === 'set_loadout' && isSkillLoadout(message.loadout)) {
+    return { type, loadout: message.loadout };
   }
 
   if (type === 'set_ready' && typeof message.ready === 'boolean') {
