@@ -7,7 +7,7 @@ import type { PresentationEvent } from '../../battle/PresentationEvents';
 import { sameTiles } from '../../battle/PresentationEvents';
 import type { BattleFeedback } from '../../battle/BattleFeedback';
 import { THEME_PRESENTATIONS, type ThemeEnvironment, type EnvironmentDetail } from '../themes/ThemePresentation';
-import { fitTile } from '../tiles/TileSizingPolicy';
+import { fitTile, constrainTileMotion } from '../tiles/TileSizingPolicy';
 import type { TileVisual } from '../tiles/TileFactory';
 import { Effects } from '../vfx/Effects';
 
@@ -310,6 +310,7 @@ export class BattleBoardView {
       tween.update(t);
       if (t >= 1) { this.tweens.splice(this.tweens.indexOf(tween), 1); tween.complete?.(); }
     }
+    this.tiles.forEach(tile => constrainTileMotion(tile.root));
     this.environment.update(this.visualTime, dt);
     this.effects.update(dt);
     this.tiles.forEach((tile, id) => tile.animatedParts.forEach((part, index) => {
@@ -410,7 +411,7 @@ export class BattleBoardView {
   }
 
   private addTile(tile: BoardTile, spawn: boolean): TileInstance {
-    const visual = fitTile(this.presentation.factory.create(tile.value), tile.value);
+    const visual = fitTile(this.presentation.factory.create(tile.value), tile.value, this.presentation.sizing);
     const instance: TileInstance = { ...visual, value: tile.value };
     instance.root.position.copy(this.cellPosition(tile.row, tile.col));
     instance.root.name = `Tile-${tile.id}-${tile.value}`;

@@ -235,7 +235,8 @@ function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Obj
   const palette = PALETTES[value] ?? PALETTES[2048];
   const profile = PROFILES[value] ?? PROFILES[2048];
   const character = new THREE.Group();
-  character.scale.setScalar(tierScale(value, 0.70, 1.40));
+  // Costume/crown/throne carry rank; the body does not expand sideways with tier.
+  character.scale.set(0.80, tierScale(value, 0.80, 1.04), 0.80);
   character.position.y = 0.02;
   parent.add(character);
 
