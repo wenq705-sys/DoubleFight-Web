@@ -143,6 +143,12 @@ export class Effects {
     this.light(center.clone().add(new THREE.Vector3(0, 2.8, 0)), primary, theme.skillLight, 0.86);
   }
 
+  dispose(): void {
+    this.clearTransient();
+    for (const item of this.items) { (item.mesh.material as THREE.Material).dispose(); item.mesh.removeFromParent(); }
+    for (const item of this.lights) item.light.removeFromParent();
+  }
+
   clearTransient(): void {
     this.items.forEach((item) => this.release(item));
     this.lights.forEach((item) => {
