@@ -48,8 +48,10 @@ M2.6 goal:
 - Production browser/minigame traffic must use `wss://`.
 - Do not expose port 8787 publicly unless temporarily required for controlled debugging.
 - Keep private-room and matchmaking traffic on the exact same RoomSession implementation.
-- Before changing firewall/security-group rules, inspect existing services so unrelated workloads are not broken.
-- Back up or document any pre-existing 2048/server deployment before replacing it.
+- This host is now dedicated exclusively to Double Fight.
+- Pre-existing application workloads such as the old `2048-server`, root-level `server.js`, `MoneyAI_Bot.py`, old PM2/systemd app services, old app containers and their app data do not need to be preserved.
+- Inspect first only to identify what is safe to remove; after identification, stop and remove obsolete application processes/files/configs.
+- Do not delete OS-critical directories, cloud-agent services, SSH access, package-manager state or networking required to administer the host.
 - Prefer reproducible deployment from the GitHub repository, not ad-hoc copied files.
 
 ## Recommended first deployment shape
@@ -83,21 +85,22 @@ host bind: 127.0.0.1:8787
 ## Initial deployment checklist
 
 1. Inspect OS, CPU/RAM/disk, open ports and existing processes.
-2. Inspect existing folders/services named 2048/server before modifying anything.
-3. Confirm SSH access and cloud security-group rules.
-4. Install/update Git and Docker (or document why systemd/native Node is preferable).
-5. Clone/pull `wenq705-sys/DoubleFight-Web` into a clean deployment directory such as `/opt/doublefight`.
-6. Build `Dockerfile.server`.
-7. Start the server bound privately to localhost.
-8. Verify `curl http://127.0.0.1:8787/health`.
-9. Configure TLS reverse proxy for `/ws` and `/health`.
-10. Open only the required public ports (normally 443; 80 only if needed for ACME validation).
-11. Verify public HTTPS health and public WSS handshake.
-12. Configure the web build with `VITE_WS_URL=wss://.../ws`.
-13. Rebuild/deploy the GitHub Pages client.
-14. Test two real phones on different networks.
-15. Test Wi-Fi↔5G changes, background/resume and reconnect.
-16. Record deployment commands, rollback procedure and service locations in repository docs.
+2. Identify all legacy application workloads/files/containers/services.
+3. Stop and remove those obsolete application workloads because this host is dedicated to Double Fight.
+4. Confirm SSH access and cloud security-group rules.
+5. Install/update Git and Docker (or document why systemd/native Node is preferable).
+6. Clone/pull `wenq705-sys/DoubleFight-Web` into a clean deployment directory such as `/opt/doublefight`.
+7. Build `Dockerfile.server`.
+8. Start the server bound privately to localhost.
+9. Verify `curl http://127.0.0.1:8787/health`.
+10. Configure TLS reverse proxy for `/ws` and `/health`.
+11. Open only the required public ports (normally 443; 80 only if needed for ACME validation).
+12. Verify public HTTPS health and public WSS handshake.
+13. Configure the web build with `VITE_WS_URL=wss://.../ws`.
+14. Rebuild/deploy the GitHub Pages client.
+15. Test two real phones on different networks.
+16. Test Wi-Fi↔5G changes, background/resume and reconnect.
+17. Record deployment commands, rollback procedure and service locations in repository docs.
 
 ## Security / hardening after first successful test
 
@@ -155,3 +158,26 @@ Recommended split:
 - same GitHub repository and shared documentation, separate branches/worktrees
 
 Generated production models should ultimately be exported as optimized GLB assets and integrated through the existing Three.js asset pipeline. The game server should serve competitive state, not perform rendering/model generation.
+
+
+## Dedicated-host cleanup policy
+
+This server is intentionally single-purpose.
+
+Codex may remove legacy application-level content after inspection, including:
+- old `/root/2048-server`
+- old root-level `server.js`
+- old `MoneyAI_Bot.py`
+- obsolete Node/PM2 app processes
+- obsolete app-specific systemd units
+- obsolete Docker containers/images/volumes that are clearly unrelated to Double Fight
+- old app logs/configs/reverse-proxy entries that are no longer needed
+
+Codex must not remove or disable:
+- SSH access required for administration
+- cloud-provider agent/monitoring components unless explicitly verified unnecessary
+- OS package-management infrastructure
+- base firewall/networking needed for the host
+- anything whose purpose is unknown without inspecting it first
+
+If the cloud console offers a clean OS reinstall and the user explicitly chooses it, a clean reinstall is also acceptable and may be preferable to piecemeal cleanup. After reinstall, re-establish SSH access and deploy only Double Fight.
