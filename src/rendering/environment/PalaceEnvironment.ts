@@ -110,19 +110,27 @@ export class PalaceEnvironment {
   private gestureStrength = 0;
   private impactEnergy = 0;
 
-  constructor(detail: 'full' | 'board' = 'full') {
+  constructor(detail: 'full' | 'duel' | 'board' = 'full') {
     this.root.name = 'PalaceEnvironment';
-    if (detail === 'board') { this.createBoard(); this.createSparkPool(); return; }
+    if (detail === 'board') {
+      this.createBoard();
+      this.createSparkPool();
+      return;
+    }
+
     this.createFoundation();
     this.createBoard();
     this.createRails();
     this.createPalace();
     this.createLanterns();
+    this.createBanners();
+    this.createSparkPool();
+
+    if (detail === 'duel') return;
+
     this.createGarden();
     this.createPond();
-    this.createBanners();
     this.createPetals();
-    this.createSparkPool();
   }
 
   setGesture(dx: number, dy: number, strength: number): void {
