@@ -44,7 +44,6 @@ export class DuelScreen {
   private readonly remoteEnergyFill: HTMLElement;
   private readonly remoteEnergyValue: HTMLElement;
   private readonly remoteEnergyGain: HTMLElement;
-  private readonly roomCode: HTMLElement;
   private readonly latency: HTMLElement;
   private readonly connection: HTMLElement;
   private readonly reconnectOverlay: HTMLElement;
@@ -87,61 +86,38 @@ export class DuelScreen {
         <div class="duel__stage" id="duel-stage"></div>
 
         <header class="duel__header">
-          <button id="duel-exit" class="duel__exit" type="button">← 退出</button>
-          <div class="duel__brand">
-            <strong>双数对决</strong>
-            <span>ONLINE DUEL</span>
-            <b id="duel-round-timer" class="duel__round-timer">03:00</b>
-          </div>
-          <div class="duel__net">
-            <span id="duel-connection">在线</span>
-            <b id="duel-latency">-- ms</b>
-          </div>
+          <section class="battle-score battle-score--local" aria-label="我的分数">
+            <span id="duel-local-name">玩家</span><strong id="duel-local-score">0</strong>
+            <span class="sr-only" id="duel-local-theme"></span>
+          </section>
+          <b id="duel-round-timer" class="duel__round-timer" aria-label="剩余时间">03:00</b>
+          <section class="battle-score battle-score--remote" aria-label="对手分数">
+            <span id="duel-remote-name">等待对手</span><strong id="duel-remote-score">0</strong>
+            <span class="sr-only" id="duel-remote-theme"></span>
+          </section>
         </header>
-
-        <section class="duel-player duel-player--remote">
-          <div>
-            <small>对手</small>
-            <strong id="duel-remote-name">等待对手</strong>
-            <span id="duel-remote-theme">--</span>
-            <em id="duel-remote-status"></em>
-          </div>
-          <b><small>SCORE</small><strong id="duel-remote-score">0</strong></b>
-        </section>
+        <button id="duel-exit" class="duel__exit" type="button" aria-label="退出对局">←</button>
+        <details class="duel__net"><summary id="duel-connection" aria-label="网络状态">◉</summary><b id="duel-latency"></b></details>
+        <div class="battle-status battle-status--remote" id="duel-remote-status" role="status"></div>
+        <div class="battle-status battle-status--local" id="duel-local-status" role="status"></div>
 
         <div class="duel-energy duel-energy--remote" id="duel-remote-energy">
-          <div class="duel-energy__label"><span>ENERGY</span><b id="duel-remote-energy-value">0 / 100</b></div>
+          <div class="duel-energy__label sr-only"><span>对手能量</span><b id="duel-remote-energy-value">0 / 100</b></div>
           <div class="duel-energy__track"><i id="duel-remote-energy-fill"></i></div>
           <em id="duel-remote-energy-gain"></em>
         </div>
 
-        <div class="duel__versus">
-          <i></i>
-          <strong>VS</strong>
-          <span>房间 <b id="duel-room-code">------</b></span>
-          <i></i>
-        </div>
-
-        <section class="duel-player duel-player--local">
-          <div>
-            <small>我</small>
-            <strong id="duel-local-name">玩家</strong>
-            <span id="duel-local-theme">--</span>
-            <em id="duel-local-status"></em>
-          </div>
-          <b><small>SCORE</small><strong id="duel-local-score">0</strong></b>
-        </section>
-
+        <footer class="battle-dock">
         <div class="duel-energy duel-energy--local" id="duel-local-energy">
-          <div class="duel-energy__label"><span>BATTLE ENERGY</span><b id="duel-local-energy-value">0 / 100</b></div>
+          <div class="duel-energy__label"><span>⚡</span><b id="duel-local-energy-value">0 / 100</b></div>
           <div class="duel-energy__track"><i id="duel-local-energy-fill"></i></div>
           <em id="duel-local-energy-gain"></em>
         </div>
 
         <div class="duel-skills" id="duel-skills"></div>
+        </footer>
 
         <div class="duel__input-zone" id="duel-input-zone" aria-label="我的棋盘操作区"></div>
-        <div class="duel__hint">滑动下方战场 · 本地即时响应 · 服务器权威判定</div>
         <div class="duel-skill-toast" id="duel-skill-toast"></div>
         <div class="duel-skill-fx" id="duel-skill-fx"><span></span><b></b></div>
 
@@ -200,7 +176,6 @@ export class DuelScreen {
     this.remoteEnergyFill = container.querySelector('#duel-remote-energy-fill') as HTMLElement;
     this.remoteEnergyValue = container.querySelector('#duel-remote-energy-value') as HTMLElement;
     this.remoteEnergyGain = container.querySelector('#duel-remote-energy-gain') as HTMLElement;
-    this.roomCode = container.querySelector('#duel-room-code') as HTMLElement;
     this.latency = container.querySelector('#duel-latency') as HTMLElement;
     this.connection = container.querySelector('#duel-connection') as HTMLElement;
     this.reconnectOverlay = container.querySelector('#duel-reconnect') as HTMLElement;
@@ -279,12 +254,9 @@ export class DuelScreen {
     this.latency.textContent = state.latencyMs === null ? '-- ms' : `${state.latencyMs} ms`;
     this.latency.classList.toggle('is-warn', state.latencyMs !== null && state.latencyMs >= 160);
     this.latency.classList.toggle('is-bad', state.latencyMs !== null && state.latencyMs >= 260);
-    this.connection.textContent =
-      state.status === 'connected'
-        ? state.latencyMs !== null && state.latencyMs >= 260 ? '高延迟' : '在线'
-        : state.status === 'reconnecting' ? '重连中'
-        : state.status === 'connecting' ? '连接中'
-        : '离线';
+    const netState = state.status !== 'connected' || (state.latencyMs ?? 0) >= 260 ? 'bad' : (state.latencyMs ?? 0) >= 160 ? 'warn' : 'ok';
+    this.connection.dataset.quality = netState;
+    this.connection.setAttribute('aria-label', netState === 'ok' ? '网络正常，查看延迟' : '网络波动，查看延迟');
 
     const reconnecting = this.active && state.status !== 'connected';
     if (state.status !== 'connected') this.controller.suspend();
@@ -360,7 +332,6 @@ export class DuelScreen {
 
     this.localStatus.textContent = statusText(me, this.serverNow());
     this.updateEnergy('local', me.playerId, me.energy, me.maxEnergy);
-    this.roomCode.textContent = snapshot.roomCode;
 
 
     this.refreshSkillButtons();
@@ -454,7 +425,11 @@ export class DuelScreen {
     const now = this.serverNow();
     const matchPlaying = state.match?.phase === 'playing';
     this.localStatus.textContent = statusText(me, now);
-    if (opponent) this.remoteStatus.textContent = statusText(opponent, now);
+    this.localStatus.setAttribute('aria-label', statusLabel(me, now));
+    if (opponent) {
+      this.remoteStatus.textContent = statusText(opponent, now);
+      this.remoteStatus.setAttribute('aria-label', statusLabel(opponent, now));
+    }
 
     for (const [skillId, view] of this.skillButtons) {
       const definition = SKILL_DEFINITIONS[skillId];
@@ -468,7 +443,9 @@ export class DuelScreen {
         !matchPlaying || cooling || blockedByState || noPurifyTarget || !affordable || !me.connected;
       view.button.classList.toggle('duel-skill--ready', !view.button.disabled);
       view.button.classList.toggle('duel-skill--active', blockedByState);
-      view.cost.textContent = blockedByState ? '已激活' : `${definition.cost}⚡`;
+      view.cost.textContent = blockedByState ? '◆' : String(definition.cost);
+      view.button.style.setProperty('--cooldown', `${Math.min(1, remaining / definition.cooldownMs) * 100}%`);
+      view.button.setAttribute('aria-label', `${definition.shortLabel}，${cooling ? `冷却 ${Math.ceil(remaining / 1000)} 秒` : blockedByState ? '护盾已激活' : !affordable ? '能量不足' : noPurifyTarget ? '无需净化' : '消耗 ' + definition.cost + ' 能量'}`);
       view.cooldown.textContent = cooling ? `${(remaining / 1000).toFixed(1)}s` : '';
     }
   }
@@ -559,6 +536,15 @@ export class DuelScreen {
   }
 
   private bindInput(): void {
+    window.addEventListener('keydown', event => {
+      if (!this.active || (event.target instanceof HTMLElement && event.target.matches('input,textarea,[contenteditable="true"]'))) return;
+      const direction = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', d: 'right', w: 'up', s: 'down' } as Record<string, Direction>)[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+      if (direction) { event.preventDefault(); this.attemptMove(direction); }
+      const slot = Number(event.key) - 1;
+      const state = this.client.snapshot();
+      const me = state.match?.players.find(player => player.playerId === state.playerId);
+      if (slot >= 0 && slot < 3 && me) { event.preventDefault(); this.castSkill(me.loadout[slot]); }
+    });
     this.inputZone.addEventListener('pointerdown', (event) => {
       if (!event.isPrimary || !this.active) return;
       this.pointerStart = { x: event.clientX, y: event.clientY, at: performance.now() };
@@ -587,6 +573,7 @@ export class DuelScreen {
 
     this.inputZone.addEventListener('pointercancel', () => {
       this.pointerStart = null;
+      this.scene.local.clearGesture();
     });
 
     this.inputZone.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -666,8 +653,7 @@ export class DuelScreen {
 function skillButtonHtml(skillId: SkillId, index: number): string {
   const definition = SKILL_DEFINITIONS[skillId];
   return `
-    <button class="duel-skill" data-skill="${skillId}" type="button">
-      <span class="duel-skill__slot">${index + 1}</span>
+    <button class="duel-skill" data-skill="${skillId}" type="button" aria-label="${definition.shortLabel}" aria-keyshortcuts="${index + 1}">
       <span class="duel-skill__icon">${definition.icon}</span>
       <strong>${definition.shortLabel}</strong>
       <small data-role="cost">${definition.cost}⚡</small>
@@ -677,11 +663,15 @@ function skillButtonHtml(skillId: SkillId, index: number): string {
 
 function statusText(player: MatchPlayerState, now: number): string {
   const labels: string[] = [];
-  if (player.shieldActive) labels.push('◆ 护盾');
+  if (player.shieldActive) labels.push('◆');
   if (player.petrifyExpiresAt > now) {
-    labels.push(`❄ 冻结 ${Math.max(0, (player.petrifyExpiresAt - now) / 1000).toFixed(1)}s`);
+    labels.push(`❄ ${Math.ceil(Math.max(0, (player.petrifyExpiresAt - now) / 1000))}s`);
   }
   return labels.join(' · ');
+}
+
+function statusLabel(player: MatchPlayerState, now: number): string {
+  return [player.shieldActive ? '护盾已激活' : '', player.petrifyExpiresAt > now ? `石化剩余 ${Math.ceil((player.petrifyExpiresAt - now) / 1000)} 秒` : ''].filter(Boolean).join('，');
 }
 
 function resultPlayerFromSnapshot(
