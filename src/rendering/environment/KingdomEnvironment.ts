@@ -122,23 +122,35 @@ export class KingdomEnvironment {
   private gestureDirection: Direction | null = null;
   private gestureStrength = 0;
 
-  constructor(detail: 'full' | 'board' = 'full') {
+  constructor(detail: 'full' | 'duel' | 'board' = 'full') {
     this.root.name = 'KingdomEnvironment';
-    if (detail === 'board') { this.createBoard(); this.createEnergyNetwork(); return; }
+    if (detail === 'board') {
+      this.createBoard();
+      this.createEnergyNetwork();
+      this.createEnergyMotePool();
+      return;
+    }
+
     this.createIsland();
     this.createBoard();
     this.createEnergyNetwork();
     this.createWalls();
     this.createCastle();
+    this.createFlags();
+    this.createEnergyMotePool();
+
+    if (detail === 'duel') {
+      this.createTrees();
+      return;
+    }
+
     this.createVillage();
     this.createTrees();
     this.createFlowers();
     this.createLanterns();
     this.createNumberTotems();
     this.createMountains();
-    this.createFlags();
     this.createClouds();
-    this.createEnergyMotePool();
 
     this.water = addMesh(
       this.root,
