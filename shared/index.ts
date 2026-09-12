@@ -49,14 +49,18 @@ export type { EnergyGainBreakdown } from './battle/energy';
 
 export {
   PETRIFY_DURATION_MS,
+  DEFAULT_SKILL_LOADOUT,
   SKILL_DEFINITIONS,
   emptySkillCooldowns,
   isSkillId,
+  isSkillLoadout,
+  normalizeSkillLoadout,
 } from './battle/skills';
 export type {
   SkillCooldowns,
   SkillDefinition,
   SkillId,
+  SkillLoadout,
   SkillTarget,
 } from './battle/skills';
 
