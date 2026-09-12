@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly renewal check for the DoubleFight IP certificate
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

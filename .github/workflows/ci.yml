@@ -36,9 +36,31 @@ jobs:
           for i in {1..20}; do
             if curl --fail --silent http://127.0.0.1:8787/health > /tmp/health.json; then
               cat /tmp/health.json
-              exit 0
+              node scripts/smoke-online.mjs
+              exit $?
             fi
             sleep 0.25
           done
           cat /tmp/doublefight-server.log
           exit 1
+      - name: Production container and proxy configuration smoke
+        env:
+          DOUBLEFIGHT_RELEASE: ci
+        run: |
+          set -euo pipefail
+          trap 'docker compose -f ops/compose.server.yml down' EXIT
+          bash -n ops/deploy-main.sh ops/reload-nginx.sh
+          docker compose -f ops/compose.server.yml config --quiet
+          docker compose -f ops/compose.server.yml build
+          docker compose -f ops/compose.server.yml up -d --wait --wait-timeout 90
+          test "$(docker compose -f ops/compose.server.yml port server 8787)" = "127.0.0.1:8787"
+          node scripts/smoke-online.mjs
+          # Synthetic CI certificate only; never used on the production host.
+          mkdir -p /tmp/ci-cert
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=ci.invalid \
+            -keyout /tmp/ci-cert/privkey.pem -out /tmp/ci-cert/fullchain.pem 2>/dev/null
+          docker run --rm \
+            -v "$PWD/ops/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/ops/doublefight-tls.conf:/etc/nginx/conf.d/doublefight-tls.conf:ro" \
+            -v /tmp/ci-cert:/etc/letsencrypt/live/150.158.127.128:ro \
+            nginx:1.26 nginx -t

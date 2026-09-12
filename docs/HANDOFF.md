@@ -261,9 +261,16 @@ After step 2 there is no matchmaking-specific battle path. Energy, skills, timer
 
 ## Deployment state
 
-The **server code is deployable but there is no public game-server URL configured in GitHub Pages yet**.
+M2.6 host audit and reviewed deployment configuration are now tracked in
+`docs/SERVER_DEPLOYMENT.md`. The target is `wss://150.158.127.128/ws` using a
+Let's Encrypt short-lived IP certificate, hourly renewal, Nginx and the existing
+Docker server on `127.0.0.1:8787`. Pages builds now select that endpoint.
+Actual deployment, certificate issuance and real-phone acceptance must be
+recorded there; configuration alone is not a successful public deployment.
 
-Therefore the public Pages build will show the Online Duel UI and report that the server is not configured. This is expected and honest.
+The **server code is deployable; public endpoint activation is pending**.
+
+Until the endpoint passes deployment verification, Online Duel may report a connection failure.
 
 Local test:
 - run `npm run dev:server`
