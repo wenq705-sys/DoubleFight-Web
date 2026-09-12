@@ -13,6 +13,7 @@ import {
   MATCH_DURATION_MS,
   resolveTimeLimitStandings,
 } from '../shared/battle/match';
+import { DEFAULT_SKILL_LOADOUT } from '../shared/battle/skills';
 import { parseClientMessage } from '../shared/protocol/messages';
 import type { ServerMessage } from '../shared/protocol/messages';
 import { MatchmakingQueue } from '../server/MatchmakingQueue';
@@ -123,7 +124,13 @@ describe('shared online game core', () => {
       type: 'join_matchmaking',
       playerName: 'A',
       theme: 'palace',
-    }))).toEqual({ type: 'join_matchmaking', playerName: 'A', theme: 'palace' });
+      loadout: DEFAULT_SKILL_LOADOUT,
+    }))).toEqual({
+      type: 'join_matchmaking',
+      playerName: 'A',
+      theme: 'palace',
+      loadout: DEFAULT_SKILL_LOADOUT,
+    });
 
     expect(parseClientMessage(JSON.stringify({
       type: 'cancel_matchmaking',
@@ -146,9 +153,9 @@ describe('shared online game core', () => {
 
   it('keeps public matchmaking FIFO and removes cancelled connections cleanly', () => {
     const queue = new MatchmakingQueue();
-    queue.enqueue({ connectionId: 'a', playerName: 'A', theme: 'kingdom', joinedAt: 1 });
-    queue.enqueue({ connectionId: 'b', playerName: 'B', theme: 'palace', joinedAt: 2 });
-    queue.enqueue({ connectionId: 'c', playerName: 'C', theme: 'kingdom', joinedAt: 3 });
+    queue.enqueue({ connectionId: 'a', playerName: 'A', theme: 'kingdom', loadout: [...DEFAULT_SKILL_LOADOUT], joinedAt: 1 });
+    queue.enqueue({ connectionId: 'b', playerName: 'B', theme: 'palace', loadout: [...DEFAULT_SKILL_LOADOUT], joinedAt: 2 });
+    queue.enqueue({ connectionId: 'c', playerName: 'C', theme: 'kingdom', loadout: [...DEFAULT_SKILL_LOADOUT], joinedAt: 3 });
 
     expect(queue.size).toBe(3);
     expect(queue.remove('b')?.playerName).toBe('B');
@@ -168,6 +175,7 @@ describe('shared online game core', () => {
       type: 'join_matchmaking',
       playerName: 'King',
       theme: 'kingdom',
+      loadout: [...DEFAULT_SKILL_LOADOUT],
     });
     expect(manager.stats().queued).toBe(1);
     expect(aMessages.some((message) =>
@@ -178,6 +186,7 @@ describe('shared online game core', () => {
       type: 'join_matchmaking',
       playerName: 'Palace',
       theme: 'palace',
+      loadout: [...DEFAULT_SKILL_LOADOUT],
     });
 
     expect(manager.stats().queued).toBe(0);
@@ -212,6 +221,7 @@ describe('shared online game core', () => {
       type: 'join_matchmaking',
       playerName: 'Solo',
       theme: 'kingdom',
+      loadout: [...DEFAULT_SKILL_LOADOUT],
     });
     expect(manager.stats().queued).toBe(1);
 
@@ -323,7 +333,7 @@ describe('shared online game core', () => {
     expect(host.energy).toBe(15);
   });
 
-  it('petrifies an empty cell temporarily and restores it after server expiry', () => {
+  it('petrifies a real occupied tile temporarily and restores movement after expiry', () => {
     const room = new RoomSession('888888', () => undefined);
     const host = room.addPlayer('connection-a', 'A', 'kingdom');
     const guest = room.addPlayer('connection-b', 'B', 'palace');
@@ -344,12 +354,58 @@ describe('shared online game core', () => {
     expect(cast.event.blockedCell).not.toBeNull();
     expect(cast.timedEffectExpiresAt).toBe(now + 6_000);
     expect(guest.board!.blockedCells()).toHaveLength(1);
+    const frozen = cast.event.blockedCell!;
+    expect(guest.board!.tiles().some((tile) => tile.row === frozen.row && tile.col === frozen.col)).toBe(true);
     expect(room.matchSnapshot(now + 1).players.find((player) => player.playerId === guest.id)?.petrifyExpiresAt)
       .toBe(now + 6_000);
+
+    const beforeMoveFrozen = guest.board!.tiles().find((tile) => tile.row === frozen.row && tile.col === frozen.col);
+    guest.board!.move('left');
+    const afterMoveFrozen = guest.board!.tiles().find((tile) => tile.id === beforeMoveFrozen?.id);
+    expect(afterMoveFrozen).toMatchObject(frozen);
 
     expect(room.expireTimedEffects(now + 6_001)).toBe(true);
     expect(guest.board!.blockedCells()).toEqual([]);
     expect(guest.petrifyExpiresAt).toBe(0);
+  });
+
+  it('supports server-authoritative shuffle/purify and rejects unequipped skills', () => {
+    const room = new RoomSession('565656', () => undefined);
+    const host = room.addPlayer(
+      'connection-a',
+      'A',
+      'kingdom',
+      ['shuffle', 'purify', 'petrify'],
+    );
+    const guest = room.addPlayer('connection-b', 'B', 'palace', [...DEFAULT_SKILL_LOADOUT]);
+    room.setReady(host.id, true);
+    room.setReady(guest.id, true);
+
+    host.energy = 100;
+    guest.energy = 100;
+    host.board!.load([
+      [2, 4, 8, 16],
+      [32, 64, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]);
+
+    const before = host.board!.tiles().map((tile) => `${tile.id}@${tile.row},${tile.col}`).join('|');
+    room.castSkill(host.id, 'shuffle', 0);
+    const after = host.board!.tiles().map((tile) => `${tile.id}@${tile.row},${tile.col}`).join('|');
+    expect(after).not.toBe(before);
+
+    guest.board!.blockRandomTile();
+    guest.petrifyExpiresAt = Date.now() + 6_000;
+    guest.loadout = ['purify', 'shield', 'random_clear'];
+    guest.energy = 100;
+    const purified = room.castSkill(guest.id, 'purify', 0);
+    expect(purified.event.clearedBlockedCells).toHaveLength(1);
+    expect(guest.board!.blockedCells()).toEqual([]);
+    expect(guest.petrifyExpiresAt).toBe(0);
+
+    host.energy = 100;
+    expect(() => room.castSkill(host.id, 'shield', 1)).toThrow('SKILL_NOT_EQUIPPED');
   });
 
   it('rejects skills when energy is insufficient or a shield is already active', () => {
