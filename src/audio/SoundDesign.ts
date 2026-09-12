@@ -56,6 +56,41 @@ export class SoundDesign {
     this.tone(context, now + 0.26, 990, 520, 0.2, 0.028, 'square');
   }
 
+  skillImpact(kind: 'random_clear' | 'shield' | 'petrify' | 'shuffle' | 'purify'): void {
+    const context = this.ensureContext();
+    if (!context) return;
+    const now = context.currentTime;
+
+    if (kind === 'petrify') {
+      this.tone(context, now, 1180, 320, 0.24, 0.065, 'triangle');
+      this.tone(context, now + 0.035, 210, 72, 0.34, 0.08, 'sine');
+      this.tone(context, now + 0.08, 1600, 760, 0.18, 0.035, 'square');
+      return;
+    }
+
+    if (kind === 'shield') {
+      this.tone(context, now, 240, 520, 0.24, 0.055, 'sine');
+      this.tone(context, now + 0.055, 520, 1040, 0.3, 0.045, 'triangle');
+      return;
+    }
+
+    if (kind === 'shuffle') {
+      this.tone(context, now, 160, 720, 0.22, 0.05, 'triangle');
+      this.tone(context, now + 0.08, 760, 190, 0.24, 0.04, 'sine');
+      return;
+    }
+
+    if (kind === 'purify') {
+      [440, 660, 880, 1320].forEach((frequency, index) => {
+        this.tone(context, now + index * 0.045, frequency, frequency * 1.12, 0.24, 0.038, 'sine');
+      });
+      return;
+    }
+
+    this.tone(context, now, 520, 1040, 0.18, 0.05, 'triangle');
+    this.tone(context, now + 0.04, 180, 90, 0.22, 0.055, 'sine');
+  }
+
   legendary(): void {
     const context = this.ensureContext();
     if (!context) return;
