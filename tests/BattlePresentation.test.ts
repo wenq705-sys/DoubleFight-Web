@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import type { BoardTile, MatchSnapshot } from '../shared/index';
+import { DEFAULT_SKILL_LOADOUT, type BoardTile, type MatchSnapshot } from '../shared/index';
 import { OnlineController } from '../src/battle/OnlineController';
 import { predictPresentation, sameTiles, snapshotMove, type PresentationEvent } from '../src/battle/PresentationEvents';
 import { BattleBoardView } from '../src/rendering/battle/BattleBoardView';
@@ -21,8 +21,10 @@ function snapshot(tiles = initial, sequence = 0): MatchSnapshot {
     matchId: 'match', roomCode: 'ABC123', phase: 'playing', serverTime: 100, roundStartedAt: 0,
     roundEndsAt: 180000, durationMs: 180000, winnerId: null, endReason: null, result: null,
     players: ['local', 'remote'].map(playerId => ({
-      playerId, name: playerId, theme: 'kingdom', connected: true, energy: 0, maxEnergy: 100,
-      shieldActive: false, petrifyExpiresAt: 0, skillCooldowns: { random_clear: 0, shield: 0, petrify: 0 },
+      playerId, name: playerId, theme: 'kingdom', loadout: [...DEFAULT_SKILL_LOADOUT],
+      connected: true, energy: 0, maxEnergy: 100,
+      shieldActive: false, petrifyExpiresAt: 0,
+      skillCooldowns: { random_clear: 0, shield: 0, petrify: 0, shuffle: 0, purify: 0 },
       lastSequence: sequence, lastSkillSequence: 0,
       board: { tiles: tiles.map(tile => ({ ...tile })), cells: [], blockedCells: [], score: sequence ? 4 : 0, highest: 4, canMove: true },
     })),
@@ -110,7 +112,18 @@ describe('shared battle presentation', () => {
     tick(remote);
     expect(remoteEvents.filter(event => event.type === 'merge')).toHaveLength(1);
     expect(localEvents.filter(event => event.type === 'status_apply')).toHaveLength(1);
-    const skill = { sequence: 1, skillId: 'shield' as const, casterId: 'local', targetId: 'local', outcome: 'applied' as const, energySpent: 0, removedTiles: [], blockedCell: null, petrifyExpiresAt: 0 };
+    const skill = {
+      sequence: 1,
+      skillId: 'shield' as const,
+      casterId: 'local',
+      targetId: 'local',
+      outcome: 'applied' as const,
+      energySpent: 0,
+      removedTiles: [],
+      blockedCell: null,
+      clearedBlockedCells: [],
+      petrifyExpiresAt: 0,
+    };
     controller.skill(skill, 'local'); controller.skill(skill, 'local');
     expect(localEvents.filter(event => event.type === 'skill_cast')).toHaveLength(1);
   });
