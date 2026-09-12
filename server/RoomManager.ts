@@ -4,6 +4,7 @@ import {
   type ClientMessage,
   type NetworkThemeId,
   type ServerMessage,
+  type SkillLoadout,
 } from '../shared/index';
 import { MatchmakingQueue } from './MatchmakingQueue';
 import { RoomSession, type RoomPlayerRecord } from './RoomSession';
@@ -93,13 +94,13 @@ export class RoomManager {
           }
           return;
         case 'create_room':
-          this.createRoom(connectionId, message.playerName, message.theme);
+          this.createRoom(connectionId, message.playerName, message.theme, message.loadout);
           return;
         case 'join_room':
-          this.joinRoom(connectionId, message.roomCode, message.playerName, message.theme);
+          this.joinRoom(connectionId, message.roomCode, message.playerName, message.theme, message.loadout);
           return;
         case 'join_matchmaking':
-          this.joinMatchmaking(connectionId, message.playerName, message.theme);
+          this.joinMatchmaking(connectionId, message.playerName, message.theme, message.loadout);
           return;
         case 'cancel_matchmaking':
           this.cancelMatchmaking(connectionId);
@@ -110,6 +111,12 @@ export class RoomManager {
         case 'set_theme':
           this.withRoom(connectionId, (room, player) => {
             room.setTheme(player.id, message.theme);
+            room.broadcast({ type: 'room_state', room: room.state() });
+          });
+          return;
+        case 'set_loadout':
+          this.withRoom(connectionId, (room, player) => {
+            room.setLoadout(player.id, message.loadout);
             room.broadcast({ type: 'room_state', room: room.state() });
           });
           return;
@@ -206,25 +213,36 @@ export class RoomManager {
     };
   }
 
-  private createRoom(connectionId: string, playerName: string, theme: NetworkThemeId): void {
+  private createRoom(
+    connectionId: string,
+    playerName: string,
+    theme: NetworkThemeId,
+    loadout: SkillLoadout,
+  ): void {
     this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = this.generateRoomCode();
     const room = new RoomSession(code, (target, message) => this.send(target, message));
-    const host = room.addPlayer(connectionId, playerName, theme);
+    const host = room.addPlayer(connectionId, playerName, theme, loadout);
 
     this.rooms.set(code, room);
     this.memberships.set(connectionId, { roomCode: code, playerId: host.id });
     this.sendJoined(connectionId, room, host);
   }
 
-  private joinRoom(connectionId: string, roomCode: string, playerName: string, theme: NetworkThemeId): void {
+  private joinRoom(
+    connectionId: string,
+    roomCode: string,
+    playerName: string,
+    theme: NetworkThemeId,
+    loadout: SkillLoadout,
+  ): void {
     this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
     if (!room) throw new Error('ROOM_NOT_FOUND');
-    const player = room.addPlayer(connectionId, playerName, theme);
+    const player = room.addPlayer(connectionId, playerName, theme, loadout);
     this.memberships.set(connectionId, { roomCode: code, playerId: player.id });
     this.sendJoined(connectionId, room, player);
     room.broadcast({ type: 'room_state', room: room.state() });
@@ -284,6 +302,7 @@ export class RoomManager {
     connectionId: string,
     playerName: string,
     theme: NetworkThemeId,
+    loadout: SkillLoadout,
   ): void {
     if (this.matchmaking.has(connectionId)) throw new Error('ALREADY_MATCHMAKING');
 
@@ -295,6 +314,7 @@ export class RoomManager {
       connectionId,
       playerName: sanitizeQueueName(playerName),
       theme,
+      loadout: [...loadout],
       joinedAt: Date.now(),
     };
     this.matchmaking.enqueue(entry);
@@ -343,8 +363,8 @@ export class RoomManager {
 
       const code = this.generateRoomCode();
       const room = new RoomSession(code, (target, message) => this.send(target, message));
-      const firstPlayer = room.addPlayer(first.connectionId, first.playerName, first.theme);
-      const secondPlayer = room.addPlayer(second.connectionId, second.playerName, second.theme);
+      const firstPlayer = room.addPlayer(first.connectionId, first.playerName, first.theme, first.loadout);
+      const secondPlayer = room.addPlayer(second.connectionId, second.playerName, second.theme, second.loadout);
 
       this.rooms.set(code, room);
       this.memberships.set(first.connectionId, { roomCode: code, playerId: firstPlayer.id });
@@ -468,6 +488,7 @@ export class RoomManager {
       SKILL_COOLDOWN: 'SKILL_COOLDOWN',
       SKILL_ALREADY_ACTIVE: 'SKILL_ALREADY_ACTIVE',
       SKILL_NO_TARGET: 'SKILL_NO_TARGET',
+      SKILL_NOT_EQUIPPED: 'SKILL_NOT_EQUIPPED',
     };
     const mapped = known[code] ?? 'BAD_MESSAGE';
     this.error(connectionId, mapped, errorMessage(mapped));
@@ -543,6 +564,7 @@ function errorMessage(code: ErrorCode): string {
     SKILL_COOLDOWN: '技能仍在冷却中。',
     SKILL_ALREADY_ACTIVE: '该技能效果已经处于激活状态。',
     SKILL_NO_TARGET: '当前没有可用的技能目标。',
+    SKILL_NOT_EQUIPPED: '这个技能没有装备到当前三个技能槽。',
   };
   return messages[code];
 }
