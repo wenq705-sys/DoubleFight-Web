@@ -7,6 +7,7 @@ import {
   type RoomState,
   type ServerMessage,
   type SkillId,
+  type SkillLoadout,
 } from '../../shared/index';
 
 export type OnlineStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed';
@@ -131,16 +132,16 @@ export class OnlineClient {
     this.patch({ status: 'closed' });
   }
 
-  createRoom(playerName: string, theme: NetworkThemeId): void {
-    this.send({ type: 'create_room', playerName, theme });
+  createRoom(playerName: string, theme: NetworkThemeId, loadout: SkillLoadout): void {
+    this.send({ type: 'create_room', playerName, theme, loadout });
   }
 
-  joinRoom(roomCode: string, playerName: string, theme: NetworkThemeId): void {
-    this.send({ type: 'join_room', roomCode, playerName, theme });
+  joinRoom(roomCode: string, playerName: string, theme: NetworkThemeId, loadout: SkillLoadout): void {
+    this.send({ type: 'join_room', roomCode, playerName, theme, loadout });
   }
 
-  joinMatchmaking(playerName: string, theme: NetworkThemeId): void {
-    this.send({ type: 'join_matchmaking', playerName, theme });
+  joinMatchmaking(playerName: string, theme: NetworkThemeId, loadout: SkillLoadout): void {
+    this.send({ type: 'join_matchmaking', playerName, theme, loadout });
   }
 
   cancelMatchmaking(): void {
@@ -149,6 +150,10 @@ export class OnlineClient {
 
   setTheme(theme: NetworkThemeId): void {
     this.send({ type: 'set_theme', theme });
+  }
+
+  setLoadout(loadout: SkillLoadout): void {
+    this.send({ type: 'set_loadout', loadout });
   }
 
   setReady(ready: boolean): void {
@@ -229,6 +234,7 @@ export class OnlineClient {
       case 'match_end':
         this.patch({ match: message.snapshot }, message);
         break;
+      case 'move_event':
       case 'move_ack':
       case 'skill_event':
         this.emit(message);
