@@ -23,7 +23,7 @@ export class MatchmakingQueue {
 
   enqueue(entry: MatchmakingEntry): void {
     this.remove(entry.connectionId);
-    this.entries.push({ ...entry });
+    this.entries.push({ ...entry, loadout: [...entry.loadout] });
   }
 
   remove(connectionId: string): MatchmakingEntry | null {
@@ -49,6 +49,6 @@ export class MatchmakingQueue {
   }
 
   snapshot(): MatchmakingEntry[] {
-    return this.entries.map((entry) => ({ ...entry }));
+    return this.entries.map((entry) => ({ ...entry, loadout: [...entry.loadout] }));
   }
 }
