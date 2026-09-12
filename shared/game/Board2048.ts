@@ -72,9 +72,6 @@ export class Board2048 {
     const next = new Set<string>();
     for (const cell of cells) {
       if (!this.inBounds(cell)) continue;
-      if (this.grid[cell.row][cell.col] !== null) {
-        throw new Error('Cannot block an occupied 2048 cell.');
-      }
       next.add(this.key(cell));
     }
     this.blocked = next;
@@ -88,8 +85,47 @@ export class Board2048 {
     return { ...position };
   }
 
-  clearBlockedCells(): void {
+  blockRandomTile(): CellPosition | null {
+    const candidates = this.tiles().filter((tile) => !this.isBlocked(tile));
+    if (candidates.length === 0) return null;
+    const tile = candidates[Math.min(candidates.length - 1, Math.floor(this.random() * candidates.length))];
+    const position = { row: tile.row, col: tile.col };
+    this.blocked.add(this.key(position));
+    return position;
+  }
+
+  clearBlockedCells(): CellPosition[] {
+    const cleared = this.blockedCells();
     this.blocked.clear();
+    return cleared;
+  }
+
+  shuffleTiles(): boolean {
+    const movable = this.tiles().filter((tile) => !this.isBlocked(tile));
+    if (movable.length < 2) return false;
+
+    const positions = movable.map((tile) => ({ row: tile.row, col: tile.col }));
+    for (let index = positions.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.min(index, Math.floor(this.random() * (index + 1)));
+      [positions[index], positions[swapIndex]] = [positions[swapIndex], positions[index]];
+    }
+
+    const changed = movable.some((tile, index) => {
+      const position = positions[index];
+      return position.row !== tile.row || position.col !== tile.col;
+    });
+    if (!changed && positions.length > 1) {
+      [positions[0], positions[1]] = [positions[1], positions[0]];
+    }
+
+    for (const tile of movable) this.grid[tile.row][tile.col] = null;
+    movable.forEach((tile, index) => {
+      const position = positions[index];
+      tile.row = position.row;
+      tile.col = position.col;
+      this.grid[position.row][position.col] = tile;
+    });
+    return true;
   }
 
   emptyCells(): CellPosition[] {
@@ -106,6 +142,10 @@ export class Board2048 {
   move(direction: Direction): MoveResult {
     const before = this.serialize();
     const next = this.emptyGrid();
+    for (const position of this.blockedCells()) {
+      const fixed = this.grid[position.row][position.col];
+      if (fixed) next[position.row][position.col] = { ...fixed };
+    }
     const motions: TileMotion[] = [];
     const merges: MergeEvent[] = [];
     let scoreDelta = 0;
