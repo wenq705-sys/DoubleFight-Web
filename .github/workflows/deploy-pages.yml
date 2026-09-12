@@ -31,7 +31,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build
         env:
-          VITE_WS_URL: wss://150.158.127.128/ws
+          VITE_WS_URL: wss://game.whvwayfare.online/ws
         run: npm run build
       - name: Configure Pages
         uses: actions/configure-pages@v5

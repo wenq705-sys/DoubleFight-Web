@@ -62,5 +62,5 @@ jobs:
           docker run --rm \
             -v "$PWD/ops/nginx.conf:/etc/nginx/nginx.conf:ro" \
             -v "$PWD/ops/doublefight-tls.conf:/etc/nginx/conf.d/doublefight-tls.conf:ro" \
-            -v /tmp/ci-cert:/etc/letsencrypt/live/150.158.127.128:ro \
+            -v /tmp/ci-cert:/etc/letsencrypt/live/game.whvwayfare.online:ro \
             nginx:1.26 nginx -t
