@@ -6,6 +6,13 @@ Double Fight separates deterministic game rules, rendering and network authority
 
 ## Shared core
 
+### M2.8.1 presentation sizing and mobile composition
+
+- `ThemePresentation.sizing` supplies tier-aware horizontal limits and minimum heights. `fitTile` preserves safe authored dimensions, clamps only X/Z when needed and keeps vertical growth independent; animated decorations contribute swept horizontal bounds.
+- `BattleBoardView` applies the same sizing and transient motion envelope for Solo and both online boards. `OnlineController` retains prediction/reconciliation ownership.
+- `DuelScene` renders two board-detail views through one renderer with separate scissor regions; camera framing, not player-specific tile scaling, sets screen composition.
+- Shared CSS tokens define typography, touch targets and safe insets. Home previews render the canonical factories; setup skill selection uses a native modal dialog.
+
 ### `shared/game/`
 
 Platform-independent TypeScript.

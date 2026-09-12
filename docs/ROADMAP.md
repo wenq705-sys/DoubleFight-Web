@@ -1,5 +1,10 @@
 # Roadmap
 
+## M2.8.1 — Mobile gameplay visual system (Draft review)
+
+- Tier-aware sizing, readable tactical opponent board, compact Solo/Duel/setup UI and safe-area tokens implemented.
+- Automated and browser viewport checks pass; physical iPhone Safari readability, performance and touch acceptance remain pending. No rules/protocol/deployment changes.
+
 ## M0 — Repository foundation ✅
 
 - company-style repository structure
