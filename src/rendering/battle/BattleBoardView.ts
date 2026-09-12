@@ -45,12 +45,24 @@ export class BattleBoardView {
     this.environment = this.getEnvironment(theme);
     this.root.add(this.environment.root, this.tileLayer);
     this.effects = new Effects(this.root, mobile);
-    const geometry = new THREE.OctahedronGeometry(0.58, 0);
-    const material = new THREE.MeshStandardMaterial({ color: 0x9edcf2, emissive: 0x2b90ba, emissiveIntensity: 0.42, transparent: true, opacity: 0.82 });
+    const geometry = new THREE.IcosahedronGeometry(0.88, 1);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xbdeeff,
+      emissive: 0x35aee2,
+      emissiveIntensity: 0.72,
+      roughness: 0.08,
+      metalness: 0.06,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+      wireframe: true,
+    });
     for (let i = 0; i < 16; i++) {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.copy(this.cellPosition(Math.floor(i / 4), i % 4));
-      mesh.position.y += 0.6;
+      mesh.position.y += 0.92;
+      mesh.scale.set(0.92, 1.28, 0.92);
+      mesh.userData.baseScale = mesh.scale.clone();
       mesh.visible = false;
       this.blockers.push(mesh);
       this.root.add(mesh);
@@ -77,7 +89,7 @@ export class BattleBoardView {
     this.root.add(this.environment.root);
     (this.shield.material as THREE.MeshBasicMaterial).color.setHex(this.presentation.effects.skill);
     this.shield.position.y = this.presentation.surfaceY + 0.1;
-    this.blockers.forEach(mesh => { mesh.position.y = this.presentation.surfaceY + 0.6; });
+    this.blockers.forEach(mesh => { mesh.position.y = this.presentation.surfaceY + 0.92; });
     this.reset(tiles);
   }
 
@@ -115,11 +127,28 @@ export class BattleBoardView {
       this.emit(event);
       return this.applyMove(event.result);
     }
-    if (event.type === 'skill_hit' && event.removed?.length) { this.emit(event); return this.applyClearSkill(event.removed); }
+    if (event.type === 'skill_hit' && event.removed?.length) {
+      this.emit(event);
+      return this.applyClearSkill(event.removed);
+    }
+
     this.emit(event);
     if (event.type === 'skill_cast' || event.type === 'skill_hit') {
-      const position = this.cellPosition(event.type === 'skill_hit' && event.cell ? event.cell.row : 1, event.type === 'skill_hit' && event.cell ? event.cell.col : 1);
-      this.effects.spawn(position, this.presentation.effects);
+      const position = this.cellPosition(
+        event.type === 'skill_hit' && event.cell ? event.cell.row : 1,
+        event.type === 'skill_hit' && event.cell ? event.cell.col : 1,
+      );
+
+      if (
+        event.type === 'skill_hit'
+        && (event.skill === 'petrify' || event.skill === 'shuffle' || event.skill === 'purify')
+      ) {
+        this.effects.skillClear([position], this.presentation.effects);
+        this.cameraShake = Math.max(this.cameraShake, event.skill === 'petrify' ? 0.24 : 0.14);
+        this.cameraPunch = Math.max(this.cameraPunch, event.skill === 'petrify' ? 0.9 : 0.55);
+      } else {
+        this.effects.spawn(position, this.presentation.effects);
+      }
       this.presentation.skillReaction(this.environment, [position]);
     }
     return Promise.resolve();
@@ -190,10 +219,27 @@ export class BattleBoardView {
     const blocked = new Set(cells.map(cell => cell.row * 4 + cell.col));
     this.blockers.forEach((mesh, index) => {
       const visible = blocked.has(index);
-      if (visible !== mesh.visible) this.emit({ type: visible ? 'status_apply' : 'status_remove', status: 'petrify', cell: { row: Math.floor(index / 4), col: index % 4 } });
+      if (visible !== mesh.visible) {
+        const cell = { row: Math.floor(index / 4), col: index % 4 };
+        this.emit({ type: visible ? 'status_apply' : 'status_remove', status: 'petrify', cell });
+        const position = this.cellPosition(cell.row, cell.col);
+        if (visible) {
+          mesh.userData.appearedAt = this.visualTime;
+          this.effects.skillClear([position], this.presentation.effects);
+          this.cameraShake = Math.max(this.cameraShake, 0.26);
+          this.cameraPunch = Math.max(this.cameraPunch, 0.8);
+        } else {
+          this.effects.spawn(position, this.presentation.effects);
+        }
+      }
       mesh.visible = visible;
     });
-    if (shield !== this.shield.visible) this.emit({ type: shield ? 'status_apply' : 'status_remove', status: 'shield' });
+
+    if (shield !== this.shield.visible) {
+      this.emit({ type: shield ? 'status_apply' : 'status_remove', status: 'shield' });
+      this.effects.skillClear([this.cellPosition(1, 1)], this.presentation.effects);
+      this.cameraPunch = Math.max(this.cameraPunch, 0.45);
+    }
     this.shield.visible = shield;
   }
 
@@ -270,7 +316,22 @@ export class BattleBoardView {
       part.rotation.y += dt * (0.42 + index * 0.14);
       part.rotation.z = Math.sin(this.visualTime * 1.45 + id + index) * 0.018;
     }));
-    this.blockers.forEach((mesh, index) => { if (mesh.visible) mesh.rotation.y += dt * (index % 2 ? 0.7 : -0.7); });
+    this.blockers.forEach((mesh, index) => {
+      if (!mesh.visible) return;
+      mesh.rotation.y += dt * (index % 2 ? 0.82 : -0.82);
+      mesh.rotation.x = Math.sin(this.visualTime * 1.7 + index) * 0.06;
+      const base = mesh.userData.baseScale as THREE.Vector3 | undefined;
+      const pulse = 1 + Math.sin(this.visualTime * 5.6 + index) * 0.045;
+      if (base) mesh.scale.copy(base).multiplyScalar(pulse);
+      if (mesh.material instanceof THREE.MeshStandardMaterial) {
+        mesh.material.emissiveIntensity = 0.68 + Math.sin(this.visualTime * 4.4) * 0.18;
+      }
+    });
+    if (this.shield.visible) {
+      const shieldPulse = 1 + Math.sin(this.visualTime * 4.2) * 0.045;
+      this.shield.scale.setScalar(shieldPulse);
+      this.shield.rotation.z += dt * 0.18;
+    }
   }
 
   dispose(): void {

@@ -36,6 +36,11 @@ export function predictMoveTiles(
 
   const blocked = new Set(blockedCells.map((cell) => `${cell.row}:${cell.col}`));
   const output = Array.from({ length: SIZE }, () => Array<BoardTile | null>(SIZE).fill(null));
+  for (const tile of inputTiles) {
+    if (blocked.has(`${tile.row}:${tile.col}`)) {
+      output[tile.row][tile.col] = { ...tile };
+    }
+  }
   const motions: PredictedMotion[] = [];
   let scoreDelta = 0;
 

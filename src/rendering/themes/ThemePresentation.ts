@@ -15,7 +15,7 @@ export interface EffectPalette {
   skillLight: number;
   confetti: readonly number[];
 }
-export type EnvironmentDetail = 'full' | 'board';
+export type EnvironmentDetail = 'full' | 'duel' | 'board';
 export type ThemeEnvironment = Pick<KingdomEnvironment, 'root' | 'update' | 'impact' | 'setGesture' | 'clearGesture' | 'pulseDirection'>;
 export interface ThemePresentation {
   factory: { create(value: number): TileVisual; warmup(values: number[]): void };

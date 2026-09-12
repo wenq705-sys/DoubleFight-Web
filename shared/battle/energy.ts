@@ -6,6 +6,8 @@ export const FUTURE_SKILL_ENERGY_COSTS = {
   random_clear: 35,
   shield: 45,
   petrify: 50,
+  shuffle: 40,
+  purify: 30,
 } as const;
 
 export interface EnergyGainBreakdown {
@@ -27,24 +29,15 @@ const ENERGY_BY_VALUE: Record<number, number> = {
   2048: 34,
 };
 
-/**
- * Energy rewards scale super-linearly with meaningful merges so stronger 2048 play
- * creates more combat opportunities. This is server-authoritative competitive tuning.
- */
 export function energyForMergeValue(value: number): number {
   const normalized = Math.max(4, value);
   const known = ENERGY_BY_VALUE[normalized];
   if (known !== undefined) return known;
-
   if (normalized < 4) return 0;
   const extraTiers = Math.max(0, Math.round(Math.log2(normalized)) - 11);
   return Math.min(60, 34 + extraTiers * 8);
 }
 
-/**
- * Multiple merges in one swipe receive a small combo reward.
- * This rewards board planning without depending on client clocks/network latency.
- */
 export function comboBonusForMergeCount(mergeCount: number): number {
   if (mergeCount <= 1) return 0;
   if (mergeCount === 2) return 2;
@@ -55,11 +48,7 @@ export function comboBonusForMergeCount(mergeCount: number): number {
 export function energyForMerges(merges: readonly MergeEvent[]): EnergyGainBreakdown {
   const mergeEnergy = merges.reduce((sum, merge) => sum + energyForMergeValue(merge.value), 0);
   const comboBonus = comboBonusForMergeCount(merges.length);
-  return {
-    mergeEnergy,
-    comboBonus,
-    total: mergeEnergy + comboBonus,
-  };
+  return { mergeEnergy, comboBonus, total: mergeEnergy + comboBonus };
 }
 
 export function clampBattleEnergy(value: number): number {

@@ -7,6 +7,7 @@ import type {
   ServerMessage,
   SkillEvent,
   SkillId,
+  SkillLoadout,
 } from '../../shared/index';
 import {
   MAX_BATTLE_ENERGY,
@@ -59,12 +60,15 @@ export class DuelScreen {
   private readonly rematchStatus: HTMLElement;
   private readonly inputZone: HTMLElement;
   private readonly skillToast: HTMLElement;
+  private readonly skillDock: HTMLElement;
+  private readonly skillFx: HTMLElement;
   private readonly skillButtons = new Map<SkillId, SkillButtonView>();
 
   private readonly controller: OnlineController;
   private pointerStart: { x: number; y: number; at: number } | null = null;
   private currentMatchId: string | null = null;
   private readonly lastEnergyByPlayer = new Map<string, number>();
+  private lastRenderedLoadout = '';
   private serverClockOffsetMs = 0;
   private pingTimer: number | null = null;
   private skillUiTimer: number | null = null;
@@ -134,15 +138,12 @@ export class DuelScreen {
           <em id="duel-local-energy-gain"></em>
         </div>
 
-        <div class="duel-skills" id="duel-skills">
-          ${skillButtonHtml('random_clear')}
-          ${skillButtonHtml('shield')}
-          ${skillButtonHtml('petrify')}
-        </div>
+        <div class="duel-skills" id="duel-skills"></div>
 
         <div class="duel__input-zone" id="duel-input-zone" aria-label="我的棋盘操作区"></div>
-        <div class="duel__hint">滑动下方棋盘 · 合成攒能量 · 技能由服务器判定</div>
+        <div class="duel__hint">滑动下方战场 · 本地即时响应 · 服务器权威判定</div>
         <div class="duel-skill-toast" id="duel-skill-toast"></div>
+        <div class="duel-skill-fx" id="duel-skill-fx"><span></span><b></b></div>
 
         <div class="duel__reconnect duel__reconnect--hidden" id="duel-reconnect">
           <div class="duel__spinner"></div>
@@ -215,13 +216,13 @@ export class DuelScreen {
     this.rematchStatus = container.querySelector('#duel-rematch-status') as HTMLElement;
     this.inputZone = container.querySelector('#duel-input-zone') as HTMLElement;
     this.skillToast = container.querySelector('#duel-skill-toast') as HTMLElement;
+    this.skillDock = container.querySelector('#duel-skills') as HTMLElement;
+    this.skillFx = container.querySelector('#duel-skill-fx') as HTMLElement;
 
-    (Object.keys(SKILL_DEFINITIONS) as SkillId[]).forEach((skillId) => {
-      const button = container.querySelector(`[data-skill="${skillId}"]`) as HTMLButtonElement;
-      const cost = button.querySelector('[data-role="cost"]') as HTMLElement;
-      const cooldown = button.querySelector('[data-role="cooldown"]') as HTMLElement;
-      this.skillButtons.set(skillId, { button, cost, cooldown });
-      button.addEventListener('click', () => this.castSkill(skillId));
+    this.skillDock.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-skill]');
+      if (!button?.dataset.skill) return;
+      this.castSkill(button.dataset.skill as SkillId);
     });
 
     this.rematchButton.addEventListener('click', () => this.toggleRematch());
@@ -276,11 +277,14 @@ export class DuelScreen {
 
   private consume(state: Readonly<OnlineClientState>, message?: ServerMessage): void {
     this.latency.textContent = state.latencyMs === null ? '-- ms' : `${state.latencyMs} ms`;
+    this.latency.classList.toggle('is-warn', state.latencyMs !== null && state.latencyMs >= 160);
+    this.latency.classList.toggle('is-bad', state.latencyMs !== null && state.latencyMs >= 260);
     this.connection.textContent =
-      state.status === 'connected' ? '在线' :
-      state.status === 'reconnecting' ? '重连中' :
-      state.status === 'connecting' ? '连接中' :
-      '离线';
+      state.status === 'connected'
+        ? state.latencyMs !== null && state.latencyMs >= 260 ? '高延迟' : '在线'
+        : state.status === 'reconnecting' ? '重连中'
+        : state.status === 'connecting' ? '连接中'
+        : '离线';
 
     const reconnecting = this.active && state.status !== 'connected';
     if (state.status !== 'connected') this.controller.suspend();
@@ -341,6 +345,7 @@ export class DuelScreen {
     const opponent = snapshot.players.find((player) => player.playerId !== playerId);
     if (!me) return;
 
+    this.renderSkillDock(me.loadout);
     this.localName.textContent = me.name;
     this.localTheme.textContent = THEMES[me.theme].label;
     this.localScore.textContent = this.controller.predictedScore.toLocaleString('zh-CN');
@@ -376,6 +381,8 @@ export class DuelScreen {
     const me = state.match.players.find((player) => player.playerId === state.playerId);
     if (!me) return;
 
+    if (!me.loadout.includes(skillId)) return;
+
     const definition = SKILL_DEFINITIONS[skillId];
     const remaining = Math.max(0, me.skillCooldowns[skillId] - this.serverNow());
     if (remaining > 0) {
@@ -390,9 +397,14 @@ export class DuelScreen {
       this.showSkillToast('护盾已经激活', true);
       return;
     }
+    if (skillId === 'purify' && me.board.blockedCells.length === 0) {
+      this.showSkillToast('当前没有需要解除的石化', true);
+      return;
+    }
 
-    this.client.castSkill(skillId);
-    this.showSkillToast(`${definition.shortLabel} · 请求服务器判定`);
+    this.controller.previewSkill(skillId, id => this.client.castSkill(id));
+    this.showSkillToast(`${definition.shortLabel} · 释放！`);
+    navigator.vibrate?.([10, 5, 14]);
   }
 
   private updateEnergy(
@@ -449,15 +461,33 @@ export class DuelScreen {
       const remaining = Math.max(0, me.skillCooldowns[skillId] - now);
       const cooling = remaining > 0;
       const blockedByState = skillId === 'shield' && me.shieldActive;
+      const noPurifyTarget = skillId === 'purify' && me.board.blockedCells.length === 0;
       const affordable = me.energy >= definition.cost;
 
       view.button.disabled =
-        !matchPlaying || cooling || blockedByState || !affordable || !me.connected;
+        !matchPlaying || cooling || blockedByState || noPurifyTarget || !affordable || !me.connected;
       view.button.classList.toggle('duel-skill--ready', !view.button.disabled);
       view.button.classList.toggle('duel-skill--active', blockedByState);
       view.cost.textContent = blockedByState ? '已激活' : `${definition.cost}⚡`;
       view.cooldown.textContent = cooling ? `${(remaining / 1000).toFixed(1)}s` : '';
     }
+  }
+
+  private renderSkillDock(loadout: SkillLoadout): void {
+    const signature = loadout.join('|');
+    if (signature === this.lastRenderedLoadout) return;
+    this.lastRenderedLoadout = signature;
+    this.skillButtons.clear();
+    this.skillDock.innerHTML = loadout.map((skillId, index) => skillButtonHtml(skillId, index)).join('');
+
+    this.skillDock.querySelectorAll<HTMLButtonElement>('[data-skill]').forEach((button) => {
+      const skillId = button.dataset.skill as SkillId;
+      this.skillButtons.set(skillId, {
+        button,
+        cost: button.querySelector('[data-role="cost"]') as HTMLElement,
+        cooldown: button.querySelector('[data-role="cooldown"]') as HTMLElement,
+      });
+    });
   }
 
   private refreshRoundTimer(): void {
@@ -478,20 +508,42 @@ export class DuelScreen {
 
   private playSkillEvent(event: SkillEvent, playerId: string): void {
     const casterIsLocal = event.casterId === playerId;
+    const targetIsLocal = event.targetId === playerId;
     const definition = SKILL_DEFINITIONS[event.skillId];
 
+    let text = '';
     if (event.skillId === 'petrify') {
-      if (event.outcome === 'shielded') {
-        this.showSkillToast(casterIsLocal ? '对方护盾抵消了石化' : '护盾抵消石化！');
-      } else {
-        this.showSkillToast(casterIsLocal ? '石化命中对手棋盘' : '你的棋盘被石化！');
-      }
+      text = event.outcome === 'shielded'
+        ? casterIsLocal ? '对方护盾挡住石化！' : '护盾爆裂 · 石化被抵消！'
+        : casterIsLocal ? '命中！对手一枚棋子被冻结 6 秒' : '受击！一枚棋子被冻结 6 秒';
     } else if (event.skillId === 'shield') {
-      this.showSkillToast(casterIsLocal ? '护盾已激活' : '对手开启护盾');
-    } else {
-      this.showSkillToast(casterIsLocal ? '清除两枚棋子' : '对手使用清块');
+      text = casterIsLocal ? '护盾展开 · 可抵消下一次石化' : '对手展开了护盾';
+    } else if (event.skillId === 'random_clear') {
+      text = casterIsLocal ? '清除成功 · 腾出棋盘空间' : '对手使用了清块';
+    } else if (event.skillId === 'shuffle') {
+      text = casterIsLocal ? '乾坤挪移 · 棋盘重新排列' : '对手重排了棋盘';
+    } else if (event.skillId === 'purify') {
+      text = casterIsLocal ? '净化完成 · 石化解除' : '对手解除了石化';
     }
 
+    this.showSkillToast(text);
+
+    const icon = this.skillFx.querySelector('span');
+    const caption = this.skillFx.querySelector('b');
+    if (icon) icon.textContent = event.outcome === 'shielded' ? '◆' : definition.icon;
+    if (caption) caption.textContent = text;
+
+    this.skillFx.className = 'duel-skill-fx';
+    void this.skillFx.offsetWidth;
+    this.skillFx.classList.add(
+      targetIsLocal ? 'duel-skill-fx--impact-local' : 'duel-skill-fx--impact-remote',
+    );
+
+    navigator.vibrate?.(
+      event.outcome === 'shielded'
+        ? [22, 8, 18]
+        : targetIsLocal ? [25, 10, 32] : [14, 6, 18],
+    );
   }
 
   private showSkillToast(message: string, error = false): void {
@@ -526,7 +578,7 @@ export class DuelScreen {
       this.scene.local.clearGesture();
 
       const distance = Math.hypot(dx, dy);
-      const threshold = elapsed < 180 ? 22 : 30;
+      const threshold = elapsed < 180 ? 16 : 22;
       if (distance < threshold) return;
 
       if (Math.abs(dx) > Math.abs(dy)) this.attemptMove(dx > 0 ? 'right' : 'left');
@@ -611,10 +663,11 @@ export class DuelScreen {
   }
 }
 
-function skillButtonHtml(skillId: SkillId): string {
+function skillButtonHtml(skillId: SkillId, index: number): string {
   const definition = SKILL_DEFINITIONS[skillId];
   return `
     <button class="duel-skill" data-skill="${skillId}" type="button">
+      <span class="duel-skill__slot">${index + 1}</span>
       <span class="duel-skill__icon">${definition.icon}</span>
       <strong>${definition.shortLabel}</strong>
       <small data-role="cost">${definition.cost}⚡</small>
@@ -626,7 +679,7 @@ function statusText(player: MatchPlayerState, now: number): string {
   const labels: string[] = [];
   if (player.shieldActive) labels.push('◆ 护盾');
   if (player.petrifyExpiresAt > now) {
-    labels.push(`❄ 石化 ${Math.max(0, (player.petrifyExpiresAt - now) / 1000).toFixed(1)}s`);
+    labels.push(`❄ 冻结 ${Math.max(0, (player.petrifyExpiresAt - now) / 1000).toFixed(1)}s`);
   }
   return labels.join(' · ');
 }

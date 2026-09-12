@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   Board2048,
+  DEFAULT_SKILL_LOADOUT,
   SeededRandom,
   randomUint32,
   MATCH_DURATION_MS,
@@ -22,6 +23,7 @@ import {
   type SkillCooldowns,
   type SkillEvent,
   type SkillId,
+  type SkillLoadout,
   type TimeLimitTieBreaker,
 } from '../shared/index';
 
@@ -29,6 +31,7 @@ export interface RoomPlayerRecord {
   id: string;
   name: string;
   theme: NetworkThemeId;
+  loadout: SkillLoadout;
   ready: boolean;
   rematchReady: boolean;
   connected: boolean;
@@ -67,7 +70,12 @@ export class RoomSession {
     private readonly send: Send,
   ) {}
 
-  addPlayer(connectionId: string, name: string, theme: NetworkThemeId): RoomPlayerRecord {
+  addPlayer(
+    connectionId: string,
+    name: string,
+    theme: NetworkThemeId,
+    loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT],
+  ): RoomPlayerRecord {
     if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
     if (this.players.size >= 2) throw new Error('ROOM_FULL');
 
@@ -75,6 +83,7 @@ export class RoomSession {
       id: randomUUID(),
       name: sanitizeName(name),
       theme,
+      loadout: [...loadout],
       ready: false,
       rematchReady: false,
       connected: true,
@@ -105,6 +114,13 @@ export class RoomSession {
     const player = this.requirePlayer(playerId);
     if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
     player.theme = theme;
+    player.ready = false;
+  }
+
+  setLoadout(playerId: string, loadout: SkillLoadout): void {
+    const player = this.requirePlayer(playerId);
+    if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
+    player.loadout = [...loadout];
     player.ready = false;
   }
 
@@ -168,6 +184,7 @@ export class RoomSession {
     if (sequence <= caster.lastSkillSequence) throw new Error('STALE_SKILL_SEQUENCE');
 
     const definition = SKILL_DEFINITIONS[skillId];
+    if (!caster.loadout.includes(skillId)) throw new Error('SKILL_NOT_EQUIPPED');
     if (caster.energy < definition.cost) throw new Error('INSUFFICIENT_ENERGY');
     if (skillId === 'shield' && caster.shieldActive) throw new Error('SKILL_ALREADY_ACTIVE');
     if (caster.skillCooldowns[skillId] > now) throw new Error('SKILL_COOLDOWN');
@@ -181,6 +198,7 @@ export class RoomSession {
       energySpent: definition.cost,
       removedTiles: [],
       blockedCell: null,
+      clearedBlockedCells: [],
       petrifyExpiresAt: 0,
     };
 
@@ -201,7 +219,7 @@ export class RoomSession {
         target.shieldActive = false;
         event.outcome = 'shielded';
       } else {
-        const blockedCell = target.board.blockRandomEmpty();
+        const blockedCell = target.board.blockRandomTile();
         if (!blockedCell) throw new Error('SKILL_NO_TARGET');
 
         const expiresAt = now + (definition.petrifyDurationMs ?? 0);
@@ -214,6 +232,17 @@ export class RoomSession {
           this.finishMatch('petrified_lock', caster.id, null, now);
         }
       }
+    }
+
+    if (skillId === 'shuffle') {
+      if (!caster.board.shuffleTiles()) throw new Error('SKILL_NO_TARGET');
+    }
+
+    if (skillId === 'purify') {
+      const cleared = caster.board.clearBlockedCells();
+      if (cleared.length === 0) throw new Error('SKILL_NO_TARGET');
+      caster.petrifyExpiresAt = 0;
+      event.clearedBlockedCells = cleared;
     }
 
     caster.energy = clampBattleEnergy(caster.energy - definition.cost);
@@ -296,6 +325,7 @@ export class RoomSession {
         id: player.id,
         name: player.name,
         theme: player.theme,
+        loadout: [...player.loadout],
         ready: player.ready,
         rematchReady: player.rematchReady,
         connected: player.connected,
@@ -326,6 +356,7 @@ export class RoomSession {
           playerId: player.id,
           name: player.name,
           theme: player.theme,
+          loadout: [...player.loadout],
           board: player.board.publicState(),
           energy: player.energy,
           maxEnergy: MAX_BATTLE_ENERGY,

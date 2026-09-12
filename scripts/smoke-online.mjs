@@ -31,25 +31,27 @@ async function connect() {
   };
   await once(socket, 'open');
   const welcome = await wait('welcome');
-  assert.equal(welcome.protocolVersion, 5);
+  assert.equal(welcome.protocolVersion, 6);
   return { socket, wait, send: message => socket.send(JSON.stringify(message)) };
 }
+
+const defaultLoadout = ['random_clear', 'shield', 'petrify'];
 
 async function runPair(mode) {
   const a = await connect();
   const b = await connect();
   let identity;
   if (mode === 'private') {
-    a.send({ type: 'create_room', playerName: 'Ops A', theme: 'kingdom' });
+    a.send({ type: 'create_room', playerName: 'Ops A', theme: 'kingdom', loadout: defaultLoadout });
     identity = await a.wait('room_joined');
-    b.send({ type: 'join_room', roomCode: identity.room.code, playerName: 'Ops B', theme: 'palace' });
+    b.send({ type: 'join_room', roomCode: identity.room.code, playerName: 'Ops B', theme: 'palace', loadout: ['shuffle', 'purify', 'petrify'] });
     await b.wait('room_joined');
     a.send({ type: 'set_ready', ready: true });
     b.send({ type: 'set_ready', ready: true });
   } else {
-    a.send({ type: 'join_matchmaking', playerName: 'Ops A', theme: 'kingdom' });
+    a.send({ type: 'join_matchmaking', playerName: 'Ops A', theme: 'kingdom', loadout: defaultLoadout });
     await a.wait('matchmaking_state', m => m.state.status === 'searching');
-    b.send({ type: 'join_matchmaking', playerName: 'Ops B', theme: 'palace' });
+    b.send({ type: 'join_matchmaking', playerName: 'Ops B', theme: 'palace', loadout: ['shuffle', 'purify', 'petrify'] });
     identity = await a.wait('room_joined');
     await b.wait('room_joined');
   }
@@ -58,6 +60,7 @@ async function runPair(mode) {
   assert.equal(start.matchId, other.matchId);
   assert.equal(start.roundEndsAt - start.roundStartedAt, 180_000);
   assert.deepEqual(start.players.map(p => p.theme).sort(), ['kingdom', 'palace']);
+  assert.equal(start.players.every(p => Array.isArray(p.loadout) && p.loadout.length === 3), true);
   a.send({ type: 'move', direction: 'left', sequence: 1 });
   await a.wait('move_ack', m => m.sequence === 1);
   const state = (await a.wait('match_state', m => m.snapshot.players.some(p => p.playerId === identity.playerId && p.lastSequence === 1))).snapshot;

@@ -14,6 +14,7 @@ export class OnlineController {
   private matchId: string | null = null;
   private ready = false;
   private readonly skillSequences = new Map<string, number>();
+  private readonly predictedSkillSequences = new Set<number>();
   predictedScore = 0;
 
   constructor(private readonly local: BoardViewPort, private readonly remote: BoardViewPort) {}
@@ -22,7 +23,8 @@ export class OnlineController {
 
   reset(): void {
     this.pending = []; this.tiles = []; this.blocked = []; this.remoteTiles = []; this.remoteBlocked = [];
-    this.matchId = null; this.ready = false; this.predictedScore = 0; this.skillSequences.clear();
+    this.matchId = null; this.ready = false; this.predictedScore = 0;
+    this.skillSequences.clear(); this.predictedSkillSequences.clear();
     this.local.reset(); this.remote.reset();
   }
   suspend(): void { this.pending = []; this.ready = false; }
@@ -61,7 +63,9 @@ export class OnlineController {
   }
 
   move(direction: Direction, send: (direction: Direction) => number): boolean {
-    if (!this.ready || this.pending.length >= 3) return false;
+    // 2048 is deterministic between authoritative spawns, so a slightly deeper local queue
+    // keeps rapid swipes responsive even when mobile RTT spikes.
+    if (!this.ready || this.pending.length >= 6) return false;
     const prediction = predictPresentation(this.tiles, direction, this.blocked);
     if (!prediction.result.changed) { this.local.rejectDirection(direction); return false; }
     this.tiles = prediction.tiles;
@@ -73,12 +77,32 @@ export class OnlineController {
     return true;
   }
 
+  previewSkill(skillId: SkillEvent['skillId'], send: (skillId: SkillEvent['skillId']) => number): number {
+    const sequence = send(skillId);
+    this.predictedSkillSequences.add(sequence);
+    void this.local.present({ type: 'skill_cast', skill: skillId });
+    return sequence;
+  }
+
   skill(event: SkillEvent, playerId: string): void {
     if (!this.matchId || event.sequence <= (this.skillSequences.get(event.casterId) ?? -1)) return;
     this.skillSequences.set(event.casterId, event.sequence);
-    const caster = event.casterId === playerId ? this.local : this.remote;
+
+    const casterIsLocal = event.casterId === playerId;
+    const caster = casterIsLocal ? this.local : this.remote;
     const target = event.targetId === playerId ? this.local : this.remote;
-    void caster.present({ type: 'skill_cast', skill: event.skillId });
-    if (event.outcome !== 'shielded') void target.present({ type: 'skill_hit', skill: event.skillId, removed: event.removedTiles, cell: event.blockedCell ?? undefined });
+
+    if (!(casterIsLocal && this.predictedSkillSequences.delete(event.sequence))) {
+      void caster.present({ type: 'skill_cast', skill: event.skillId });
+    }
+
+    if (event.outcome !== 'shielded') {
+      void target.present({
+        type: 'skill_hit',
+        skill: event.skillId,
+        removed: event.removedTiles,
+        cell: event.blockedCell ?? undefined,
+      });
+    }
   }
 }
