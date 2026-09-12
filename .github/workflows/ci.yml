@@ -30,9 +30,9 @@ jobs:
         run: npm run build
       - name: Game server smoke test
         run: |
-          npm run server > /tmp/doublefight-server.log 2>&1 &
+          HOST=127.0.0.1 node --import tsx server/index.ts > /tmp/doublefight-server.log 2>&1 &
           SERVER_PID=$!
-          trap 'kill $SERVER_PID || true' EXIT
+          trap 'kill $SERVER_PID || true; wait $SERVER_PID || true' EXIT
           for i in {1..20}; do
             if curl --fail --silent http://127.0.0.1:8787/health > /tmp/health.json; then
               cat /tmp/health.json

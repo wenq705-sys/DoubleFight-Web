@@ -50,6 +50,12 @@ sudo /opt/certbot/bin/pip install 'certbot>=5.4,<6'
 sudo /opt/certbot/bin/certbot --version
 ```
 
+The host cannot reach Docker Hub directly; Tencent's registry mirror is reachable.
+On this initially Docker-free host, install `ops/docker-daemon.json` as
+`/etc/docker/daemon.json` before starting Docker. On an existing Docker host,
+merge settings only after inspection rather than replacing daemon configuration.
+This keeps the Dockerfile's original `node:22-alpine` reference.
+
 ## Dedicated host cleanup
 
 After rechecking identities against the audit, stop/delete PM2 app `2048_net`,
