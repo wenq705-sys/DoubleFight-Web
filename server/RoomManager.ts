@@ -89,7 +89,7 @@ export class RoomManager {
     try {
       switch (message.type) {
         case 'hello':
-          if (message.protocolVersion !== PROTOCOL_VERSION) {
+          if (message.protocolVersion !== PROTOCOL_VERSION && message.protocolVersion !== 5) {
             this.error(connectionId, 'PROTOCOL_MISMATCH', `客户端协议 ${message.protocolVersion} 与服务器 ${PROTOCOL_VERSION} 不一致。`);
           }
           return;
