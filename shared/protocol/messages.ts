@@ -1,7 +1,7 @@
 import type { BoardPublicState, BoardTile, CellPosition, Direction, MoveResult } from '../game/types';
 import type { TimeLimitTieBreaker } from '../battle/match';
 import type { SkillCooldowns, SkillId, SkillLoadout } from '../battle/skills';
-import { isSkillId, isSkillLoadout } from '../battle/skills';
+import { DEFAULT_SKILL_LOADOUT, isSkillId, isSkillLoadout } from '../battle/skills';
 
 export const PROTOCOL_VERSION = 6;
 
@@ -193,9 +193,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     type === 'create_room'
     && typeof message.playerName === 'string'
     && isNetworkThemeId(message.theme)
-    && isSkillLoadout(message.loadout)
   ) {
-    return { type, playerName: message.playerName, theme: message.theme, loadout: message.loadout };
+    const loadout = parseLoadout(message.loadout);
+    if (!loadout) return null;
+    return { type, playerName: message.playerName, theme: message.theme, loadout };
   }
 
   if (
@@ -203,14 +204,15 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     && typeof message.roomCode === 'string'
     && typeof message.playerName === 'string'
     && isNetworkThemeId(message.theme)
-    && isSkillLoadout(message.loadout)
   ) {
+    const loadout = parseLoadout(message.loadout);
+    if (!loadout) return null;
     return {
       type,
       roomCode: message.roomCode,
       playerName: message.playerName,
       theme: message.theme,
-      loadout: message.loadout,
+      loadout,
     };
   }
 
@@ -218,9 +220,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
     type === 'join_matchmaking'
     && typeof message.playerName === 'string'
     && isNetworkThemeId(message.theme)
-    && isSkillLoadout(message.loadout)
   ) {
-    return { type, playerName: message.playerName, theme: message.theme, loadout: message.loadout };
+    const loadout = parseLoadout(message.loadout);
+    if (!loadout) return null;
+    return { type, playerName: message.playerName, theme: message.theme, loadout };
   }
 
   if (type === 'cancel_matchmaking') return { type };
@@ -260,4 +263,12 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   }
 
   return null;
+}
+
+
+/** Protocol-v5 clients did not send a loadout. Keep the production rollout compatible
+ * while v6 clients gain explicit three-slot selection. Invalid explicit values still fail. */
+function parseLoadout(value: unknown): SkillLoadout | null {
+  if (value === undefined) return [...DEFAULT_SKILL_LOADOUT];
+  return isSkillLoadout(value) ? [...value] as SkillLoadout : null;
 }
