@@ -1,9 +1,10 @@
-import type { NetworkThemeId } from '../shared/index';
+import type { NetworkThemeId, SkillLoadout } from '../shared/index';
 
 export interface MatchmakingEntry {
   connectionId: string;
   playerName: string;
   theme: NetworkThemeId;
+  loadout: SkillLoadout;
   joinedAt: number;
 }
 
