@@ -1,4 +1,5 @@
 import type { ThemeId } from '../config/themes';
+import { themePreviews } from '../rendering/themes/ThemePreview';
 
 type ThemeCard = {
   id: ThemeId | 'candy' | 'snow';
@@ -9,8 +10,8 @@ type ThemeCard = {
 };
 
 const CARDS: ThemeCard[] = [
-  { id: 'kingdom', title: '微缩王国', kicker: 'MINIATURE KINGDOM', icon: '🏰' },
-  { id: 'palace', title: '后宫晋升', kicker: 'PALACE ASCENSION', icon: '🏯' },
+  { id: 'kingdom', title: '微缩王国', kicker: 'MINIATURE KINGDOM', icon: '♜' },
+  { id: 'palace', title: '后宫晋升', kicker: 'PALACE ASCENSION', icon: '♛' },
   { id: 'candy', title: '糖果王国', kicker: 'COMING SOON', icon: '🍭', locked: true },
   { id: 'snow', title: '冰雪神殿', kicker: 'COMING SOON', icon: '❄️', locked: true },
 ];
@@ -32,6 +33,7 @@ export class HomeScreen {
 
   constructor(container: HTMLElement, initialTheme: ThemeId) {
     this.index = Math.max(0, CARDS.findIndex((card) => card.id === initialTheme));
+    const previews = themePreviews();
 
     const islands = CARDS.map((card, index) => `
       <article class="home-island home-island--${card.id} ${card.locked ? 'home-island--locked' : ''}" data-index="${index}">
@@ -40,7 +42,7 @@ export class HomeScreen {
         <div class="home-island__land">
           <div class="home-island__rim"></div>
           <div class="home-island__world">
-            <span class="home-island__icon">${card.icon}</span>
+            ${card.id === 'kingdom' || card.id === 'palace' ? `<img class="home-island__hero" src="${previews[card.id]}" alt="${card.title}主题棋子" />` : `<span class="home-island__icon">${card.icon}</span>`}
             <i class="home-island__prop home-island__prop--1"></i>
             <i class="home-island__prop home-island__prop--2"></i>
             <i class="home-island__prop home-island__prop--3"></i>
@@ -67,8 +69,8 @@ export class HomeScreen {
           <div class="home__record" id="home-record"></div>
           <div class="home__dots" id="home-dots"></div>
           <button class="home__start" id="home-start" type="button">进入世界</button>
-          <button class="home__online" id="home-online" type="button"><span>⚔</span> 在线对决 <small>M2</small></button>
-          <div class="home__tip">左右滑动选择主题 · 在线对决支持双方选择不同主题</div>
+          <button class="home__online" id="home-online" type="button"><span>⚔</span> 在线对决</button>
+          <div class="home__tip">左右滑动选择主题</div>
         </div>
       </section>`);
 
@@ -166,7 +168,7 @@ export class HomeScreen {
     this.startButton.textContent = card.locked ? '即将开放' : '进入世界';
     this.onlineButton.innerHTML = card.locked
       ? '<span>🔒</span> 在线对决 <small>未开放</small>'
-      : '<span>⚔</span> 在线对决 <small>M2</small>';
+      : '<span>⚔</span> 在线对决';
 
     if (card.id === 'kingdom' || card.id === 'palace') {
       const best = Number(localStorage.getItem(`doublefight-best-${card.id}`) ?? 0);
