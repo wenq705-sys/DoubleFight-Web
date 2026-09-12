@@ -30,6 +30,8 @@ export class OnlineLobby {
   private readonly themeButtons: HTMLButtonElement[];
   private readonly loadoutSlots: HTMLButtonElement[];
   private readonly skillCards: HTMLButtonElement[];
+  private readonly library: HTMLDialogElement;
+  private readonly changeSkills: HTMLButtonElement;
 
   private currentTheme: ThemeId = 'kingdom';
   private loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT];
@@ -46,9 +48,8 @@ export class OnlineLobby {
         <div class="online-lobby__backdrop"></div>
         <div class="online-lobby__sheet online-lobby__sheet--m28">
           <div class="online-lobby__top">
-            <button class="online-lobby__back" id="online-back" type="button">← 主题岛</button>
+            <button class="online-lobby__back" id="online-back" type="button" aria-label="返回主题岛">←</button>
             <div>
-              <div class="online-lobby__eyebrow">DOUBLE FIGHT · ONLINE</div>
               <h2>配置你的对决</h2>
             </div>
             <span class="online-lobby__dot" id="online-dot"></span>
@@ -63,40 +64,31 @@ export class OnlineLobby {
 
           <section class="online-setup">
             <div class="online-setup__head">
-              <div><small>THEME</small><strong>选择你的战场</strong></div>
-              <span>双方可使用不同主题</span>
+              <div><strong>选择战场</strong></div>
             </div>
             <div class="online-theme-grid">
               <button type="button" data-theme-choice="kingdom">
-                <i>🏰</i><b>微缩王国</b><small>城堡 · 草地 · 晶能</small>
+                <i aria-hidden="true">♜</i><b>微缩王国</b>
               </button>
               <button type="button" data-theme-choice="palace">
-                <i>🏯</i><b>后宫晋升</b><small>宫廷 · 玉石 · 金漆</small>
+                <i aria-hidden="true">♛</i><b>后宫晋升</b>
               </button>
             </div>
           </section>
 
           <section class="online-setup online-loadout">
             <div class="online-setup__head">
-              <div><small>LOADOUT</small><strong>3 个技能槽</strong></div>
-              <span>点槽位，再选择技能替换</span>
+              <div><strong>选择 3 个技能</strong></div>
             </div>
 
             <div class="online-loadout__slots">
               ${[0, 1, 2].map((index) => `<button type="button" data-loadout-slot="${index}"></button>`).join('')}
             </div>
 
-            <div class="online-loadout__library">
-              ${SKILL_ORDER.map(skillLibraryHtml).join('')}
-            </div>
+            <button id="change-skills" class="text-button" type="button">更换技能</button>
           </section>
 
           <section class="online-matchmaking">
-            <div class="online-matchmaking__hero">
-              <span>PUBLIC MATCH</span>
-              <strong>快速匹配</strong>
-              <small>当前主题 + 当前三技能 · 180 秒实时对决</small>
-            </div>
             <button id="online-matchmake" class="online-matchmaking__button" type="button">⚔ 开始匹配</button>
 
             <div id="online-matchmaking-panel" class="online-matchmaking__search online-matchmaking__search--hidden">
@@ -109,16 +101,15 @@ export class OnlineLobby {
             </div>
           </section>
 
-          <div class="online-lobby__divider"><span>私人房</span></div>
-
+          <details class="online-private"><summary>好友房间</summary>
           <div class="online-lobby__actions">
             <button id="online-create" class="online-lobby__secondary" type="button">创建 6 位房间</button>
             <div class="online-lobby__join">
-              <input id="online-code-input" inputmode="numeric" maxlength="6" placeholder="6位房间码" />
+              <input id="online-code-input" aria-label="6 位房间码" inputmode="numeric" maxlength="6" placeholder="6位房间码" />
               <button id="online-join" type="button">加入</button>
             </div>
           </div>
-
+          </details>
           <div class="online-lobby__error" id="online-error"></div>
 
           <div class="online-room online-room--hidden" id="online-room">
@@ -132,6 +123,10 @@ export class OnlineLobby {
             <p class="online-room__note">修改主题或技能会自动取消准备；双方准备后进入对决。</p>
           </div>
         </div>
+        <dialog class="skill-library" id="skill-library" aria-labelledby="skill-library-title">
+          <header><h2 id="skill-library-title">选择技能</h2><button id="close-library" type="button" aria-label="关闭技能选择">×</button></header>
+          <div class="online-loadout__library">${SKILL_ORDER.map(skillLibraryHtml).join('')}</div>
+        </dialog>
       </section>`);
 
     this.root = container.querySelector('#online-lobby') as HTMLElement;
@@ -153,6 +148,10 @@ export class OnlineLobby {
     this.themeButtons = [...container.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')];
     this.loadoutSlots = [...container.querySelectorAll<HTMLButtonElement>('[data-loadout-slot]')];
     this.skillCards = [...container.querySelectorAll<HTMLButtonElement>('[data-skill-choice]')];
+    this.library = container.querySelector('#skill-library') as HTMLDialogElement;
+    this.changeSkills = container.querySelector('#change-skills') as HTMLButtonElement;
+    this.changeSkills.addEventListener('click', () => this.openLibrary());
+    container.querySelector('#close-library')?.addEventListener('click', () => this.library.close());
 
     const savedName = localStorage.getItem('doublefight-player-name');
     if (savedName) this.nameInput.value = savedName;
@@ -176,6 +175,7 @@ export class OnlineLobby {
         if (this.setupLocked()) return;
         this.activeSlot = index;
         this.renderSetup();
+        this.openLibrary();
       });
     });
 
@@ -183,6 +183,7 @@ export class OnlineLobby {
       button.addEventListener('click', () => {
         if (this.setupLocked()) return;
         this.assignSkill(button.dataset.skillChoice as SkillId);
+        this.library.close();
       });
     });
 
@@ -246,6 +247,7 @@ export class OnlineLobby {
   }
 
   hideForMatch(): void {
+    this.library.close();
     this.root.classList.add('online-lobby--hidden');
     this.root.setAttribute('aria-hidden', 'true');
   }
@@ -282,9 +284,12 @@ export class OnlineLobby {
 
   private renderSetup(): void {
     const locked = this.setupLocked();
+    this.changeSkills.disabled = locked;
+    if (locked) this.library.close();
 
     this.themeButtons.forEach((button) => {
       button.classList.toggle('is-selected', button.dataset.themeChoice === this.currentTheme);
+      button.setAttribute('aria-pressed', String(button.dataset.themeChoice === this.currentTheme));
       button.disabled = locked;
     });
 
@@ -293,15 +298,16 @@ export class OnlineLobby {
       button.classList.toggle('is-active', index === this.activeSlot);
       button.disabled = locked;
       button.innerHTML = `
-        <span>${index + 1}</span>
         <i>${skill.icon}</i>
         <b>${skill.shortLabel}</b>
         <small>${skill.cost}⚡</small>`;
+      button.setAttribute('aria-label', `技能槽 ${index + 1}：${skill.shortLabel}，点击更换`);
     });
 
     this.skillCards.forEach((button) => {
       const skillId = button.dataset.skillChoice as SkillId;
       button.classList.toggle('is-equipped', this.loadout.includes(skillId));
+      button.setAttribute('aria-pressed', String(this.loadout.includes(skillId)));
       button.disabled = locked;
     });
   }
@@ -309,6 +315,9 @@ export class OnlineLobby {
   private render(state: Readonly<OnlineClientState>): void {
     this.status.textContent = statusText(state);
     this.root.dataset.status = state.status;
+    this.status.hidden = state.status === 'connected' && !state.lastError && state.matchmaking.status !== 'timed_out';
+    this.root.querySelector('#online-dot')?.setAttribute('aria-label', statusText(state));
+    this.root.classList.toggle('has-room', Boolean(state.room));
     this.error.textContent = state.lastError ?? '';
     this.renderMatchmaking(state);
     this.renderSetup();
@@ -376,6 +385,12 @@ export class OnlineLobby {
     return state.matchmaking.status === 'searching'
       || state.matchmaking.status === 'matched'
       || state.room?.phase === 'playing';
+  }
+
+  private openLibrary(): void {
+    if (this.setupLocked()) return;
+    this.library.querySelector('h2')!.textContent = `替换第 ${this.activeSlot + 1} 个技能`;
+    this.library.showModal();
   }
 
   private loadSavedSetup(): void {
