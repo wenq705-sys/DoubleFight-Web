@@ -1,3 +1,4 @@
+import { THEME_PRESENTATIONS } from './themes/ThemePresentation';
 import * as THREE from 'three';
 import type { BoardTile, Direction, MoveResult } from '../game/board/types';
 import { ART } from '../config/artDirection';
@@ -244,7 +245,7 @@ export class GameScene {
       visual.root.scale.set(0.34, 0.18, 0.34);
       visual.root.position.y -= 0.1;
 
-      this.effects.merge(position, merge.value, this.currentTheme);
+      this.effects.merge(position, merge.value, THEME_PRESENTATIONS[this.currentTheme].effects);
       this.environment.impact(merge.value, position);
       this.mergeBounce(visual.root, merge.value);
 
@@ -264,7 +265,7 @@ export class GameScene {
 
     if (result.spawned) {
       this.addTile(result.spawned, true);
-      this.effects.spawn(this.cellPosition(result.spawned.row, result.spawned.col), this.currentTheme);
+      this.effects.spawn(this.cellPosition(result.spawned.row, result.spawned.col), THEME_PRESENTATIONS[this.currentTheme].effects);
     }
   }
 
@@ -272,7 +273,7 @@ export class GameScene {
     if (removed.length === 0) return;
 
     const positions = removed.map((tile) => this.cellPosition(tile.row, tile.col));
-    this.effects.skillClear(positions, this.currentTheme);
+    this.effects.skillClear(positions, THEME_PRESENTATIONS[this.currentTheme].effects);
 
     if (this.environment instanceof PalaceEnvironment) {
       this.environment.skillPulse();

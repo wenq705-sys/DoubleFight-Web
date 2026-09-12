@@ -116,14 +116,15 @@ export class KingdomEnvironment {
   private readonly directionPulse: Record<Direction, number> = { left: 0, right: 0, up: 0, down: 0 };
   private readonly castleWindowMaterials: THREE.MeshStandardMaterial[] = [];
   private readonly energyMotes: EnergyMote[] = [];
-  private readonly water: THREE.Mesh;
+  private readonly water?: THREE.Mesh;
   private impactEnergy = 0;
   private castlePulse = 0;
   private gestureDirection: Direction | null = null;
   private gestureStrength = 0;
 
-  constructor() {
+  constructor(detail: 'full' | 'board' = 'full') {
     this.root.name = 'KingdomEnvironment';
+    if (detail === 'board') { this.createBoard(); this.createEnergyNetwork(); return; }
     this.createIsland();
     this.createBoard();
     this.createEnergyNetwork();
@@ -276,7 +277,7 @@ export class KingdomEnvironment {
       }
     }
 
-    if (this.water.material instanceof THREE.MeshStandardMaterial) {
+    if (this.water?.material instanceof THREE.MeshStandardMaterial) {
       this.water.material.opacity = 0.84 + Math.sin(time * 1.25) * 0.035;
       this.water.material.emissiveIntensity = 0.07 + impact * 0.16;
     }

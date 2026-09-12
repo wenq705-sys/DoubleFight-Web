@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ART } from '../../config/artDirection';
-import type { ThemeId } from '../../config/themes';
+import type { EffectPalette } from '../themes/ThemePresentation';
 import type { QualityLevel } from '../../performance/PerformanceManager';
 
 type PoolKind = 'spark' | 'confetti' | 'ring' | 'flash' | 'beam' | 'ray';
@@ -56,10 +56,10 @@ export class Effects {
     this.quality = quality;
   }
 
-  merge(position: THREE.Vector3, value: number, theme: ThemeId): void {
+  merge(position: THREE.Vector3, value: number, theme: EffectPalette): void {
     const tier = Math.min(10, Math.max(1, Math.log2(value) - 1));
-    const primary = this.primary(theme, value);
-    const secondary = theme === 'palace' ? 0xef7d9b : ART.colors.royalBlueLight;
+    const primary = theme.primary(value);
+    const secondary = theme.secondary;
     const particleBudget =
       this.quality === 'high' ? 7 + tier * 2 :
       this.quality === 'medium' ? 5 + tier :
@@ -102,8 +102,8 @@ export class Effects {
     this.light(origin, primary, value >= 1024 ? 5.2 : value >= 512 ? 4 : 2.4);
   }
 
-  spawn(position: THREE.Vector3, theme: ThemeId): void {
-    const primary = theme === 'palace' ? 0xffd26a : 0xffffff;
+  spawn(position: THREE.Vector3, theme: EffectPalette): void {
+    const primary = theme.spawn;
     this.ring(position, primary, 0.23, 1.35);
     const origin = position.clone().add(new THREE.Vector3(0, 0.28, 0));
     const count = this.quality === 'low' ? 3 : 5;
@@ -118,10 +118,10 @@ export class Effects {
     }
   }
 
-  skillClear(positions: THREE.Vector3[], theme: ThemeId): void {
+  skillClear(positions: THREE.Vector3[], theme: EffectPalette): void {
     const center = new THREE.Vector3(0, 0.62, ART.board.centerZ);
-    const primary = theme === 'palace' ? 0xffc94d : 0x8de7ff;
-    const secondary = theme === 'palace' ? 0xef6f91 : 0xffb064;
+    const primary = theme.skill;
+    const secondary = theme.skillSecondary;
 
     this.ring(center, primary, 0.72, 9);
     this.ring(center.clone().add(new THREE.Vector3(0, 0.035, 0)), secondary, 0.66, 6.4);
@@ -140,7 +140,7 @@ export class Effects {
     });
 
     this.confetti(center.clone().add(new THREE.Vector3(0, 2.1, 0)), this.quality === 'high' ? 20 : 12, theme);
-    this.light(center.clone().add(new THREE.Vector3(0, 2.8, 0)), primary, theme === 'palace' ? 6.3 : 5.4, 0.86);
+    this.light(center.clone().add(new THREE.Vector3(0, 2.8, 0)), primary, theme.skillLight, 0.86);
   }
 
   clearTransient(): void {
@@ -313,10 +313,8 @@ export class Effects {
     }
   }
 
-  private confetti(origin: THREE.Vector3, count: number, theme: ThemeId): void {
-    const palette = theme === 'palace'
-      ? [0xffcf55, 0xef6f91, 0xe85c4b, 0x6bb7a0, 0xffffff]
-      : [ART.colors.gold, ART.colors.royalBlueLight, ART.colors.coralLight, ART.colors.flowerPink, ART.colors.teal];
+  private confetti(origin: THREE.Vector3, count: number, theme: EffectPalette): void {
+    const palette = theme.confetti;
 
     for (let i = 0; i < count; i += 1) {
       const item = this.acquire('confetti');
@@ -344,19 +342,6 @@ export class Effects {
     item.light.color.setHex(color);
     item.light.position.copy(position);
     item.light.visible = true;
-  }
-
-  private primary(theme: ThemeId, value: number): number {
-    if (theme === 'palace') {
-      if (value >= 256) return 0xffcf55;
-      if (value >= 64) return 0xf2a63d;
-      return 0xff8c72;
-    }
-    if (value >= 1024) return 0xffd34f;
-    if (value >= 512) return ART.colors.gold;
-    if (value >= 128) return ART.colors.crystalBlue;
-    if (value >= 32) return ART.colors.coralLight;
-    return 0xffe5a0;
   }
 
   private easeOutCubic(t: number): number {
