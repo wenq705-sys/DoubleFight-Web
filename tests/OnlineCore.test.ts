@@ -151,6 +151,25 @@ describe('shared online game core', () => {
     expect(parseClientMessage('{broken')).toBeNull();
   });
 
+  it('keeps protocol-v5 clients usable during the v6 production rollout', () => {
+    expect(parseClientMessage(JSON.stringify({
+      type: 'create_room',
+      playerName: 'Legacy',
+      theme: 'kingdom',
+    }))).toEqual({
+      type: 'create_room',
+      playerName: 'Legacy',
+      theme: 'kingdom',
+      loadout: DEFAULT_SKILL_LOADOUT,
+    });
+
+    const manager = new RoomManager();
+    const messages: ServerMessage[] = [];
+    const connection = manager.register((message) => messages.push(message));
+    manager.handle(connection.id, { type: 'hello', protocolVersion: 5 });
+    expect(messages.some((message) => message.type === 'error' && message.code === 'PROTOCOL_MISMATCH')).toBe(false);
+  });
+
   it('keeps public matchmaking FIFO and removes cancelled connections cleanly', () => {
     const queue = new MatchmakingQueue();
     queue.enqueue({ connectionId: 'a', playerName: 'A', theme: 'kingdom', loadout: [...DEFAULT_SKILL_LOADOUT], joinedAt: 1 });
