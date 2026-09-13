@@ -8,8 +8,9 @@ export interface TileVisualSizingProfile {
   minimumHeight(value: number): number;
 }
 const kingdomHeights = [1.05, 1.16, 1.82, 1.96, 2.12, 2.28, 2.46, 2.64, 2.83, 3.10, 3.55];
+const kingdomFootprints = [1.20, 1.27, 1.38, 1.48, 1.58, 1.66, 1.73, 1.80, 1.86, 1.91, 1.94];
 export const KINGDOM_SIZING: TileVisualSizingProfile = {
-  horizontalLimit: value => tierScale(value, 1.62, 1.94),
+  horizontalLimit: value => kingdomFootprints[tierIndex(value)],
   minimumHeight: value => kingdomHeights[tierIndex(value)],
 };
 export const PALACE_SIZING: TileVisualSizingProfile = {

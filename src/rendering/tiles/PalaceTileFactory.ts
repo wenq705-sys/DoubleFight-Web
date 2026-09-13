@@ -316,6 +316,38 @@ function addCharacter(parent: THREE.Object3D, value: number, animated: THREE.Obj
     }
   }
 
+  if (value >= 64) {
+    // The middle ranks gain a raised hair crest and layered shoulder sleeves.
+    cylinder(character, 0.12, 0.19, value >= 512 ? 0.48 : 0.32, C.hair, [0, value >= 512 ? 2.10 : 2.02, -0.07], 8);
+    for (const side of [-1, 1]) {
+      const cuff = rounded(character, [0.24, 0.08, 0.34], palette.metal, [side * 0.53, 0.88, 0.11], 0.03, true);
+      cuff.rotation.z = side * 0.27;
+    }
+  }
+
+  if (value >= 128) {
+    // Side hair ornaments change the outline even with all costume colors removed.
+    for (const side of [-1, 1]) {
+      const hairpin = rounded(character, [0.10, value >= 512 ? 0.56 : 0.38, 0.09], palette.metal, [side * 0.44, 1.88, -0.02], 0.03, true);
+      hairpin.rotation.z = side * -0.32;
+    }
+  }
+
+  if (value >= 256) {
+    for (const side of [-1, 1]) {
+      const mantle = rounded(character, [0.25, 0.32, 0.14], palette.accent, [side * 0.65, 1.32, -0.08], 0.05);
+      mantle.rotation.z = side * -0.25;
+    }
+  }
+
+  if (value >= 512) {
+    // A compact ceremonial back fan distinguishes the upper ranks from 64–256.
+    for (const side of [-1, 0, 1]) {
+      const rib = rounded(character, [0.13, side === 0 ? 0.68 : 0.52, 0.07], C.gold, [side * 0.34, 1.75, -0.27], 0.03, true);
+      rib.rotation.z = side * -0.30;
+    }
+  }
+
   if (value === 16) {
     // First unmistakably noble silhouette: wide ceremonial back fan.
     const backFan = new THREE.Group();

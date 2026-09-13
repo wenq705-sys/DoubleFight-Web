@@ -5,7 +5,7 @@ import { OnlineController } from '../src/battle/OnlineController';
 import { predictPresentation, sameTiles, snapshotMove, type PresentationEvent } from '../src/battle/PresentationEvents';
 import { BattleBoardView } from '../src/rendering/battle/BattleBoardView';
 import { THEME_PRESENTATIONS } from '../src/rendering/themes/ThemePresentation';
-import { fitTile, constrainTileMotion, MOTION_FOOTPRINT } from '../src/rendering/tiles/TileSizingPolicy';
+import { fitTile, constrainTileMotion, KINGDOM_SIZING, MOTION_FOOTPRINT } from '../src/rendering/tiles/TileSizingPolicy';
 import { ART } from '../src/config/artDirection';
 
 const initial: BoardTile[] = [{ id: 1, value: 2, row: 0, col: 0 }, { id: 2, value: 2, row: 0, col: 1 }];
@@ -142,7 +142,7 @@ describe('shared battle presentation', () => {
         expect(size.y).toBeGreaterThanOrEqual(authoredHeight - 0.001);
         expect(size.y).toBeGreaterThan(lastHeight);
         lastHeight = size.y;
-        expect(Math.max(size.x, size.z)).toBeGreaterThan(1.3);
+        expect(Math.max(size.x, size.z)).toBeGreaterThan(theme.sizing === KINGDOM_SIZING ? 1.15 : 1.3);
         expect(Math.max(size.x, size.z)).toBeLessThanOrEqual(theme.sizing.horizontalLimit(value) + 0.001);
         for (const t of [0.08, 0.16, 0.3, 0.6, 1]) {
           visual.root.scale.set(1.34, 1.26, 1.34);
@@ -153,6 +153,21 @@ describe('shared battle presentation', () => {
         }
       }
     }
+  });
+
+  it('gives Kingdom low tiers breathing room and increases actual horizontal footprint through 2048', () => {
+    const factory = THEME_PRESENTATIONS.kingdom.factory;
+    const footprints: number[] = [];
+    for (let value = 2; value <= 2048; value *= 2) {
+      const visual = fitTile(factory.create(value), value, KINGDOM_SIZING);
+      const size = new THREE.Box3().setFromObject(visual.root).getSize(new THREE.Vector3());
+      footprints.push(Math.max(size.x, size.z));
+    }
+    expect(footprints[0]).toBeLessThan(1.3);
+    expect(footprints[1]).toBeLessThan(1.35);
+    expect(footprints[1]).toBeLessThan(footprints[10] * 0.7);
+    for (let i = 1; i < footprints.length; i++) expect(footprints[i]).toBeGreaterThan(footprints[i - 1]);
+    expect(footprints[10]).toBeLessThanOrEqual(KINGDOM_SIZING.horizontalLimit(2048) + 0.001);
   });
 
   it('does not shrink an authored model inside the footprint, and horizontal clamp never reduces height', () => {
