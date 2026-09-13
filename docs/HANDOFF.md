@@ -2,7 +2,13 @@
 
 ## Current state
 
-**Milestone: M2.5 — Public Matchmaking over the Existing Match Engine.**
+**M2.8.1 review branch: mobile gameplay visual system, based on M2.8 `d1e04fb`.**
+
+- Shared tier-aware horizontal clamping preserves authored height; motion has a separate transient envelope.
+- Solo HUD, tactical dual-board view, compact setup and canonical theme previews use shared mobile tokens/safe insets.
+- Validation: typecheck, 30/30 tests and production build pass (Vite reports a >500 kB chunk warning). Local online smoke covers quick/private/reconnect; two-browser flow covers matching, room readiness, keyboard and pointer input.
+- Browser fixtures cover 390×844, 430×932 and desktop, both themes, early/crowded Solo, duel and setup; simulated 47/34 px insets also pass. Optional scripts: `mobile-visual-smoke.mjs`, `mobile-flow-smoke.mjs`; use existing Playwright via `PLAYWRIGHT_MODULE`, local Vite and the local server for flow smoke.
+- Real iPhone Safari toolbar/rotation, physical touch/haptics, sustained FPS and cross-network reconnect still require human device validation. No server deployment in this pass.
 
 The product definition has changed from the earlier misunderstood local/same-device concept. **Online Duel means two players on two separate devices connected through a server.**
 

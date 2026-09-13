@@ -5,7 +5,7 @@ import { OnlineController } from '../src/battle/OnlineController';
 import { predictPresentation, sameTiles, snapshotMove, type PresentationEvent } from '../src/battle/PresentationEvents';
 import { BattleBoardView } from '../src/rendering/battle/BattleBoardView';
 import { THEME_PRESENTATIONS } from '../src/rendering/themes/ThemePresentation';
-import { fitTile, MAX_MOTION_STRETCH, MAX_MOTION_TILT, tileFootprint } from '../src/rendering/tiles/TileSizingPolicy';
+import { fitTile, constrainTileMotion, KINGDOM_SIZING, MOTION_FOOTPRINT } from '../src/rendering/tiles/TileSizingPolicy';
 import { ART } from '../src/config/artDirection';
 
 const initial: BoardTile[] = [{ id: 1, value: 2, row: 0, col: 0 }, { id: 2, value: 2, row: 0, col: 1 }];
@@ -128,19 +128,58 @@ describe('shared battle presentation', () => {
     expect(localEvents.filter(event => event.type === 'skill_cast')).toHaveLength(1);
   });
 
-  it('fits both theme factories inside one cell during peak motion while increasing the tier footprint', () => {
+  it('preserves readable tier growth and clamps horizontal footprint in both themes', () => {
     // Faces are decorative canvas textures; sizing exercises the real model geometry.
     vi.stubGlobal('document', { createElement: () => ({ getContext: () => null }) });
-    expect(tileFootprint(2048)).toBeGreaterThan(tileFootprint(2));
     for (const theme of Object.values(THEME_PRESENTATIONS)) {
+      let lastHeight = 0;
       for (let value = 2; value <= 2048; value *= 2) {
-        const visual = fitTile(theme.factory.create(value), value);
-        visual.root.scale.setScalar(MAX_MOTION_STRETCH);
-        visual.root.rotation.set(MAX_MOTION_TILT, Math.PI / 4, MAX_MOTION_TILT);
-        for (const part of visual.animatedParts) part.rotation.y += Math.PI / 3;
+        const authored = theme.factory.create(value);
+        const authoredHeight = new THREE.Box3().setFromObject(authored.root).getSize(new THREE.Vector3()).y;
+        const visual = fitTile(authored, value, theme.sizing);
         const bounds = new THREE.Box3().setFromObject(visual.root);
-        expect(Math.max(Math.abs(bounds.min.x), Math.abs(bounds.max.x), Math.abs(bounds.min.z), Math.abs(bounds.max.z))).toBeLessThan(ART.board.tileSize / 2);
+        const size = bounds.getSize(new THREE.Vector3());
+        expect(size.y).toBeGreaterThanOrEqual(authoredHeight - 0.001);
+        expect(size.y).toBeGreaterThan(lastHeight);
+        lastHeight = size.y;
+        expect(Math.max(size.x, size.z)).toBeGreaterThan(theme.sizing === KINGDOM_SIZING ? 1.15 : 1.3);
+        expect(Math.max(size.x, size.z)).toBeLessThanOrEqual(theme.sizing.horizontalLimit(value) + 0.001);
+        for (const t of [0.08, 0.16, 0.3, 0.6, 1]) {
+          visual.root.scale.set(1.34, 1.26, 1.34);
+          visual.root.rotation.set(0.1 * Math.sin(t * Math.PI), 0.2 * Math.sin(t * Math.PI), 0);
+          constrainTileMotion(visual.root);
+          const moving = new THREE.Box3().setFromObject(visual.root).getSize(new THREE.Vector3());
+          expect(Math.max(moving.x, moving.z)).toBeLessThanOrEqual(MOTION_FOOTPRINT + 0.001);
+        }
       }
+    }
+  });
+
+  it('gives Kingdom low tiers breathing room and increases actual horizontal footprint through 2048', () => {
+    const factory = THEME_PRESENTATIONS.kingdom.factory;
+    const footprints: number[] = [];
+    for (let value = 2; value <= 2048; value *= 2) {
+      const visual = fitTile(factory.create(value), value, KINGDOM_SIZING);
+      const size = new THREE.Box3().setFromObject(visual.root).getSize(new THREE.Vector3());
+      footprints.push(Math.max(size.x, size.z));
+    }
+    expect(footprints[0]).toBeLessThan(1.3);
+    expect(footprints[1]).toBeLessThan(1.35);
+    expect(footprints[1]).toBeLessThan(footprints[10] * 0.7);
+    for (let i = 1; i < footprints.length; i++) expect(footprints[i]).toBeGreaterThan(footprints[i - 1]);
+    expect(footprints[10]).toBeLessThanOrEqual(KINGDOM_SIZING.horizontalLimit(2048) + 0.001);
+  });
+
+  it('does not shrink an authored model inside the footprint, and horizontal clamp never reduces height', () => {
+    for (const width of [1.5, 3]) {
+      const model = new THREE.Group();
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 4, width));
+      mesh.position.y = 2; model.add(mesh);
+      const fitted = fitTile({ root: model, animatedParts: [] }, 2048);
+      const size = new THREE.Box3().setFromObject(fitted.root).getSize(new THREE.Vector3());
+      expect(size.y).toBe(4);
+      expect(size.x).toBeCloseTo(Math.min(width, 1.94));
+      expect(fitted.root.scale.toArray()).toEqual([1, 1, 1]);
     }
   });
 });

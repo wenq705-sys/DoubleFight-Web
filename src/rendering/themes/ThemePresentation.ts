@@ -5,6 +5,7 @@ import { KingdomEnvironment } from '../environment/KingdomEnvironment';
 import { PalaceEnvironment } from '../environment/PalaceEnvironment';
 import { TileFactory, type TileVisual } from '../tiles/TileFactory';
 import { PalaceTileFactory } from '../tiles/PalaceTileFactory';
+import { KINGDOM_SIZING, PALACE_SIZING, type TileVisualSizingProfile } from '../tiles/TileSizingPolicy';
 
 export interface EffectPalette {
   primary(value: number): number;
@@ -18,6 +19,7 @@ export interface EffectPalette {
 export type EnvironmentDetail = 'full' | 'duel' | 'board';
 export type ThemeEnvironment = Pick<KingdomEnvironment, 'root' | 'update' | 'impact' | 'setGesture' | 'clearGesture' | 'pulseDirection'>;
 export interface ThemePresentation {
+  sizing: TileVisualSizingProfile;
   factory: { create(value: number): TileVisual; warmup(values: number[]): void };
   environment(detail: EnvironmentDetail): ThemeEnvironment;
   skillReaction(environment: ThemeEnvironment, positions: THREE.Vector3[]): void;
@@ -32,6 +34,7 @@ export interface ThemePresentation {
 /** Theme dependencies live here; online controllers and board motion have no theme branches. */
 export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
   kingdom: {
+    sizing: KINGDOM_SIZING,
     factory: new TileFactory(), environment: detail => new KingdomEnvironment(detail),
     skillReaction: (environment, positions) => positions.forEach(position => environment.impact(512, position)),
     surfaceY: 0.57, sky: ART.colors.sky, fog: ART.colors.skyFog, exposure: 1.03,
@@ -44,6 +47,7 @@ export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
     feedback: { move: 8, merge: [11, 6, 14], skill: [22, 18, 38, 20, 62] },
   },
   palace: {
+    sizing: PALACE_SIZING,
     factory: new PalaceTileFactory(), environment: detail => new PalaceEnvironment(detail),
     skillReaction: environment => (environment as PalaceEnvironment).skillPulse(),
     surfaceY: 0.695, sky: 0xd89069, fog: 0xe6bb93, exposure: 1.0,

@@ -5,8 +5,6 @@ export class Hud {
   private readonly scoreValue: HTMLElement;
   private readonly bestValue: HTMLElement;
   private readonly highestValue: HTMLElement;
-  private readonly highestLabel: HTMLElement;
-  private readonly subtitle: HTMLElement;
   private readonly toast: HTMLElement;
   private readonly gameOver: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
@@ -23,21 +21,13 @@ export class Hud {
 
     container.insertAdjacentHTML('beforeend', `
       <div class="hud" aria-label="游戏状态">
-        <div class="hud__brand">
-          <div class="hud__title">双数对决</div>
-          <div class="hud__subtitle" id="theme-subtitle">MINIATURE KINGDOM · 2048</div>
-        </div>
-
         <button class="hud__new" id="new-game" type="button">↻ 新局</button>
 
         <div class="hud__stats">
-          <div class="stat-card"><span>SCORE</span><strong id="score-value">0</strong></div>
-          <div class="stat-card stat-card--secondary"><span>BEST</span><strong id="best-value">0</strong></div>
+          <div class="stat-card" aria-label="分数"><span>分数</span><strong id="score-value">0</strong></div>
         </div>
 
-        <div class="hud__highest"><span id="highest-label">王国地标</span> <strong id="highest-value">4</strong></div>
-
-        <button class="hud__theme" id="theme-toggle" type="button" aria-label="返回主题岛">☁ 主题岛</button>
+        <button class="hud__theme" id="theme-toggle" type="button" aria-label="返回主题岛">← 主题岛</button>
 
         <button class="hud__skill" id="clear-skill" type="button" aria-label="随机清块技能">
           <span class="hud__skill-icon">◇</span>
@@ -45,7 +35,6 @@ export class Hud {
           <strong class="hud__skill-count" id="skill-count">3</strong>
         </button>
 
-        <div class="hud__hint">手机滑动 · 电脑方向键 / WASD</div>
         <div class="hud__toast" id="merge-toast">MERGE!</div>
       </div>
 
@@ -64,6 +53,7 @@ export class Hud {
           <div class="game-over__crown">♛</div>
           <h2>棋盘已满</h2>
           <p>没有可移动的格子了，再开一局继续晋升吧。</p>
+          <p>最佳分数 <strong id="best-value">0</strong> · <strong id="highest-value"></strong></p>
           <button id="retry-game" type="button">再来一局</button>
         </div>
       </div>`);
@@ -72,8 +62,6 @@ export class Hud {
     this.scoreValue = container.querySelector('#score-value') as HTMLElement;
     this.bestValue = container.querySelector('#best-value') as HTMLElement;
     this.highestValue = container.querySelector('#highest-value') as HTMLElement;
-    this.highestLabel = container.querySelector('#highest-label') as HTMLElement;
-    this.subtitle = container.querySelector('#theme-subtitle') as HTMLElement;
     this.toast = container.querySelector('#merge-toast') as HTMLElement;
     this.gameOver = container.querySelector('#game-over') as HTMLElement;
     this.restartButton = container.querySelector('#new-game') as HTMLButtonElement;
@@ -98,9 +86,7 @@ export class Hud {
   }
 
   setTheme(theme: ThemeMeta): void {
-    this.subtitle.textContent = theme.subtitle;
-    this.highestLabel.textContent = theme.highestLabel;
-    this.themeButton.textContent = '☁ 主题岛';
+    this.themeButton.textContent = '← 主题岛';
     this.root.dataset.theme = theme.id;
     document.body.dataset.theme = theme.id;
   }

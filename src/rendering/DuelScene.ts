@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { BoardTile, CellPosition, Direction } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
-import { BattleBoardView, BOARD_PRESENTATION_WIDTH } from './battle/BattleBoardView';
+import { BattleBoardView } from './battle/BattleBoardView';
 import { BattleFeedback } from '../battle/BattleFeedback';
 
 type BoardRole = 'local' | 'remote';
@@ -10,12 +10,13 @@ export class DuelScene {
   readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(39, 1, 0.1, 80);
+  private readonly camera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 80);
   private readonly clock = new THREE.Clock();
   readonly local: BattleBoardView;
   readonly remote: BattleBoardView;
   private active = false;
   private raf = 0;
+  private readonly resizeObserver: ResizeObserver;
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -32,7 +33,6 @@ export class DuelScene {
     this.canvas = this.renderer.domElement;
     container.appendChild(this.canvas);
 
-    this.scene.fog = new THREE.Fog(0xd9d8c6, 18, 34);
 
     const hemi = new THREE.HemisphereLight(0xfff4d6, 0x33525c, 2.05);
     this.scene.add(hemi);
@@ -51,23 +51,21 @@ export class DuelScene {
     fill.position.set(6, 7, -8);
     this.scene.add(fill);
 
-    this.local = new BattleBoardView('kingdom', 'duel', new BattleFeedback(), undefined, true);
+    this.local = new BattleBoardView('kingdom', 'board', new BattleFeedback(), undefined, true);
     // Opponent uses the same sound language, but never vibrates the local device.
-    this.remote = new BattleBoardView('kingdom', 'duel', new BattleFeedback(undefined, () => {}), undefined, true);
+    this.remote = new BattleBoardView('kingdom', 'board', new BattleFeedback(undefined, () => {}), undefined, true);
 
     // Portrait composition: the local arena owns the lower action zone, opponent stays readable above.
-    this.local.root.position.set(0, 0, 3.95);
-    this.local.root.scale.setScalar(4.55 / BOARD_PRESENTATION_WIDTH);
-    this.remote.root.position.set(0, 0, -4.25);
-    this.remote.root.scale.setScalar(3.45 / BOARD_PRESENTATION_WIDTH);
     this.scene.add(this.local.root, this.remote.root);
 
-    this.camera.position.set(0, 15.4, 13.9);
-    this.camera.lookAt(0, 0.24, -0.35);
+    this.camera.position.set(0, 24, 12);
+    this.camera.lookAt(0, 0.6, 0.18);
 
     this.local.prewarmTheme('kingdom');
     this.local.prewarmTheme('palace');
     window.addEventListener('resize', this.resize);
+    this.resizeObserver = new ResizeObserver(this.resize);
+    this.resizeObserver.observe(container);
     this.resize();
     this.animate();
   }
@@ -89,14 +87,13 @@ export class DuelScene {
   clear(): void { this.local.reset(); this.remote.reset(); }
   dispose(): void {
     cancelAnimationFrame(this.raf); window.removeEventListener('resize', this.resize);
+    this.resizeObserver.disconnect();
     this.local.dispose(); this.remote.dispose(); this.renderer.dispose(); this.canvas.remove();
   }
   private readonly resize = (): void => {
     const width = Math.max(1, this.canvas.parentElement?.clientWidth ?? window.innerWidth);
     const height = Math.max(1, this.canvas.parentElement?.clientHeight ?? window.innerHeight);
     this.renderer.setSize(width, height, false);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
   };
 
 
@@ -105,6 +102,28 @@ export class DuelScene {
     const delta = Math.min(0.05, this.clock.getDelta());
     if (!this.active) return;
     this.local.update(delta); this.remote.update(delta);
-    this.renderer.render(this.scene, this.camera);
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const localHeight = Math.round(size.y * 0.55);
+    this.renderer.setScissorTest(true);
+    this.renderBoard('local', 0, size.x, localHeight);
+    this.renderBoard('remote', localHeight, size.x, size.y - localHeight);
+    this.renderer.setScissorTest(false);
+    this.local.root.visible = this.remote.root.visible = true;
   };
+
+  private renderBoard(role: BoardRole, bottom: number, width: number, height: number): void {
+    this.local.root.visible = role === 'local';
+    this.remote.root.visible = role === 'remote';
+    // Fit the playable grid to its screen region. No per-player tile scaling.
+    const aspect = width / Math.max(1, height);
+    const viewHeight = Math.max(9.3, 9.5 / aspect);
+    this.camera.left = -viewHeight * aspect / 2;
+    this.camera.right = viewHeight * aspect / 2;
+    this.camera.top = viewHeight / 2;
+    this.camera.bottom = -viewHeight / 2;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setViewport(0, bottom, width, height);
+    this.renderer.setScissor(0, bottom, width, height);
+    this.renderer.render(this.scene, this.camera);
+  }
 }
