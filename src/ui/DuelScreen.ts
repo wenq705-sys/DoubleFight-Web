@@ -49,7 +49,10 @@ export class DuelScreen {
   private readonly reconnectOverlay: HTMLElement;
   private readonly result: HTMLElement;
   private readonly resultTitle: HTMLElement;
-  private readonly resultDetail: HTMLElement;
+  private readonly resultLocalName: HTMLElement;
+  private readonly resultRemoteName: HTMLElement;
+  private readonly resultLeave: HTMLButtonElement;
+  private readonly exitDialog: HTMLDialogElement;
   private readonly resultRule: HTMLElement;
   private readonly resultLocalScore: HTMLElement;
   private readonly resultLocalMeta: HTMLElement;
@@ -97,12 +100,12 @@ export class DuelScreen {
           </section>
         </header>
         <button id="duel-exit" class="duel__exit" type="button" aria-label="退出对局">←</button>
-        <details class="duel__net"><summary id="duel-connection" aria-label="网络状态">◉</summary><b id="duel-latency"></b></details>
+        <details class="duel__net"><summary id="duel-connection" aria-label="网络状态"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0M9 16a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/></svg></summary><b id="duel-latency"></b></details>
         <div class="battle-status battle-status--remote" id="duel-remote-status" role="status"></div>
         <div class="battle-status battle-status--local" id="duel-local-status" role="status"></div>
 
         <div class="duel-energy duel-energy--remote" id="duel-remote-energy">
-          <div class="duel-energy__label sr-only"><span>对手能量</span><b id="duel-remote-energy-value">0 / 100</b></div>
+          <div class="duel-energy__label"><span>对手 ⚡</span><b id="duel-remote-energy-value">0</b></div>
           <div class="duel-energy__track"><i id="duel-remote-energy-fill"></i></div>
           <em id="duel-remote-energy-gain"></em>
         </div>
@@ -127,21 +130,20 @@ export class DuelScreen {
           <span>对局计时继续 · 正在恢复连接…</span>
         </div>
 
-        <div class="duel-result duel-result--hidden" id="duel-result">
+        <div class="duel-result duel-result--hidden" id="duel-result" role="dialog" aria-modal="true" aria-labelledby="duel-result-title">
           <div class="duel-result__card">
-            <div class="duel-result__crest">⚔</div>
-            <h2 id="duel-result-title">对局结束</h2>
-            <p id="duel-result-detail"></p>
+            <div class="duel-result__crest" aria-hidden="true">✦</div>
+            <h2 id="duel-result-title" tabindex="-1">对局结束</h2>
 
             <div class="duel-result__stats">
               <div class="duel-result__player duel-result__player--me">
-                <span>我</span>
+                <span id="duel-result-local-name"></span>
                 <strong id="duel-result-local-score">0</strong>
                 <small id="duel-result-local-meta">最高 2 · 空格 0</small>
               </div>
               <b>VS</b>
               <div class="duel-result__player">
-                <span>对手</span>
+                <span id="duel-result-remote-name"></span>
                 <strong id="duel-result-remote-score">0</strong>
                 <small id="duel-result-remote-meta">最高 2 · 空格 0</small>
               </div>
@@ -149,10 +151,16 @@ export class DuelScreen {
 
             <div class="duel-result__rule" id="duel-result-rule"></div>
             <button id="duel-rematch" class="duel-result__rematch" type="button">再来一局</button>
-            <div class="duel-result__rematch-status" id="duel-rematch-status"></div>
-            <button id="duel-result-leave" class="duel-result__leave" type="button">离开房间</button>
+            <div class="duel-result__rematch-status" id="duel-rematch-status" role="status"></div>
+            <button id="duel-result-leave" class="duel-result__leave" type="button">返回大厅</button>
           </div>
         </div>
+        <dialog class="duel-exit-dialog" id="duel-exit-dialog" aria-labelledby="duel-exit-title" aria-describedby="duel-exit-description">
+          <h2 id="duel-exit-title">退出对局？</h2>
+          <p id="duel-exit-description">现在离开将结束本局并离开房间。</p>
+          <button id="duel-exit-cancel" type="button" autofocus>继续游戏</button>
+          <button id="duel-exit-confirm" type="button">确认退出</button>
+        </dialog>
       </section>`);
 
     this.root = container.querySelector('#duel-screen') as HTMLElement;
@@ -181,7 +189,10 @@ export class DuelScreen {
     this.reconnectOverlay = container.querySelector('#duel-reconnect') as HTMLElement;
     this.result = container.querySelector('#duel-result') as HTMLElement;
     this.resultTitle = container.querySelector('#duel-result-title') as HTMLElement;
-    this.resultDetail = container.querySelector('#duel-result-detail') as HTMLElement;
+    this.resultLocalName = container.querySelector('#duel-result-local-name') as HTMLElement;
+    this.resultRemoteName = container.querySelector('#duel-result-remote-name') as HTMLElement;
+    this.resultLeave = container.querySelector('#duel-result-leave') as HTMLButtonElement;
+    this.exitDialog = container.querySelector('#duel-exit-dialog') as HTMLDialogElement;
     this.resultRule = container.querySelector('#duel-result-rule') as HTMLElement;
     this.resultLocalScore = container.querySelector('#duel-result-local-score') as HTMLElement;
     this.resultLocalMeta = container.querySelector('#duel-result-local-meta') as HTMLElement;
@@ -203,6 +214,18 @@ export class DuelScreen {
     this.rematchButton.addEventListener('click', () => this.toggleRematch());
     container.querySelector('#duel-exit')?.addEventListener('click', () => this.exit());
     container.querySelector('#duel-result-leave')?.addEventListener('click', () => this.exit());
+    container.querySelector('#duel-exit-cancel')?.addEventListener('click', () => this.exitDialog.close());
+    container.querySelector('#duel-exit-confirm')?.addEventListener('click', () => this.leaveMatch());
+    this.result.addEventListener('keydown', event => {
+      if (event.key !== 'Tab') return;
+      const buttons = [this.rematchButton, this.resultLeave].filter(button => !button.hidden && !button.disabled);
+      const first = buttons[0], last = buttons[buttons.length - 1];
+      if ((event.shiftKey && (document.activeElement === first || document.activeElement === this.resultTitle))
+        || (!event.shiftKey && document.activeElement === last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      }
+    });
 
     this.bindInput();
     this.client.subscribe((state, message) => this.consume(state, message));
@@ -217,6 +240,7 @@ export class DuelScreen {
   }
 
   hide(): void {
+    this.exitDialog.close();
     this.active = false;
     this.root.classList.add('duel--hidden');
     this.root.setAttribute('aria-hidden', 'true');
@@ -280,6 +304,7 @@ export class DuelScreen {
     if (authoritative) this.serverClockOffsetMs = state.match.serverTime - Date.now();
 
     if (state.match.matchId !== this.currentMatchId) {
+      this.exitDialog.close();
       this.currentMatchId = state.match.matchId;
       this.controller.reset();
       this.lastEnergyByPlayer.clear();
@@ -399,7 +424,7 @@ export class DuelScreen {
     const ratio = clamped / safeMax;
 
     fill.style.width = `${(ratio * 100).toFixed(1)}%`;
-    value.textContent = `${clamped} / ${safeMax}`;
+    value.textContent = role === 'remote' ? String(clamped) : `${clamped} / ${safeMax}`;
     root.classList.toggle('duel-energy--full', clamped >= safeMax);
 
     if (gain > 0 && this.active) {
@@ -537,7 +562,7 @@ export class DuelScreen {
 
   private bindInput(): void {
     window.addEventListener('keydown', event => {
-      if (!this.active || (event.target instanceof HTMLElement && event.target.matches('input,textarea,[contenteditable="true"]'))) return;
+      if (!this.active || this.exitDialog.open || (event.target instanceof HTMLElement && event.target.matches('input,textarea,[contenteditable="true"]'))) return;
       const direction = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', d: 'right', w: 'up', s: 'down' } as Record<string, Direction>)[event.key.length === 1 ? event.key.toLowerCase() : event.key];
       if (direction) { event.preventDefault(); this.attemptMove(direction); }
       const slot = Number(event.key) - 1;
@@ -588,19 +613,25 @@ export class DuelScreen {
 
     const won = snapshot.winnerId === playerId;
     const draw = snapshot.winnerId === null;
+    const firstReveal = this.result.classList.contains('duel-result--hidden');
+    this.exitDialog.close();
+    this.result.dataset.outcome = draw ? 'draw' : won ? 'victory' : 'defeat';
 
     this.resultTitle.textContent = draw ? '平局' : won ? '胜利' : '惜败';
-    this.resultDetail.textContent = resultReason(snapshot, playerId);
+    this.resultLocalName.textContent = me?.name ?? '玩家';
+    this.resultRemoteName.textContent = opponent?.name ?? '对手';
 
     this.resultLocalScore.textContent = (me?.score ?? 0).toLocaleString('zh-CN');
     this.resultLocalMeta.textContent =
-      `最高 ${me?.highest ?? 2} · 可用空格 ${me?.usableEmptyCells ?? 0}`;
+      `最高 ${me?.highest ?? 2}\n空格 ${me?.usableEmptyCells ?? 0}`;
     this.resultRemoteScore.textContent = (opponent?.score ?? 0).toLocaleString('zh-CN');
     this.resultRemoteMeta.textContent =
-      `最高 ${opponent?.highest ?? 2} · 可用空格 ${opponent?.usableEmptyCells ?? 0}`;
-    this.resultRule.textContent = resultRuleText(snapshot);
+      `最高 ${opponent?.highest ?? 2}\n空格 ${opponent?.usableEmptyCells ?? 0}`;
+    this.resultRule.textContent = resultRuleText(snapshot, playerId);
 
     this.result.classList.remove('duel-result--hidden');
+    if (firstReveal) this.resultTitle.focus({ preventScroll: true });
+    if (firstReveal && won && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(16);
   }
 
   private toggleRematch(): void {
@@ -612,15 +643,15 @@ export class DuelScreen {
   }
 
   private refreshRematchState(state: Readonly<OnlineClientState>): void {
-    if (!this.active || state.match?.phase !== 'finished' || !state.room || !state.playerId) return;
+    if (!this.active || state.match?.phase !== 'finished' || !state.playerId) return;
 
-    const me = state.room.players.find((player) => player.id === state.playerId);
-    const opponent = state.room.players.find((player) => player.id !== state.playerId);
+    const me = state.room?.players.find((player) => player.id === state.playerId);
+    const opponent = state.room?.players.find((player) => player.id !== state.playerId);
+    this.rematchButton.hidden = !me || !opponent;
+    this.resultLeave.classList.toggle('duel-result__leave--primary', !me || !opponent);
 
     if (!me || !opponent) {
-      this.rematchButton.disabled = true;
-      this.rematchButton.textContent = '对手已离开';
-      this.rematchStatus.textContent = '需要两名玩家才能再来一局';
+      this.rematchStatus.textContent = '';
       return;
     }
 
@@ -628,17 +659,27 @@ export class DuelScreen {
     this.rematchButton.textContent = me.rematchReady ? '取消再来一局' : '再来一局';
 
     if (me.rematchReady && opponent.rematchReady) {
-      this.rematchStatus.textContent = '双方已准备 · 正在开始新对局…';
+      this.rematchStatus.textContent = '双方已准备…';
     } else if (me.rematchReady) {
-      this.rematchStatus.textContent = '已准备 · 等待对手';
+      this.rematchStatus.textContent = '等待对手…';
     } else if (opponent.rematchReady) {
       this.rematchStatus.textContent = '对手想再来一局';
     } else {
-      this.rematchStatus.textContent = '双方确认后直接在当前房间开下一局';
+      this.rematchStatus.textContent = '';
     }
   }
 
   private exit(): void {
+    if (this.client.snapshot().match?.phase === 'playing') {
+      this.pointerStart = null;
+      this.scene.local.clearGesture();
+      if (!this.exitDialog.open) this.exitDialog.showModal();
+      return;
+    }
+    this.leaveMatch();
+  }
+
+  private leaveMatch(): void {
     this.client.leaveRoom();
     this.currentMatchId = null;
     this.controller.reset();
@@ -693,34 +734,26 @@ function resultPlayerFromSnapshot(
   };
 }
 
-function resultReason(snapshot: MatchSnapshot, playerId: string): string {
+export function resultRuleText(snapshot: MatchSnapshot, playerId: string): string {
   const won = snapshot.winnerId === playerId;
-
+  const outcome = won ? '胜利原因' : '失败原因';
   if (snapshot.endReason === 'board_locked') {
-    return won ? '对手棋盘无法继续移动，你提前获胜。' : '你的棋盘无法继续移动，对局提前结束。';
+    return `${outcome} · ${won ? '对手棋盘锁死' : '棋盘锁死'}`;
   }
   if (snapshot.endReason === 'petrified_lock') {
-    return won ? '石化封死了对手最后的可用空间。' : '最后的可用空间被石化封锁。';
+    return `${outcome} · 石化封锁`;
   }
   if (snapshot.endReason === 'opponent_left') {
-    return '对手离开房间，对局结束。';
+    return won ? '胜利原因 · 对手退出' : '失败原因 · 已退出对局';
   }
   if (snapshot.endReason === 'time_limit') {
-    if (snapshot.result?.tieBreaker === 'draw') return '180 秒结束，所有判定项完全相同。';
-    return won ? '180 秒结束，你在最终判定中领先。' : '180 秒结束，对手在最终判定中领先。';
+    const leader = won ? '' : '对手';
+    const tieBreaker = snapshot.result?.tieBreaker;
+    if (tieBreaker === 'score') return `时间结束 · ${leader}分数领先`;
+    if (tieBreaker === 'highest') return `分数相同 · ${leader}最高棋子领先`;
+    if (tieBreaker === 'usable_space') return `最高棋子相同 · ${leader}可用空间领先`;
+    if (tieBreaker === 'draw') return '判定完全相同 · 平局';
+    return '时间结束 · 对局已结算';
   }
-  return '对局已经结束。';
-}
-
-function resultRuleText(snapshot: MatchSnapshot): string {
-  if (snapshot.endReason !== 'time_limit') {
-    return '提前结束：棋盘锁死 / 石化击杀 / 对手离开';
-  }
-
-  const tieBreaker = snapshot.result?.tieBreaker;
-  if (tieBreaker === 'score') return '时间到 · 按 SCORE 判胜';
-  if (tieBreaker === 'highest') return 'SCORE 相同 · 按最高棋子判胜';
-  if (tieBreaker === 'usable_space') return 'SCORE 与最高棋子相同 · 按可用空格判胜';
-  if (tieBreaker === 'draw') return 'SCORE / 最高棋子 / 可用空格全部相同 · 平局';
-  return '时间到 · 服务器结算';
+  return '对局已结束';
 }
