@@ -307,7 +307,7 @@ export class PalaceEnvironment {
 
   private createPalace(): void {
     const hall = new THREE.Group();
-    hall.position.z = -6.2;
+    hall.position.z = -6.6;
     this.root.add(hall);
 
     box(hall, [5.6, 1.55, 1.35], C.lacquerLight, [0, 1.0, 0], 0.1);
@@ -317,10 +317,10 @@ export class PalaceEnvironment {
 
     // Tiered imperial roof.
     const roof1 = add(hall, new THREE.CylinderGeometry(0.8, 3.6, 0.55, 4), toon(C.roof), [0, 2.15, 0]);
-    roof1.scale.z = 0.48;
+    roof1.scale.set(0.76, 1, 0.38);
     roof1.rotation.y = Math.PI / 4;
     const roof2 = add(hall, new THREE.CylinderGeometry(0.55, 2.6, 0.42, 4), toon(C.roofDark), [0, 2.55, 0]);
-    roof2.scale.z = 0.5;
+    roof2.scale.set(0.78, 1, 0.4);
     roof2.rotation.y = Math.PI / 4;
 
     box(hall, [2.0, 0.5, 0.18], 0x244e62, [0, 1.7, 0.75], 0.05);

@@ -85,7 +85,7 @@ export class OnlineLobby {
               ${[0, 1, 2].map((index) => `<button type="button" data-loadout-slot="${index}"></button>`).join('')}
             </div>
 
-            <button id="change-skills" class="text-button" type="button">更换技能</button>
+            <button id="change-skills" class="text-button" type="button">⚙ 更换技能</button>
           </section>
 
           <section class="online-matchmaking">
@@ -315,7 +315,8 @@ export class OnlineLobby {
   private render(state: Readonly<OnlineClientState>): void {
     this.status.textContent = statusText(state);
     this.root.dataset.status = state.status;
-    this.status.hidden = state.status === 'connected' && !state.lastError && state.matchmaking.status !== 'timed_out';
+    this.status.hidden = (state.status === 'connected' && !state.lastError && state.matchmaking.status !== 'timed_out')
+      || (Boolean(state.lastError) && this.status.textContent === state.lastError);
     this.root.querySelector('#online-dot')?.setAttribute('aria-label', statusText(state));
     this.root.classList.toggle('has-room', Boolean(state.room));
     this.error.textContent = state.lastError ?? '';

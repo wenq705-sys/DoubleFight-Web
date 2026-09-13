@@ -62,6 +62,7 @@ try {
           }
         }, { mode, theme, base });
         await page.waitForTimeout(1800);
+        if (process.env.GRAYSCALE && mode.startsWith('solo')) await page.addStyleTag({ content: '.game-canvas{filter:grayscale(1)}' });
         const name = `${viewport.width}x${viewport.height}-${mode}-${theme}${process.env.SAFE_FRAME ? '-safe' : ''}`;
         await page.screenshot({ path: resolve(output, `${name}.png`) });
         const metrics = await page.evaluate(() => {
