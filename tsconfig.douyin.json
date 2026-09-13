@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["platform/douyin/src", "shared/game", "shared/protocol", "src/rendering/tiles/TileFactory.ts", "src/rendering/tiles/TileSizingPolicy.ts"]
+}

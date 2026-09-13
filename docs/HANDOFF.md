@@ -332,3 +332,7 @@ CI must pass:
 - unit tests
 - client production build
 - server health smoke test
+
+## M2.9 runtime spike handoff
+
+The isolated Douyin mini-game build is in `platform/douyin/`; run `npm run build:douyin` and open its `dist` directory in Douyin IDE. Canvas/Three.js and touch/shared-core movement worked in the IDE simulator. WebSocket is blocked by the mini-game legal-domain list, and repeated real hide/show remains unverified. Exact evidence and the remaining gate are in `docs/DOUYIN_RUNTIME_SPIKE.md`.

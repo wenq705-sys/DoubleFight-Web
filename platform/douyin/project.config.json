@@ -1,0 +1,8 @@
+{
+  "description": "Double Fight M2.9 runtime feasibility spike",
+  "appid": "testappid",
+  "compileType": "game",
+  "setting": {
+    "es6": true
+  }
+}
