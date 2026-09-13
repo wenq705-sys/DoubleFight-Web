@@ -2,6 +2,11 @@
 
 ## Current state
 
+**M2.8.2 review branch:** Duel HUD/result/exit feedback only, based on `4211c46`.
+- One authoritative result reason, actual names, room-aware rematch/return CTA and active-match exit confirmation.
+- Wi-Fi status icon, labeled opponent energy, restrained outcome entry/one-shot victory haptic with reduced-motion support.
+- Validation: 44/44 unit tests, typecheck/build; local online smoke; `scripts/duel-feedback-smoke.mjs` covers 390×844 / 430×932 results, rematch, exit, network and reduced motion. Physical Safari/touch/haptic acceptance remains pending. No deployment.
+
 **M2.8.1 review branch: mobile gameplay visual system, based on M2.8 `d1e04fb`.**
 
 - Shared tier-aware horizontal clamping preserves authored height; motion has a separate transient envelope.

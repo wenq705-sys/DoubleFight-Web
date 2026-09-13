@@ -25,6 +25,7 @@ try {
   assert.ok(Number((await a.locator('#duel-local-score').innerText()).replaceAll(',', '')) > 0);
   console.log('PASS real browser quick match, mixed themes, desktop keyboard movement');
   await a.locator('#duel-exit').click();
+  await a.locator('#duel-exit-confirm').click();
   await b.locator('#duel-result-leave').click();
   for (const page of [a, b]) await page.locator('.online-private summary').click();
   await a.locator('#online-create').click();
