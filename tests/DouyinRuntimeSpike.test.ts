@@ -41,6 +41,22 @@ describe('Douyin runtime spike adapters', () => {
     expect(board.tiles().length).toBeGreaterThan(0);
   });
 
+  it('ignores touch after deactivation until the next active gesture', () => {
+    const { api, handlers } = fakeApi();
+    const moves: string[] = [];
+    const touch = new DouyinSwipeInput(api, direction => moves.push(direction));
+    const point = (x: number): DouyinTouchEvent => ({ touches: [], changedTouches: [{ identifier: 1, clientX: x, clientY: 0 }] });
+    touch.setActive(true);
+    handlers.get('start')!(point(0));
+    touch.setActive(false);
+    handlers.get('end')!(point(100));
+    expect(moves).toEqual([]);
+    touch.setActive(true);
+    handlers.get('start')!(point(0));
+    handlers.get('end')!(point(100));
+    expect(moves).toEqual(['right']);
+  });
+
   it('uses protocol v6 hello/welcome/ping/pong and closes without duplicate sockets', () => {
     const { api, handlers, socket, raw } = fakeApi();
     const probe = new DouyinSocketProbe(api);
@@ -58,6 +74,21 @@ describe('Douyin runtime spike adapters', () => {
     expect(probe.log).toContain('socket error: test error');
     probe.close(); probe.close();
     expect(socket.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores socket callbacks from an earlier generation after reconnect', () => {
+    const { api, handlers, socket } = fakeApi();
+    const probe = new DouyinSocketProbe(api);
+    probe.connect();
+    const oldOpen = handlers.get('open')!;
+    const oldMessage = handlers.get('message')!;
+    probe.close();
+    probe.connect();
+    oldOpen();
+    oldMessage({ data: JSON.stringify({ type: 'welcome', protocolVersion: PROTOCOL_VERSION }) });
+    expect(socket.send).not.toHaveBeenCalled();
+    handlers.get('open')!();
+    expect(socket.send).toHaveBeenCalledTimes(1);
   });
 
   it('does not duplicate render frames, lifecycle listeners, or sockets across hide/show', () => {
@@ -85,6 +116,16 @@ describe('Douyin runtime spike adapters', () => {
     handlers.get('show')!(); handlers.get('show')!();
     expect(resume).toHaveBeenCalledTimes(2);
     expect(raw.connectSocket).toHaveBeenCalledTimes(2);
+    for (let i = 0; i < 3; i++) {
+      handlers.get('hide')!(); handlers.get('hide')!();
+      expect(pending.size).toBe(0);
+      expect(probe.isConnectedOrConnecting()).toBe(false);
+      handlers.get('show')!(); handlers.get('show')!();
+      expect(pending.size).toBe(1);
+      expect(probe.isConnectedOrConnecting()).toBe(true);
+    }
+    expect(raw.connectSocket).toHaveBeenCalledTimes(5);
+    expect(socket.close).toHaveBeenCalledTimes(4);
     expect(raw.onShow).toHaveBeenCalledTimes(1);
     expect(raw.onHide).toHaveBeenCalledTimes(1);
   });

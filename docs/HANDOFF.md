@@ -335,4 +335,4 @@ CI must pass:
 
 ## M2.9 runtime spike handoff
 
-The isolated Douyin mini-game build is in `platform/douyin/`; run `npm run build:douyin` and open its `dist` directory in Douyin IDE. Canvas/Three.js and touch/shared-core movement worked in the IDE simulator. WebSocket is blocked by the mini-game legal-domain list, and repeated real hide/show remains unverified. Exact evidence and the remaining gate are in `docs/DOUYIN_RUNTIME_SPIKE.md`.
+The isolated Douyin mini-game build is in `platform/douyin/`; run `npm run build:douyin` and open its `dist` directory in Douyin IDE. Canvas/Three.js, touch/shared-core movement, and Protocol v6 WebSocket hello/welcome/pong worked in IDE development mode. The only remaining spike acceptance is a repeated real hide/show cycle. IDE 4.5.5 needed its development-only domain bypass checkbox enabled despite the source `urlCheck: true` setting; formal publication requires the socket domain whitelist. Exact logs and the configuration discrepancy are in `docs/DOUYIN_RUNTIME_SPIKE.md`.

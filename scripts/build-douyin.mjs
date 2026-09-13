@@ -1,5 +1,5 @@
 import { build } from 'vite';
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, readFile } from 'node:fs/promises';
 
 const outDir = 'platform/douyin/dist';
 await build({
@@ -23,3 +23,7 @@ await mkdir(outDir, { recursive: true });
 await Promise.all(['game.json', 'project.config.json'].map(name =>
   copyFile(`platform/douyin/${name}`, `${outDir}/${name}`),
 ));
+const projectConfig = JSON.parse(await readFile(`${outDir}/project.config.json`, 'utf8'));
+if (projectConfig.setting?.urlCheck !== true) {
+  throw new Error('Douyin spike build requires setting.urlCheck=true in dist/project.config.json');
+}

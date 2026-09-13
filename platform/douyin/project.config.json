@@ -3,6 +3,7 @@
   "appid": "testappid",
   "compileType": "game",
   "setting": {
-    "es6": true
+    "es6": true,
+    "urlCheck": true
   }
 }
