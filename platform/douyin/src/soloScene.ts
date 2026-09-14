@@ -65,6 +65,11 @@ export class DouyinSoloScene {
   private visualTime = 0;
   private nextDynamicHudAt = 0;
   private nextHomeHudAt = 0;
+  private perfTime = 0;
+  private perfFrames = 0;
+  private goodPerfWindows = 0;
+  private quality: 'high' | 'medium' | 'low' = 'high';
+  private currentDpr = 1;
   private notice: { text: string; until: number } | null = null;
   private joinPadOpen = false;
   private joinCode = '';
@@ -296,6 +301,7 @@ export class DouyinSoloScene {
     if (this.disposed) return;
     const delta = Math.min(0.033, this.clock.getDelta());
     this.visualTime += delta;
+    this.samplePerformance(delta);
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
@@ -729,6 +735,7 @@ export class DouyinSoloScene {
     const width = Math.max(1, info.width);
     const height = Math.max(1, info.height);
     const dpr = Math.min(1.65, Math.max(1, info.pixelRatio));
+    this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
 
@@ -744,6 +751,50 @@ export class DouyinSoloScene {
     this.uiCamera.bottom = -1;
     this.uiCamera.updateProjectionMatrix();
     if (this.uiPlane) this.uiPlane.scale.set(aspect, 1, 1);
+  }
+
+  private samplePerformance(delta: number): void {
+    if (!Number.isFinite(delta) || delta <= 0) return;
+    this.perfTime += delta;
+    this.perfFrames += 1;
+    if (this.perfTime < 2) return;
+
+    const fps = this.perfFrames / this.perfTime;
+    this.perfTime = 0;
+    this.perfFrames = 0;
+
+    if (fps < 43) {
+      this.goodPerfWindows = 0;
+      this.applyQuality('low', 1.12);
+      return;
+    }
+    if (fps < 53) {
+      this.goodPerfWindows = 0;
+      this.applyQuality('medium', 1.32);
+      return;
+    }
+    if (fps >= 57) {
+      this.goodPerfWindows += 1;
+      if (this.goodPerfWindows >= 2) {
+        this.applyQuality('high', 1.65);
+        this.goodPerfWindows = 0;
+      }
+    } else {
+      this.goodPerfWindows = Math.max(0, this.goodPerfWindows - 1);
+    }
+  }
+
+  private applyQuality(quality: 'high' | 'medium' | 'low', maxDpr: number): void {
+    const info = this.platform.getSystemInfo();
+    const targetDpr = Math.min(Math.max(1, info.pixelRatio), maxDpr);
+    if (this.quality === quality && Math.abs(this.currentDpr - targetDpr) < 0.04) return;
+    this.quality = quality;
+    this.currentDpr = targetDpr;
+    this.renderer.setPixelRatio(targetDpr);
+    this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
+    this.boardView.setQuality(quality);
+    this.online.local.setQuality(quality);
+    this.online.remote.setQuality(quality);
   }
 
   private configureCamera(): void {
