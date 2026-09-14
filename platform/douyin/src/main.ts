@@ -28,6 +28,7 @@ const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme);
 const sharedRoom = social.launchRoomCode();
 if (sharedRoom) game.openSharedRoom(sharedRoom);
+const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
 
 const touch = platform.createSwipeInput(
   (direction: Direction) => game.handleDirection(direction),
@@ -62,4 +63,5 @@ const loop = new DouyinRenderLoop(
 
 platform.lifecycle.show();
 void platform.account.bootstrap().then(result => console.log(`[M2.10.2 account] ${result.status}`));
+void unsubscribeRoomInvite;
 void loop;
