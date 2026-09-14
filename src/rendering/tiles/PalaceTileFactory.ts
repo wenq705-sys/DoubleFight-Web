@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { TileVisual } from './TileFactory';
 import { tierScale } from '../../config/tierProgression';
+import { createTextureCanvas } from '../TextureCanvasFactory';
 
 const gradient = (() => {
   const data = new Uint8Array([38, 88, 154, 255]);
@@ -138,9 +139,7 @@ function cylinder(
 }
 
 function addFace(parent: THREE.Object3D): void {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 96;
+  const canvas = createTextureCanvas(128, 96);
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.clearRect(0, 0, 128, 96);
