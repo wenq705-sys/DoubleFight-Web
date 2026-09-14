@@ -22,6 +22,19 @@ export interface DouyinCanvas {
   removeEventListener?: (name: string, listener: EventListener) => void;
 }
 
+export interface DouyinInnerAudioContext {
+  src: string;
+  volume?: number;
+  autoplay?: boolean;
+  loop?: boolean;
+  obeyMuteSwitch?: boolean;
+  play(): void;
+  stop(): void;
+  seek(position: number): void;
+  destroy(): void;
+  onError?(listener: (error: { errMsg?: string; errCode?: number }) => void): void;
+}
+
 export interface DouyinAdError { errCode?: number; errNo?: number; errMsg?: string }
 
 export interface DouyinRewardedVideoAd {
@@ -86,6 +99,7 @@ export interface DouyinApi {
   removeStorageSync?(key: string): void;
 
   vibrateShort?(options?: { fail?: (error: { errMsg?: string }) => void }): void;
+  createInnerAudioContext?(): DouyinInnerAudioContext;
   login?(options: {
     force: false;
     success: (result: { isLogin: boolean; code?: string; anonymousCode?: string }) => void;
