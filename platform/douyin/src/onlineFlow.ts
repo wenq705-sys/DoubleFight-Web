@@ -13,6 +13,7 @@ import { OnlineController } from '../../../src/battle/OnlineController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { OnlineClient, type OnlineClientState } from '../../../src/network/OnlineClient';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
+import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 
 export type DouyinOnlineMode = 'lobby' | 'matching' | 'room' | 'playing' | 'result';
 
@@ -29,9 +30,9 @@ export interface DouyinOnlineSnapshot {
 }
 
 export class DouyinOnlineFlow {
-  readonly local = new BattleBoardView('kingdom', 'board', undefined, undefined, true);
-  readonly remote = new BattleBoardView('kingdom', 'board', undefined, undefined, true);
-  readonly controller = new OnlineController(this.local, this.remote);
+  readonly local: BattleBoardView;
+  readonly remote: BattleBoardView;
+  readonly controller: OnlineController;
 
   private selectedTheme: ThemeId;
   private loadout: SkillLoadout;
@@ -48,7 +49,11 @@ export class DouyinOnlineFlow {
     private readonly platform: DouyinPlatform,
     readonly client: OnlineClient,
     initialTheme: ThemeId,
+    onPresentation?: (event: PresentationEvent) => void,
   ) {
+    this.local = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
+    this.remote = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
+    this.controller = new OnlineController(this.local, this.remote);
     this.selectedTheme = initialTheme;
     this.playerName = (platform.storage.getItem('doublefight-player-name') ?? '玩家').trim().slice(0, 16) || '玩家';
     this.loadout = this.loadLoadout();
@@ -192,7 +197,9 @@ export class DouyinOnlineFlow {
   move(direction: Direction): boolean {
     const state = this.client.snapshot();
     if (!this.opened || state.status !== 'connected' || state.match?.phase !== 'playing') return false;
-    return this.controller.move(direction, move => this.client.move(move));
+    const moved = this.controller.move(direction, move => this.client.move(move));
+    if (moved) this.platform.haptics.trigger('light');
+    return moved;
   }
 
   castSkill(skillId: SkillId): { ok: boolean; reason?: string } {
