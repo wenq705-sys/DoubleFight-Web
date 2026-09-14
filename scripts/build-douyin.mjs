@@ -1,7 +1,7 @@
 import { build } from 'vite';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 
-const release = process.env.DOUYIN_RELEASE === '1';
+const release = process.argv.includes('--release') || process.env.DOUYIN_RELEASE === '1';
 const outDir = release ? 'platform/douyin/dist-release' : 'platform/douyin/dist';
 const projectConfigSource = release
   ? 'platform/douyin/project.release.config.json'
