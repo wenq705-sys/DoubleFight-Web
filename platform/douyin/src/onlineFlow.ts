@@ -40,6 +40,7 @@ export class DouyinOnlineFlow {
   private unsubscribe: (() => void) | null = null;
   private changeListeners = new Set<() => void>();
   private currentMatchId: string | null = null;
+  private pendingJoinCode: string | null = null;
   private serverClockOffsetMs = 0;
   private lastMessage: ServerMessage | undefined;
 
@@ -75,6 +76,7 @@ export class DouyinOnlineFlow {
     if (state.room) this.client.leaveRoom();
     this.controller.reset();
     this.currentMatchId = null;
+    this.pendingJoinCode = null;
     this.opened = false;
     this.emit();
   }
@@ -154,8 +156,15 @@ export class DouyinOnlineFlow {
 
   joinRoom(code: string): void {
     const normalized = code.replace(/\D/g, '').slice(0, 6);
+    if (normalized.length !== 6) return;
     const state = this.client.snapshot();
-    if (normalized.length !== 6 || state.status !== 'connected' || state.room) return;
+    if (state.room) return;
+    if (state.status !== 'connected') {
+      this.pendingJoinCode = normalized;
+      this.client.connect();
+      return;
+    }
+    this.pendingJoinCode = null;
     this.client.joinRoom(normalized, this.playerName, this.selectedTheme, this.loadout);
   }
 
@@ -233,6 +242,11 @@ export class DouyinOnlineFlow {
 
   private consume(state: Readonly<OnlineClientState>, message?: ServerMessage): void {
     this.lastMessage = message;
+    if (state.status === 'connected' && this.pendingJoinCode && !state.room) {
+      const code = this.pendingJoinCode;
+      this.pendingJoinCode = null;
+      this.client.joinRoom(code, this.playerName, this.selectedTheme, this.loadout);
+    }
     if (message?.type === 'skill_event' && state.playerId) {
       this.controller.skill(message.event, state.playerId);
       if (message.event.targetId === state.playerId) this.platform.haptics.trigger('error');
