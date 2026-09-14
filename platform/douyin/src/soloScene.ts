@@ -30,6 +30,7 @@ export class DouyinSoloScene {
   private readonly uiPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
   private inputLocked = false;
+  private skillCharges = 3;
   private currentTheme: ThemeId;
   private disposed = false;
 
@@ -116,6 +117,60 @@ export class DouyinSoloScene {
     this.inputLocked = false;
     this.refreshHud();
     return true;
+  }
+
+  async useRandomClear(): Promise<boolean> {
+    if (this.disposed || this.inputLocked || this.skillCharges <= 0) {
+      this.platform.haptics.trigger('light');
+      return false;
+    }
+    const result = this.controller.clearRandom(2);
+    if (result.removed.length === 0) {
+      this.platform.haptics.trigger('light');
+      return false;
+    }
+    this.inputLocked = true;
+    this.skillCharges -= 1;
+    this.platform.haptics.trigger('success');
+    this.refreshHud();
+    await result.finished;
+    if (!this.disposed) {
+      this.inputLocked = false;
+      this.refreshHud();
+    }
+    return true;
+  }
+
+  handleTap(x: number, y: number): void {
+    if (this.disposed || this.inputLocked) return;
+    const info = this.platform.getSystemInfo();
+    const safeTop = Math.max(12, info.safeArea.top + 8);
+    const safeBottom = Math.max(14, info.safeArea.bottom + 10);
+
+    const themeWidth = 132;
+    const themeY = safeTop + 68;
+    if (
+      x >= info.width / 2 - themeWidth / 2
+      && x <= info.width / 2 + themeWidth / 2
+      && y >= themeY
+      && y <= themeY + 32
+    ) {
+      this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
+      this.platform.haptics.trigger('light');
+      return;
+    }
+
+    const skillWidth = 150;
+    const skillHeight = 42;
+    const skillY = info.height - safeBottom - 50;
+    if (
+      x >= info.width / 2 - skillWidth / 2
+      && x <= info.width / 2 + skillWidth / 2
+      && y >= skillY
+      && y <= skillY + skillHeight
+    ) {
+      void this.useRandomClear();
+    }
   }
 
   setTheme(theme: ThemeId): void {
@@ -271,24 +326,31 @@ export class DouyinSoloScene {
     ctx.fillText(`最高 ${this.highest}`, logicalWidth - edge - 16, safeTop + 43);
 
     const themeLabel = this.currentTheme === 'kingdom' ? '迷你王国' : '宫廷晋升';
-    const pillWidth = 118;
+    const pillWidth = 132;
     const pillY = safeTop + 68;
-    this.roundedRect(ctx, logicalWidth / 2 - pillWidth / 2, pillY, pillWidth, 30, 15);
+    this.roundedRect(ctx, logicalWidth / 2 - pillWidth / 2, pillY, pillWidth, 32, 16);
     ctx.fillStyle = 'rgba(255, 239, 189, .88)';
     ctx.fill();
     ctx.fillStyle = '#543825';
     ctx.font = '800 12px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(themeLabel, logicalWidth / 2, pillY + 15);
+    ctx.fillText(`‹  ${themeLabel}  ›`, logicalWidth / 2, pillY + 16);
 
-    const hintWidth = Math.min(230, logicalWidth - 36);
-    const hintY = logicalHeight - safeBottom - 42;
-    this.roundedRect(ctx, logicalWidth / 2 - hintWidth / 2, hintY, hintWidth, 32, 16);
-    ctx.fillStyle = 'rgba(18, 38, 49, .74)';
+    const skillWidth = 150;
+    const skillY = logicalHeight - safeBottom - 50;
+    this.roundedRect(ctx, logicalWidth / 2 - skillWidth / 2, skillY, skillWidth, 42, 18);
+    ctx.fillStyle = this.skillCharges > 0 ? 'rgba(24, 86, 95, .90)' : 'rgba(50, 60, 64, .70)';
     ctx.fill();
-    ctx.fillStyle = '#f8edcb';
-    ctx.font = '750 12px sans-serif';
-    ctx.fillText('滑动合成 · 向 2048 进阶', logicalWidth / 2, hintY + 16);
+    ctx.strokeStyle = this.skillCharges > 0 ? '#ffe08a' : '#8b989a';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = this.skillCharges > 0 ? '#fff0b6' : '#aeb9ba';
+    ctx.font = '850 14px sans-serif';
+    ctx.fillText(`✦ 清块  ×${this.skillCharges}`, logicalWidth / 2, skillY + 21);
+
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.font = '650 10px sans-serif';
+    ctx.fillText('滑动合成 · 点击技能 · 向 2048 进阶', logicalWidth / 2, skillY - 12);
 
     this.uiTexture.needsUpdate = true;
   }
