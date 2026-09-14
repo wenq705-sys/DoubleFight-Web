@@ -30,6 +30,8 @@ jobs:
         run: npm run build
       - name: Build Douyin
         run: npm run build:douyin
+      - name: Build Douyin release
+        run: npm run build:douyin:release
       - name: Game server smoke test
         run: |
           HOST=127.0.0.1 node --import tsx server/index.ts > /tmp/doublefight-server.log 2>&1 &
