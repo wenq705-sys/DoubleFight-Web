@@ -49,6 +49,10 @@ export class DouyinSoloScene {
       return canvas as unknown as HTMLCanvasElement;
     });
 
+    // Three.js expects browser-style canvas event hooks; Douyin Canvas does not always expose them.
+    screenCanvas.addEventListener ??= () => {};
+    screenCanvas.removeEventListener ??= () => {};
+
     this.renderer = new THREE.WebGLRenderer({
       canvas: screenCanvas as unknown as HTMLCanvasElement,
       context,
@@ -67,8 +71,8 @@ export class DouyinSoloScene {
     this.scene.add(this.boardView.root);
 
     this.configureLighting();
-    this.applyThemeLook();
     this.resize();
+    this.applyThemeLook();
     this.boardView.prewarmTheme(theme);
     this.controller.reset();
 
