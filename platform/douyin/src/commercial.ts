@@ -60,17 +60,28 @@ export class DouyinCommercial {
 
     this.interstitialBusy = true;
     let ad: DouyinInterstitialAd | null = null;
+    let shown = false;
     try {
       ad = this.api.createInterstitialAd({ adUnitId: DOUYIN_PRODUCT_CONFIG.ads.interstitial });
-      await ad.load();
-      await ad.show();
+      const instance = ad;
+      instance.onClose(() => {
+        try { instance.destroy(); } catch { /* native instance may already be invalid */ }
+      });
+      instance.onError(() => {
+        try { instance.destroy(); } catch { /* native instance may already be invalid */ }
+      });
+      await instance.load();
+      await instance.show();
+      shown = true;
       this.lastInterstitialAt = Date.now();
       return true;
     } catch {
       return false;
     } finally {
       this.interstitialBusy = false;
-      try { ad?.destroy(); } catch { /* native instance may already be invalid */ }
+      if (!shown) {
+        try { ad?.destroy(); } catch { /* ignore invalid native instance */ }
+      }
     }
   }
 
