@@ -70,6 +70,7 @@ export class DouyinSoloScene {
   private joinCode = '';
   private exitConfirm = false;
   private settingsOpen = false;
+  private onboardingOpen = false;
   private soundEnabled = true;
   private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
@@ -110,6 +111,7 @@ export class DouyinSoloScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.autoClear = false;
 
+    this.onboardingOpen = this.platform.storage.getItem('doublefight-onboarding-complete') !== '1';
     this.soundEnabled = this.platform.storage.getItem('doublefight-sound-enabled') !== '0';
     this.hapticsEnabled = this.platform.storage.getItem('doublefight-haptics-enabled') !== '0';
     this.audio.setEnabled(this.soundEnabled);
@@ -256,6 +258,21 @@ export class DouyinSoloScene {
 
   handleTap(x: number, y: number): void {
     if (this.disposed || this.inputLocked) return;
+    if (this.onboardingOpen) {
+      const info = this.platform.getSystemInfo();
+      const button = { x: 46, y: info.height * 0.71, width: info.width - 92, height: 48 };
+      if (this.hit(x, y, button)) {
+        this.onboardingOpen = false;
+        this.platform.storage.setItem('doublefight-onboarding-complete', '1');
+        this.platform.haptics.trigger('light');
+        this.refreshHud();
+      }
+      return;
+    }
+    if (this.settingsOpen) {
+      this.handleSettingsTap(x, y);
+      return;
+    }
     if (this.mode === 'home') this.handleHomeTap(x, y);
     else if (this.mode === 'solo') this.handleSoloTap(x, y);
     else this.handleOnlineTap(x, y);
@@ -443,6 +460,13 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const layout = this.homeLayout(info.width, info.height, info.safeArea.bottom);
 
+    if (this.hit(x, y, layout.settings)) {
+      this.settingsOpen = true;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
+
     if (this.hit(x, y, layout.theme)) {
       this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
       this.platform.haptics.trigger('light');
@@ -473,6 +497,37 @@ export class DouyinSoloScene {
         this.notice = { text: '当前环境暂不支持侧边栏', until: this.visualTime + 1.2 };
         this.refreshHud();
       }
+    }
+  }
+
+  private handleSettingsTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const width = Math.min(300, info.width - 36);
+    const x0 = (info.width - width) / 2;
+    const y0 = info.height * 0.28;
+    const sound = { x: x0 + 18, y: y0 + 72, width: width - 36, height: 44 };
+    const haptics = { x: x0 + 18, y: y0 + 126, width: width - 36, height: 44 };
+    const close = { x: x0 + 42, y: y0 + 196, width: width - 84, height: 42 };
+
+    if (this.hit(x, y, sound)) {
+      this.soundEnabled = !this.soundEnabled;
+      this.platform.storage.setItem('doublefight-sound-enabled', this.soundEnabled ? '1' : '0');
+      this.audio.setEnabled(this.soundEnabled);
+      if (this.soundEnabled) this.audio.victory();
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, haptics)) {
+      this.hapticsEnabled = !this.hapticsEnabled;
+      this.platform.storage.setItem('doublefight-haptics-enabled', this.hapticsEnabled ? '1' : '0');
+      this.platform.haptics.setEnabled(this.hapticsEnabled);
+      if (this.hapticsEnabled) this.platform.haptics.trigger('medium');
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.settingsOpen = false;
+      this.refreshHud();
     }
   }
 
@@ -798,6 +853,8 @@ export class DouyinSoloScene {
     if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
+    if (this.settingsOpen) this.drawSettings(ctx, width, height);
+    if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
     this.uiTexture.needsUpdate = true;
   }
 
@@ -824,6 +881,12 @@ export class DouyinSoloScene {
     ctx.fillStyle = 'rgba(236,244,242,.78)';
     ctx.font = '750 10px sans-serif';
     ctx.fillText('DOUBLE FIGHT · 3D 2048', width / 2, titleTop + 50);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(238,244,241,.78)';
+    ctx.font = '800 16px sans-serif';
+    ctx.fillText('⚙', 24, titleTop + 24);
+    ctx.textAlign = 'center';
 
     const metaY = Math.max(titleTop + 72, height * 0.56);
     ctx.fillStyle = 'rgba(12, 28, 36, .72)';
@@ -1144,6 +1207,104 @@ export class DouyinSoloScene {
     ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
+  private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(4,10,15,.68)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(300, width - 36);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.28;
+    this.roundedRect(ctx, x, y, panelWidth, 256, 26);
+    ctx.fillStyle = 'rgba(14,31,39,.97)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,151,.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff1ca';
+    ctx.font = '900 21px sans-serif';
+    ctx.fillText('设置', width / 2, y + 38);
+    ctx.fillStyle = '#aebfc1';
+    ctx.font = '650 9px sans-serif';
+    ctx.fillText('DOUBLE FIGHT', width / 2, y + 58);
+
+    const sound = { x: x + 18, y: y + 72, width: panelWidth - 36, height: 44 };
+    const haptics = { x: x + 18, y: y + 126, width: panelWidth - 36, height: 44 };
+    this.drawSettingRow(ctx, sound, '声音', this.soundEnabled);
+    this.drawSettingRow(ctx, haptics, '震动', this.hapticsEnabled);
+
+    ctx.fillStyle = '#9db0b2';
+    ctx.font = '650 9px sans-serif';
+    ctx.fillText('音效遵循系统静音设置', width / 2, y + 184);
+    this.drawPillButton(ctx, { x: x + 42, y: y + 196, width: panelWidth - 84, height: 42 }, '完成', 'primary');
+  }
+
+  private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, enabled: boolean): void {
+    this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 15);
+    ctx.fillStyle = 'rgba(27,52,61,.9)';
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#eff3ec';
+    ctx.font = '800 13px sans-serif';
+    ctx.fillText(label, rect.x + 16, rect.y + rect.height / 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = enabled ? '#8ff0c2' : '#97a7aa';
+    ctx.font = '850 11px sans-serif';
+    ctx.fillText(enabled ? '开启' : '关闭', rect.x + rect.width - 16, rect.y + rect.height / 2);
+  }
+
+  private drawOnboarding(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,10,15,.60)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(314, width - 30);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.34;
+    const panelHeight = 330;
+    this.roundedRect(ctx, x, y, panelWidth, panelHeight, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + panelHeight);
+    gradient.addColorStop(0, 'rgba(14,42,50,.98)');
+    gradient.addColorStop(1, 'rgba(20,31,44,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243,205,105,.5)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe7a0';
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText('欢迎来到双数对决', width / 2, y + 48);
+    ctx.fillStyle = '#d5e1df';
+    ctx.font = '700 11px sans-serif';
+    ctx.fillText('2048 × 技能 × 实时对决', width / 2, y + 76);
+
+    const steps = [
+      ['01', '滑动棋盘', '相同数字合成，冲击 2048'],
+      ['02', '释放技能', '清块、护盾、石化改变局势'],
+      ['03', '挑战好友', '快速匹配或创建 6 位好友房'],
+    ] as const;
+    steps.forEach((step, index) => {
+      const rowY = y + 112 + index * 58;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#efc968';
+      ctx.font = '900 10px sans-serif';
+      ctx.fillText(step[0], x + 24, rowY);
+      ctx.fillStyle = '#f3f2e9';
+      ctx.font = '850 12px sans-serif';
+      ctx.fillText(step[1], x + 54, rowY - 6);
+      ctx.fillStyle = '#9fb3b5';
+      ctx.font = '650 9px sans-serif';
+      ctx.fillText(step[2], x + 54, rowY + 12);
+    });
+
+    this.drawPillButton(
+      ctx,
+      { x: 46, y: height * 0.71, width: width - 92, height: 48 },
+      '开始游戏',
+      'primary',
+    );
+  }
+
   private drawExitConfirm(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     ctx.fillStyle = 'rgba(4,10,15,.62)';
     ctx.fillRect(0, 0, width, height);
@@ -1291,6 +1452,7 @@ export class DouyinSoloScene {
     const soloY = height - safeBottom - 218;
     const utilityWidth = Math.min(112, (width - 64) / 2);
     return {
+      settings: { x: 12, y: this.hudTop() + 5, width: 44, height: 40 },
       theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
       solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
       online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },
