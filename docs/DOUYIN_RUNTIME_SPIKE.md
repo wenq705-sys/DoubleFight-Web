@@ -140,21 +140,18 @@ Return one of:
 ### FEASIBLE
 Three.js + touch + socket + lifecycle all work with a thin platform adapter.
 
-### FEASIBLE WITH ONE MANUAL ACCEPTANCE
-Canvas, touch, and Protocol v6 WebSocket work in the IDE; a real repeated hide/show lifecycle acceptance is the sole remaining gate. Record any bounded canvas shims.
-
 ### BLOCKED
 A runtime or environment-configuration limitation still prevents the current architecture from being verified. Provide the smallest reproducible blocker before proposing a rewrite.
 
-Do not proceed to account/ads/social integration until this decision is recorded.
+The decision is now recorded as **FEASIBLE**. The next phase may proceed to the formal platform adapter, account bootstrap, ads, social/share, and release configuration work.
 
 ## M2.9 observed result (2026-09-13)
 
-**FEASIBLE WITH ONE MANUAL ACCEPTANCE.** Douyin IDE 4.5.5 on the iPhone 15 Pro simulator ran the generated `platform/douyin/dist` project. The generated directory contains `game.js`, `game.json` (portrait), and `project.config.json`. Only a real hide/show cycle remains unobserved.
+**FEASIBLE.** Douyin IDE 4.5.5 on the iPhone 15 Pro simulator ran the generated `platform/douyin/dist` project. The generated directory contains `game.js`, `game.json` (portrait), and `project.config.json`. Real repeated background/foreground acceptance also completed successfully.
 
 - Gate 1 **passed in IDE**: `tt.createCanvas().getContext('webgl2')` rendered a 4×4 board with the existing Kingdom `TileFactory`; console: `WebGL WebGL 2.0 (OpenGL ES 3.0 Chromium); Three.js 179; 393x852`. [Simulator capture](../platform/douyin/evidence/ide-webgl2-board.png). WebGL1 alone fails with `THREE.WebGLRenderer: WebGL 1 is not supported since r163.` The only canvas shim supplies `addEventListener` / `removeEventListener` hooks required by Three.js; no DOM UI is used.
 - Gate 2 **passed in IDE**: simulator swipe reached `tt.onTouch*`, then the existing `Board2048`; example log: `[M2.9 gate2] right changed=true score=156 tiles=9`. Four directions and cancellation also pass automated adapter tests.
 - Gate 3 **passed in IDE development mode**: [captured console log](../platform/douyin/evidence/ide-runtime-v6.txt) records `open`, `hello v6`, `welcome v6`, and `pong 302ms` against `wss://game.whvwayfare.online/ws`; a simulator restart also produced `pong 307ms`. Before enabling the development-only domain bypass, the exact error was `connectSocket:fail url not in domain list, url == wss://game.whvwayfare.online/ws`. No server or protocol changes were made.
-- Gate 4 **code-level PASS; IDE/real-device hide/show acceptance outstanding**: IDE logged `show`, but its “stop simulator” action destroyed the instance instead of dispatching a reusable `onHide`. Automated tests cover repeated show/hide, one listener registration, at most one pending frame/socket, deactivated touch, and stale socket callbacks. A real background/foreground cycle is still required.
+- Gate 4 **PASS**: automated tests cover repeated show/hide, one listener registration, at most one pending frame/socket, deactivated touch, and stale socket callbacks. Manual acceptance then repeated background/foreground cycles on device/IDE without black screen, duplicate gesture handling, stuck rendering, or persistent socket failure; the game resumed and remained interactive after each return.
 
 The source `project.config.json` sets `setting.urlCheck: true`, and `npm run build:douyin` verifies that it reaches `dist`. **IDE 4.5.5 did not treat that value as the enabled “不校验合法域名” checkbox in this session**: it initially showed the checkbox off; clicking it automatically via the IDE debugger wrote `urlCheck: false` to the local generated `dist` config and allowed the socket. This is an observed IDE configuration discrepancy, not an inferred network failure. The bypass is **for development diagnostics only**. Never use it to validate a release: disable bypass and register `game.whvwayfare.online` as the formal legal WebSocket domain for the actual mini-game AppID before publishing. See the [official network guidance](https://developer.open-douyin.com/docs/resource/zh-CN/mini-game/develop/guide/basic-function/network).
