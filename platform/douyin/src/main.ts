@@ -20,9 +20,10 @@ const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, canvas, context, theme);
 
-const touch = platform.createSwipeInput((direction: Direction) => {
-  void game.move(direction);
-});
+const touch = platform.createSwipeInput(
+  (direction: Direction) => { void game.move(direction); },
+  (x, y) => game.handleTap(x, y),
+);
 
 client.subscribe((state, message) => {
   if (message?.type === 'welcome') {
