@@ -292,6 +292,8 @@ export class DouyinSoloScene {
 
     this.renderer.clearDepth();
     this.renderer.setScissorTest(false);
+    const frame = this.platform.getSystemInfo();
+    this.renderer.setViewport(0, 0, frame.width, frame.height);
     this.renderer.render(this.uiScene, this.uiCamera);
   }
 
