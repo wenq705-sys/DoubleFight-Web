@@ -9,6 +9,8 @@ import {
   type SkillId,
   type SkillLoadout,
 } from '../../shared/index';
+import type { SocketConnection, SocketTransport } from '../platform/types';
+import { BrowserSocketTransport } from '../platform/browser/BrowserSocketTransport';
 
 export type OnlineStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'closed';
 
@@ -27,10 +29,10 @@ export interface OnlineClientState {
 type Listener = (state: Readonly<OnlineClientState>, message?: ServerMessage) => void;
 
 export class OnlineClient {
-  private socket: WebSocket | null = null;
+  private socket: SocketConnection | null = null;
   private listeners = new Set<Listener>();
   private reconnectAttempts = 0;
-  private reconnectTimer: number | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
   private sequence = 0;
   private skillSequence = 0;
@@ -51,7 +53,7 @@ export class OnlineClient {
     lastError: null,
   };
 
-  constructor(private readonly endpoint: string) {}
+  constructor(private readonly endpoint: string, private readonly transport: SocketTransport = new BrowserSocketTransport()) {}
 
   snapshot(): Readonly<OnlineClientState> {
     return { ...this.state };
@@ -68,15 +70,18 @@ export class OnlineClient {
       this.patch({ lastError: '联机服务器尚未配置。', status: 'closed' });
       return;
     }
-    if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return;
+    if (this.socket?.readyState === 'open' || this.socket?.readyState === 'connecting') return;
 
     this.intentionalClose = false;
     this.patch({ status: this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting', lastError: null });
 
-    const socket = new WebSocket(this.endpoint);
+    let socket: SocketConnection;
+    try { socket = this.transport.connect(this.endpoint); }
+    catch (error) { this.patch({ lastError: `无法连接联机服务器：${String(error)}` }); this.scheduleReconnect(); return; }
     this.socket = socket;
 
-    socket.addEventListener('open', () => {
+    socket.onOpen(() => {
+      if (this.socket !== socket) return;
       this.reconnectAttempts = 0;
       this.patch({ status: 'connected' });
       this.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION });
@@ -88,11 +93,11 @@ export class OnlineClient {
       }
     });
 
-    socket.addEventListener('message', (event) => {
-      if (typeof event.data !== 'string') return;
+    socket.onMessage((data) => {
+      if (this.socket !== socket) return;
       let message: ServerMessage;
       try {
-        message = JSON.parse(event.data) as ServerMessage;
+        message = JSON.parse(data) as ServerMessage;
       } catch {
         this.patch({ lastError: '服务器返回了无法解析的数据。' });
         return;
@@ -100,7 +105,8 @@ export class OnlineClient {
       this.consume(message);
     });
 
-    socket.addEventListener('close', () => {
+    socket.onClose(() => {
+      if (this.socket !== socket) return;
       this.socket = null;
       if (this.state.matchmaking.status === 'searching') {
         this.patch({
@@ -118,14 +124,15 @@ export class OnlineClient {
       this.scheduleReconnect();
     });
 
-    socket.addEventListener('error', () => {
+    socket.onError(() => {
+      if (this.socket !== socket) return;
       this.patch({ lastError: '无法连接联机服务器。' });
     });
   }
 
   close(): void {
     this.intentionalClose = true;
-    if (this.reconnectTimer !== null) window.clearTimeout(this.reconnectTimer);
+    if (this.reconnectTimer !== null) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.socket?.close();
     this.socket = null;
@@ -198,7 +205,7 @@ export class OnlineClient {
   }
 
   private send(message: ClientMessage): void {
-    if (this.socket?.readyState !== WebSocket.OPEN) {
+    if (this.socket?.readyState !== 'open') {
       this.patch({ lastError: '当前未连接联机服务器。' });
       return;
     }
@@ -251,7 +258,7 @@ export class OnlineClient {
     this.reconnectAttempts += 1;
     const delay = Math.min(8_000, 500 * 2 ** Math.min(this.reconnectAttempts - 1, 4));
     this.patch({ status: 'reconnecting' });
-    this.reconnectTimer = window.setTimeout(() => {
+    this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
     }, delay);

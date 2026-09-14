@@ -13,7 +13,7 @@ await build({
     sourcemap: false,
     lib: {
       entry: 'platform/douyin/src/main.ts',
-      name: 'DoubleFightDouyinRuntimeSpike',
+      name: 'DoubleFightDouyinPlatformFoundation',
       formats: ['iife'],
       fileName: () => 'game.js',
     },
@@ -25,5 +25,5 @@ await Promise.all(['game.json', 'project.config.json'].map(name =>
 ));
 const projectConfig = JSON.parse(await readFile(`${outDir}/project.config.json`, 'utf8'));
 if (projectConfig.setting?.urlCheck !== true) {
-  throw new Error('Douyin spike build requires setting.urlCheck=true in dist/project.config.json');
+  throw new Error('Douyin development build requires setting.urlCheck=true in dist/project.config.json');
 }

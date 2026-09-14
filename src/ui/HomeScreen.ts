@@ -1,5 +1,6 @@
 import type { ThemeId } from '../config/themes';
 import { themePreviews } from '../rendering/themes/ThemePreview';
+import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 type ThemeCard = {
   id: ThemeId | 'candy' | 'snow';
@@ -171,8 +172,8 @@ export class HomeScreen {
       : '<span>⚔</span> 在线对决';
 
     if (card.id === 'kingdom' || card.id === 'palace') {
-      const best = Number(localStorage.getItem(`doublefight-best-${card.id}`) ?? 0);
-      const highest = Number(localStorage.getItem(`doublefight-highest-${card.id}`) ?? 2);
+      const best = Number(browserPlatform.storage.getItem(`doublefight-best-${card.id}`) ?? 0);
+      const highest = Number(browserPlatform.storage.getItem(`doublefight-highest-${card.id}`) ?? 2);
       this.record.textContent = `最高 ${highest}  ·  BEST ${best.toLocaleString('zh-CN')}`;
       if (notify) this.onPreviewHandler?.(card.id);
     } else {

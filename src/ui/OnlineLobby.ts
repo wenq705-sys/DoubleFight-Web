@@ -1,3 +1,4 @@
+import { browserPlatform } from '../platform/browser/BrowserPlatform';
 import {
   DEFAULT_SKILL_LOADOUT,
   SKILL_DEFINITIONS,
@@ -153,7 +154,7 @@ export class OnlineLobby {
     this.changeSkills.addEventListener('click', () => this.openLibrary());
     container.querySelector('#close-library')?.addEventListener('click', () => this.library.close());
 
-    const savedName = localStorage.getItem('doublefight-player-name');
+    const savedName = browserPlatform.storage.getItem('doublefight-player-name');
     if (savedName) this.nameInput.value = savedName;
     this.loadSavedSetup();
 
@@ -231,7 +232,7 @@ export class OnlineLobby {
   }
 
   show(theme: ThemeId): void {
-    if (!localStorage.getItem('doublefight-online-theme')) this.currentTheme = theme;
+    if (!browserPlatform.storage.getItem('doublefight-online-theme')) this.currentTheme = theme;
     this.renderSetup();
     this.root.classList.remove('online-lobby--hidden');
     this.root.setAttribute('aria-hidden', 'false');
@@ -395,11 +396,11 @@ export class OnlineLobby {
   }
 
   private loadSavedSetup(): void {
-    const savedTheme = localStorage.getItem('doublefight-online-theme');
+    const savedTheme = browserPlatform.storage.getItem('doublefight-online-theme');
     if (savedTheme === 'kingdom' || savedTheme === 'palace') this.currentTheme = savedTheme;
 
     try {
-      const saved = JSON.parse(localStorage.getItem('doublefight-online-loadout') ?? 'null') as unknown;
+      const saved = JSON.parse(browserPlatform.storage.getItem('doublefight-online-loadout') ?? 'null') as unknown;
       if (
         Array.isArray(saved)
         && saved.length === 3
@@ -414,8 +415,8 @@ export class OnlineLobby {
   }
 
   private persistSetup(): void {
-    localStorage.setItem('doublefight-online-theme', this.currentTheme);
-    localStorage.setItem('doublefight-online-loadout', JSON.stringify(this.loadout));
+    browserPlatform.storage.setItem('doublefight-online-theme', this.currentTheme);
+    browserPlatform.storage.setItem('doublefight-online-loadout', JSON.stringify(this.loadout));
   }
 
   private ensureConnected(action: () => void): void {
@@ -441,7 +442,7 @@ export class OnlineLobby {
   }
 
   private saveName(): void {
-    localStorage.setItem('doublefight-player-name', this.playerName());
+    browserPlatform.storage.setItem('doublefight-player-name', this.playerName());
   }
 }
 

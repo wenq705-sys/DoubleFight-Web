@@ -9,6 +9,9 @@ import { HomeScreen } from './ui/HomeScreen';
 import { OnlineLobby } from './ui/OnlineLobby';
 import { DuelScreen } from './ui/DuelScreen';
 import { OnlineClient } from './network/OnlineClient';
+import { browserPlatform } from './platform/browser/BrowserPlatform';
+
+const { storage, haptics } = browserPlatform;
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('#app root was not found.');
@@ -31,11 +34,11 @@ let inputLocked = false;
 let inGame = false;
 let pointerStart: { x: number; y: number; time: number } | null = null;
 let skillCharges = 3;
-let theme: ThemeId = localStorage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
+let theme: ThemeId = storage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
 
 const home = new HomeScreen(app, theme);
 const onlineEndpoint = resolveOnlineEndpoint();
-const onlineClient = new OnlineClient(onlineEndpoint);
+const onlineClient = new OnlineClient(onlineEndpoint, browserPlatform.socket);
 const onlineLobby = new OnlineLobby(app, onlineClient, Boolean(onlineEndpoint));
 const duelScreen = new DuelScreen(app, onlineClient);
 
@@ -44,10 +47,10 @@ const highest = () => Math.max(2, ...board.tiles().map((tile) => tile.value));
 const persistThemeRecord = (): void => {
   const scoreKey = `doublefight-best-${theme}`;
   const highestKey = `doublefight-highest-${theme}`;
-  const best = Math.max(board.score, Number(localStorage.getItem(scoreKey) ?? 0));
-  const maxTile = Math.max(highest(), Number(localStorage.getItem(highestKey) ?? 2));
-  localStorage.setItem(scoreKey, String(best));
-  localStorage.setItem(highestKey, String(maxTile));
+  const best = Math.max(board.score, Number(storage.getItem(scoreKey) ?? 0));
+  const maxTile = Math.max(highest(), Number(storage.getItem(highestKey) ?? 2));
+  storage.setItem(scoreKey, String(best));
+  storage.setItem(highestKey, String(maxTile));
 };
 
 const refresh = () => {
@@ -59,7 +62,7 @@ const refresh = () => {
 
 function applyTheme(nextTheme: ThemeId): void {
   theme = nextTheme;
-  localStorage.setItem('doublefight-theme', theme);
+  storage.setItem('doublefight-theme', theme);
   scene.setTheme(theme, board.tiles());
   hud.setTheme(THEMES[theme]);
 }
@@ -95,7 +98,7 @@ async function useRandomClear(): Promise<void> {
   if (!inGame || inputLocked) return;
   if (skillCharges <= 0) {
     hud.showSkillEmpty();
-    navigator.vibrate?.(8);
+    haptics.trigger('light');
     return;
   }
 
@@ -128,7 +131,7 @@ async function move(direction: Direction): Promise<void> {
   const revision = solo.revision;
   const result = solo.move(direction);
   if (!result.changed) {
-    navigator.vibrate?.(7);
+    haptics.trigger('light');
     return;
   }
 
@@ -213,7 +216,7 @@ hud.onHome(openHome);
 
 home.onOnline((nextTheme) => {
   theme = nextTheme;
-  localStorage.setItem('doublefight-theme', theme);
+  storage.setItem('doublefight-theme', theme);
   home.hide();
   scene.setHomeMode(true);
   hud.setVisible(false);

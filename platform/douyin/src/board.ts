@@ -3,7 +3,8 @@ import { Board2048 } from '../../../shared/game/Board2048';
 import type { Direction } from '../../../shared/game/types';
 import { TileFactory } from '../../../src/rendering/tiles/TileFactory';
 import { fitTile, KINGDOM_SIZING } from '../../../src/rendering/tiles/TileSizingPolicy';
-import type { DouyinApi, DouyinCanvas } from './api';
+import type { DouyinCanvas } from './api';
+import type { SystemInfo } from '../../../src/platform/types';
 
 /** Gate 1 reuses the existing Kingdom tile factory and sizing, without a DOM scene or UI. */
 export class DouyinBoardProbe {
@@ -14,14 +15,13 @@ export class DouyinBoardProbe {
   private readonly tiles = new THREE.Group();
   private readonly factory = new TileFactory();
 
-  constructor(api: DouyinApi, canvas: DouyinCanvas, context: WebGLRenderingContext) {
+  constructor(info: SystemInfo, canvas: DouyinCanvas, context: WebGLRenderingContext) {
     // Three.js needs these canvas event hooks. This is a canvas-only shim, not a DOM facade.
     canvas.addEventListener ??= () => {};
     canvas.removeEventListener ??= () => {};
     this.renderer = new THREE.WebGLRenderer({ canvas: canvas as HTMLCanvasElement, context, antialias: true });
-    const info = api.getSystemInfoSync();
-    const width = Math.max(1, info.screenWidth || canvas.width);
-    const height = Math.max(1, info.screenHeight || canvas.height);
+    const width = Math.max(1, info.width || canvas.width);
+    const height = Math.max(1, info.height || canvas.height);
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(width, height, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -47,13 +47,11 @@ export class DouyinBoardProbe {
     this.scene.add(this.tiles);
     this.board.reset();
     this.syncTiles();
-    console.log(`[M2.9 gate1] WebGL ${context.getParameter(context.VERSION)}; Three.js ${THREE.REVISION}; ${width}x${height}`);
   }
 
   move(direction: Direction): boolean {
     const result = this.board.move(direction);
     if (result.changed) this.syncTiles();
-    console.log(`[M2.9 gate2] ${direction} changed=${result.changed} score=${this.board.score} tiles=${this.board.tiles().length}`);
     return result.changed;
   }
   render(): void { this.renderer.render(this.scene, this.camera); }

@@ -1,4 +1,5 @@
 import { OnlineController } from '../battle/OnlineController';
+import { browserPlatform } from '../platform/browser/BrowserPlatform';
 import type {
   Direction,
   MatchPlayerState,
@@ -400,7 +401,7 @@ export class DuelScreen {
 
     this.controller.previewSkill(skillId, id => this.client.castSkill(id));
     this.showSkillToast(`${definition.shortLabel} · 释放！`);
-    navigator.vibrate?.([10, 5, 14]);
+    browserPlatform.haptics.trigger('medium');
   }
 
   private updateEnergy(
@@ -437,7 +438,7 @@ export class DuelScreen {
       void root.offsetWidth;
       root.classList.add('duel-energy--pulse');
       this.scene.pulseEnergy(role, gain);
-      navigator.vibrate?.(gain >= 20 ? [10, 8, 18] : gain >= 8 ? 12 : 7);
+      browserPlatform.haptics.trigger(gain >= 8 ? 'medium' : 'light');
     }
   }
 
@@ -541,11 +542,7 @@ export class DuelScreen {
       targetIsLocal ? 'duel-skill-fx--impact-local' : 'duel-skill-fx--impact-remote',
     );
 
-    navigator.vibrate?.(
-      event.outcome === 'shielded'
-        ? [22, 8, 18]
-        : targetIsLocal ? [25, 10, 32] : [14, 6, 18],
-    );
+    browserPlatform.haptics.trigger(targetIsLocal ? 'error' : 'medium');
   }
 
   private showSkillToast(message: string, error = false): void {
@@ -631,7 +628,7 @@ export class DuelScreen {
 
     this.result.classList.remove('duel-result--hidden');
     if (firstReveal) this.resultTitle.focus({ preventScroll: true });
-    if (firstReveal && won && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) navigator.vibrate?.(16);
+    if (firstReveal && won && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) browserPlatform.haptics.trigger('success');
   }
 
   private toggleRematch(): void {

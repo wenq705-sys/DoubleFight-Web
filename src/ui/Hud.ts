@@ -1,4 +1,5 @@
 import { KINGDOM_RANKS, PALACE_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
+import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 export class Hud {
   readonly root: HTMLElement;
@@ -74,8 +75,8 @@ export class Hud {
 
   setScore(score: number): void {
     this.scoreValue.textContent = score.toLocaleString('zh-CN');
-    const best = Math.max(score, Number(localStorage.getItem('doublefight-best') ?? 0));
-    localStorage.setItem('doublefight-best', String(best));
+    const best = Math.max(score, Number(browserPlatform.storage.getItem('doublefight-best') ?? 0));
+    browserPlatform.storage.setItem('doublefight-best', String(best));
     this.bestValue.textContent = best.toLocaleString('zh-CN');
   }
 
