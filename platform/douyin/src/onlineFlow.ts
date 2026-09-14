@@ -40,6 +40,7 @@ export class DouyinOnlineFlow {
   private unsubscribe: (() => void) | null = null;
   private changeListeners = new Set<() => void>();
   private currentMatchId: string | null = null;
+  private serverClockOffsetMs = 0;
   private lastMessage: ServerMessage | undefined;
 
   constructor(
@@ -243,7 +244,10 @@ export class DouyinOnlineFlow {
         this.currentMatchId = state.match.matchId;
         this.controller.reset();
       }
-      if (authoritative) this.controller.accept(state.match, state.playerId);
+      if (authoritative) {
+        this.serverClockOffsetMs = state.match.serverTime - Date.now();
+        this.controller.accept(state.match, state.playerId);
+      }
     }
 
     if (state.status !== 'connected' && state.match?.phase === 'playing') this.controller.suspend();
@@ -258,8 +262,8 @@ export class DouyinOnlineFlow {
     return 'lobby';
   }
 
-  private serverNow(match: MatchSnapshot): number {
-    return Date.now() + (match.serverTime - Date.now());
+  private serverNow(_match: MatchSnapshot): number {
+    return Date.now() + this.serverClockOffsetMs;
   }
 
   private loadLoadout(): SkillLoadout {
