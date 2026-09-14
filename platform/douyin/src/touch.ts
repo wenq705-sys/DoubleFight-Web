@@ -7,7 +7,11 @@ export class DouyinSwipeInput {
   private latest: DouyinTouchPoint | null = null;
   private active = false;
 
-  constructor(private readonly api: DouyinApi, private readonly onDirection: (direction: Direction) => void) {
+  constructor(
+    private readonly api: DouyinApi,
+    private readonly onDirection: (direction: Direction) => void,
+    private readonly onTap?: (x: number, y: number) => void,
+  ) {
     api.onTouchStart(event => this.onStart(event));
     api.onTouchMove(event => this.onMove(event));
     api.onTouchEnd(event => this.onEnd(event));
@@ -36,7 +40,10 @@ export class DouyinSwipeInput {
     if (!end || !this.active) return;
     const dx = end.clientX - start.clientX;
     const dy = end.clientY - start.clientY;
-    if (Math.hypot(dx, dy) < 22) return;
+    if (Math.hypot(dx, dy) < 22) {
+      this.onTap?.(end.clientX, end.clientY);
+      return;
+    }
     this.onDirection(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
   }
 }
