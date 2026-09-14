@@ -15,6 +15,8 @@ import {
   type SkillId,
 } from '../../../shared/index';
 import { DouyinOnlineFlow } from './onlineFlow';
+import { DouyinCommercial } from './commercial';
+import { DouyinSocial } from './social';
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
@@ -64,10 +66,14 @@ export class DouyinSoloScene {
   private joinPadOpen = false;
   private joinCode = '';
   private exitConfirm = false;
+  private rewardedSkillClaims = 0;
+  private sidebarSupported = false;
 
   constructor(
     private readonly platform: DouyinPlatform,
     private readonly client: OnlineClient,
+    private readonly commercial: DouyinCommercial,
+    private readonly social: DouyinSocial,
     screenCanvas: DouyinCanvas,
     context: WebGLRenderingContext,
     theme: ThemeId,
@@ -151,12 +157,27 @@ export class DouyinSoloScene {
     });
 
     this.refreshHud();
+    this.commercial.showBanner();
+    void this.social.supportsSidebar().then((supported) => {
+      this.sidebarSupported = supported;
+      if (!this.disposed && this.mode === 'home') this.refreshHud();
+    });
   }
 
   get theme(): ThemeId { return this.currentTheme; }
   get currentMode(): ProductMode { return this.mode; }
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
+
+  openSharedRoom(code: string): void {
+    const normalized = code.replace(/\D/g, '').slice(0, 6);
+    if (normalized.length !== 6) return;
+    this.openOnline();
+    this.joinCode = normalized;
+    this.online.joinRoom(normalized);
+    this.notice = { text: `正在加入房间 ${normalized}`, until: this.visualTime + 1.4 };
+    this.refreshHud();
+  }
 
   handleDirection(direction: Direction): void {
     if (this.mode === 'home') {
@@ -307,12 +328,17 @@ export class DouyinSoloScene {
     this.uiMaterial.dispose();
     this.uiPlane.geometry.dispose();
     this.renderer.dispose();
+    this.commercial.dispose();
     setTextureCanvasFactory(null);
   }
 
   private startSolo(): void {
     this.mode = 'solo';
-    this.skillCharges = 3;
+    const bonus = Math.min(1, Math.max(0, Number(this.platform.storage.getItem('doublefight-next-solo-bonus') ?? 0)));
+    this.platform.storage.removeItem('doublefight-next-solo-bonus');
+    this.skillCharges = 3 + bonus;
+    this.rewardedSkillClaims = 0;
+    this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
@@ -329,6 +355,7 @@ export class DouyinSoloScene {
 
   private openOnline(): void {
     this.mode = 'online';
+    this.commercial.hideBanner();
     this.notice = null;
     this.joinPadOpen = false;
     this.joinCode = '';
@@ -348,6 +375,7 @@ export class DouyinSoloScene {
     this.persistRecord();
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
+    this.commercial.showBanner();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
@@ -363,6 +391,7 @@ export class DouyinSoloScene {
   }
 
   private returnOnlineLobby(): void {
+    this.commercial.hideBanner();
     this.online.leaveRoom();
     this.exitConfirm = false;
     this.joinPadOpen = false;
@@ -388,7 +417,31 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
-    if (this.hit(x, y, layout.online)) { this.openOnline(); }
+    if (this.hit(x, y, layout.online)) { this.openOnline(); return; }
+    if (this.hit(x, y, layout.rank)) {
+      void this.social.openSoloRank().then(ok => {
+        if (!ok) {
+          this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
+          this.refreshHud();
+        }
+      });
+      return;
+    }
+    if (this.hit(x, y, layout.daily)) {
+      if (this.sidebarRewardReady()) {
+        this.claimSidebarReward();
+      } else if (this.sidebarSupported) {
+        void this.social.navigateSidebar().then(ok => {
+          if (!ok) {
+            this.notice = { text: '当前环境暂不支持侧边栏', until: this.visualTime + 1.2 };
+            this.refreshHud();
+          }
+        });
+      } else {
+        this.notice = { text: '当前环境暂不支持侧边栏', until: this.visualTime + 1.2 };
+        this.refreshHud();
+      }
+    }
   }
 
   private handleSoloTap(x: number, y: number): void {
@@ -405,7 +458,8 @@ export class DouyinSoloScene {
     const skillHeight = 44;
     const skillY = info.height - safeBottom - 52;
     if (x >= info.width / 2 - skillWidth / 2 && x <= info.width / 2 + skillWidth / 2 && y >= skillY && y <= skillY + skillHeight) {
-      void this.useRandomClear();
+      if (this.skillCharges > 0) void this.useRandomClear();
+      else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
     }
   }
 
@@ -485,8 +539,16 @@ export class DouyinSoloScene {
     if (snap.mode === 'room') {
       const room = snap.state.room;
       const me = room?.players.find(player => player.id === snap.state.playerId);
+      const share = this.roomShareRect(info.width, info.height);
       const ready = { x: 48, y: info.height - Math.max(18, info.safeArea.bottom + 14) - 62, width: info.width - 96, height: 48 };
-      if (this.hit(x, y, ready) && me) this.online.toggleReady();
+      if (this.hit(x, y, share) && room?.code) {
+        void this.social.shareRoom(room.code).then(ok => {
+          this.notice = { text: ok ? '已打开好友邀请' : '分享暂不可用', until: this.visualTime + 1.2 };
+          this.refreshHud();
+        });
+      } else if (this.hit(x, y, ready) && me) {
+        this.online.toggleReady();
+      }
       return;
     }
 
@@ -515,6 +577,7 @@ export class DouyinSoloScene {
       const y0 = info.height * 0.6;
       const primary = { x: x0, y: y0, width, height: 48 };
       const lobby = { x: x0, y: y0 + 58, width, height: 42 };
+      const share = { x: x0 + 36, y: y0 + 108, width: width - 72, height: 34 };
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
         if (opponentRoom) this.online.setRematchReady();
@@ -524,6 +587,13 @@ export class DouyinSoloScene {
         }
       } else if (this.hit(x, y, lobby)) {
         this.returnOnlineLobby();
+      } else if (this.hit(x, y, share)) {
+        const score = snap.state.match?.result?.players.find(player => player.playerId === snap.state.playerId)?.score ?? 0;
+        const won = snap.state.match?.winnerId === snap.state.playerId;
+        void this.social.shareResult(score, won).then(ok => {
+          this.notice = { text: ok ? '已打开分享' : '分享暂不可用', until: this.visualTime + 1.2 };
+          this.refreshHud();
+        });
       }
     }
   }
@@ -559,7 +629,10 @@ export class DouyinSoloScene {
     const highestKey = `doublefight-highest-${this.currentTheme}`;
     const previousBest = Number(this.platform.storage.getItem(bestKey) ?? 0);
     const previousHighest = Number(this.platform.storage.getItem(highestKey) ?? 2);
-    if (this.score > previousBest) this.platform.storage.setItem(bestKey, String(this.score));
+    if (this.score > previousBest) {
+      this.platform.storage.setItem(bestKey, String(this.score));
+      void this.social.setSoloRank(this.score);
+    }
     if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
   }
 
@@ -736,6 +809,13 @@ export class DouyinSoloScene {
     this.drawPillButton(ctx, layout.theme, '‹   切换主题   ›', 'secondary');
     this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
     this.drawPillButton(ctx, layout.online, '⚔  在线对决', 'secondary');
+    this.drawPillButton(ctx, layout.rank, '🏆 排行榜', 'secondary');
+    this.drawPillButton(
+      ctx,
+      layout.daily,
+      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 每日福利',
+      this.sidebarRewardReady() ? 'primary' : 'secondary',
+    );
 
     ctx.fillStyle = 'rgba(255,255,255,.62)';
     ctx.font = '650 10px sans-serif';
@@ -776,9 +856,16 @@ export class DouyinSoloScene {
     ctx.font = '700 10px sans-serif';
     ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
 
-    const skillWidth = 156;
+    const skillWidth = 176;
     const skillY = height - safeBottom - 52;
-    this.drawSkillButton(ctx, { x: width / 2 - skillWidth / 2, y: skillY, width: skillWidth, height: 44 }, '✦ 清块', `×${this.skillCharges}`, this.skillCharges > 0);
+    const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
+    this.drawSkillButton(
+      ctx,
+      { x: width / 2 - skillWidth / 2, y: skillY, width: skillWidth, height: 44 },
+      canReward ? '▶ 看广告 +1 清块' : '✦ 清块',
+      canReward ? '可选激励' : `×${this.skillCharges}`,
+      this.skillCharges > 0 || canReward,
+    );
 
     ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = '650 10px sans-serif';
@@ -842,7 +929,9 @@ export class DouyinSoloScene {
       });
 
       const me = players.find(player => player.id === snap.state.playerId);
+      const share = this.roomShareRect(width, height);
       const ready = { x: 48, y: height - Math.max(18, this.platform.getSystemInfo().safeArea.bottom + 14) - 62, width: width - 96, height: 48 };
+      this.drawPillButton(ctx, share, '↗ 邀请抖音好友', 'secondary');
       this.drawPillButton(ctx, ready, me?.ready ? '取消准备' : '准备', 'primary');
       return;
     }
@@ -949,7 +1038,7 @@ export class DouyinSoloScene {
     const panelWidth = Math.min(310, width - 34);
     const x = (width - panelWidth) / 2;
     const y = height * 0.26;
-    const h = 300;
+    const h = 344;
 
     ctx.fillStyle = 'rgba(8,18,24,.92)';
     this.roundedRect(ctx, x, y, panelWidth, h, 26);
@@ -976,6 +1065,7 @@ export class DouyinSoloScene {
 
     const primary = { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 };
     const lobby = { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 };
+    const share = { x: x + 56, y: y + 270, width: panelWidth - 112, height: 32 };
     const roomMe = snap.state.room?.players.find(player => player.id === snap.state.playerId);
     const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
     this.drawPillButton(
@@ -985,11 +1075,12 @@ export class DouyinSoloScene {
       'primary',
     );
     this.drawPillButton(ctx, lobby, '返回对战大厅', 'secondary');
+    this.drawPillButton(ctx, share, '↗ 分享战绩', 'secondary');
 
     if (roomMe?.rematchReady && opponentRoom) {
       ctx.fillStyle = '#b9cacc';
       ctx.font = '700 9px sans-serif';
-      ctx.fillText(opponentRoom.rematchReady ? '双方已准备…' : '等待对手…', width / 2, y + 278);
+      ctx.fillText(opponentRoom.rematchReady ? '双方已准备…' : '等待对手…', width / 2, y + 324);
     }
   }
 
@@ -1119,6 +1210,41 @@ export class DouyinSoloScene {
     ctx.fillText(text, width / 2, y + 21);
   }
 
+  private async rewardSoloSkill(): Promise<void> {
+    if (this.inputLocked || this.rewardedSkillClaims >= 3) return;
+    this.inputLocked = true;
+    this.notice = { text: '正在准备激励视频…', until: this.visualTime + 8 };
+    this.refreshHud();
+    const result = await this.commercial.showRewarded();
+    this.inputLocked = false;
+    if (result === 'rewarded') {
+      this.rewardedSkillClaims += 1;
+      this.skillCharges = Math.max(1, this.skillCharges);
+      this.notice = { text: '奖励到账 · 清块 +1', until: this.visualTime + 1.5 };
+      this.platform.haptics.trigger('success');
+    } else if (result === 'skipped') {
+      this.notice = { text: '完整观看后才能获得奖励', until: this.visualTime + 1.5 };
+    } else {
+      this.notice = { text: '暂时没有可用广告', until: this.visualTime + 1.5 };
+    }
+    this.refreshHud();
+  }
+
+  private sidebarRewardReady(): boolean {
+    if (!this.social.cameFromSidebar()) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return this.platform.storage.getItem('doublefight-sidebar-reward-date') !== today;
+  }
+
+  private claimSidebarReward(): void {
+    const today = new Date().toISOString().slice(0, 10);
+    this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
+    this.platform.storage.setItem('doublefight-next-solo-bonus', '1');
+    this.notice = { text: '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
+    this.platform.haptics.trigger('success');
+    this.refreshHud();
+  }
+
   private hudTop(): number {
     const info = this.platform.getSystemInfo();
     return Math.max(Math.max(12, info.safeArea.top + 8), (info.menuButton?.bottom ?? 0) + 8);
@@ -1128,11 +1254,14 @@ export class DouyinSoloScene {
     const safeBottom = Math.max(16, safeBottomInset + 12);
     const primaryWidth = Math.min(252, width - 48);
     const secondaryWidth = Math.min(226, width - 64);
-    const soloY = height - safeBottom - 122;
+    const soloY = height - safeBottom - 218;
+    const utilityWidth = Math.min(112, (width - 64) / 2);
     return {
       theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
       solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
       online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },
+      rank: { x: width / 2 - utilityWidth - 5, y: soloY + 114, width: utilityWidth, height: 36 },
+      daily: { x: width / 2 + 5, y: soloY + 114, width: utilityWidth, height: 36 },
     };
   }
 
@@ -1148,6 +1277,10 @@ export class DouyinSoloScene {
       create: { x: 34, y: quickY + 64, width: (width - 78) / 2, height: 42 },
       join: { x: 44 + (width - 78) / 2, y: quickY + 64, width: (width - 78) / 2, height: 42 },
     };
+  }
+
+  private roomShareRect(width: number, height: number): Rect {
+    return { x: width / 2 - 78, y: height * 0.39, width: 156, height: 34 };
   }
 
   private matchingCancelRect(width: number, height: number): Rect {
