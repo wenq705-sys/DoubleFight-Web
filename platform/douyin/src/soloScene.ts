@@ -148,10 +148,11 @@ export class DouyinSoloScene {
     if (this.disposed || this.inputLocked) return;
     const info = this.platform.getSystemInfo();
     const safeTop = Math.max(12, info.safeArea.top + 8);
+    const hudTop = Math.max(safeTop, (info.menuButton?.bottom ?? 0) + 8);
     const safeBottom = Math.max(14, info.safeArea.bottom + 10);
 
     const themeWidth = 132;
-    const themeY = safeTop + 68;
+    const themeY = hudTop + 68;
     if (
       x >= info.width / 2 - themeWidth / 2
       && x <= info.width / 2 + themeWidth / 2
@@ -300,6 +301,7 @@ export class DouyinSoloScene {
     ctx.clearRect(0, 0, logicalWidth, logicalHeight);
 
     const safeTop = Math.max(12, info.safeArea.top + 8);
+    const hudTop = Math.max(safeTop, (info.menuButton?.bottom ?? 0) + 8);
     const safeBottom = Math.max(14, info.safeArea.bottom + 10);
     const edge = 16;
 
@@ -307,7 +309,7 @@ export class DouyinSoloScene {
     ctx.shadowColor = 'rgba(0,0,0,.28)';
     ctx.shadowBlur = 10;
 
-    this.roundedRect(ctx, edge, safeTop, logicalWidth - edge * 2, 58, 18);
+    this.roundedRect(ctx, edge, hudTop, logicalWidth - edge * 2, 58, 18);
     ctx.fillStyle = 'rgba(18, 38, 49, .78)';
     ctx.fill();
 
@@ -315,22 +317,22 @@ export class DouyinSoloScene {
     ctx.fillStyle = '#fff1c9';
     ctx.font = '900 21px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('双数对决', edge + 16, safeTop + 23);
+    ctx.fillText('双数对决', edge + 16, hudTop + 23);
     ctx.fillStyle = '#c8dbe0';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText('DOUBLE FIGHT · SOLO', edge + 16, safeTop + 43);
+    ctx.fillText('DOUBLE FIGHT · SOLO', edge + 16, hudTop + 43);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 25px sans-serif';
-    ctx.fillText(this.score.toLocaleString('zh-CN'), logicalWidth - edge - 16, safeTop + 23);
+    ctx.fillText(this.score.toLocaleString('zh-CN'), logicalWidth - edge - 16, hudTop + 23);
     ctx.fillStyle = '#d7e7e8';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(`最高 ${this.highest}`, logicalWidth - edge - 16, safeTop + 43);
+    ctx.fillText(`最高 ${this.highest}`, logicalWidth - edge - 16, hudTop + 43);
 
     const themeLabel = this.currentTheme === 'kingdom' ? '迷你王国' : '宫廷晋升';
     const pillWidth = 132;
-    const pillY = safeTop + 68;
+    const pillY = hudTop + 68;
     this.roundedRect(ctx, logicalWidth / 2 - pillWidth / 2, pillY, pillWidth, 32, 16);
     ctx.fillStyle = 'rgba(255, 239, 189, .88)';
     ctx.fill();
