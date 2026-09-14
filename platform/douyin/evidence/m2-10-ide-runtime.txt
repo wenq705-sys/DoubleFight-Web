@@ -1,0 +1,30 @@
+M2.10 Douyin IDE 4.5.5, iPhone 15 Pro simulator, 393x852.
+Opened platform/douyin/dist using tt-minigame-ide-cli open --mode=lite.
+Development diagnostics only: generated dist/project.config.json had urlCheck=false during IDE compile; source project.config.json remains urlCheck=true. This is not release-domain approval.
+
+Runtime console after IDE compile:
+[M2.10 account] logged_in
+[M2.10 socket] welcome v6
+[M2.10 socket] pong 304ms
+[M2.10 account] logged_in
+[M2.10 socket] welcome v6
+[M2.10 socket] pong 305ms
+
+Final build recompiled in the IDE after adapter changes:
+[M2.10 account] logged_in
+[M2.10 socket] welcome v6
+[M2.10 socket] pong 1373ms
+[M2.10 account] logged_in
+[M2.10 socket] welcome v6
+[M2.10 socket] pong 1404ms
+
+Each pair of runs came from IDE recompiles. A welcome implies the OnlineClient's open/hello sequence reached the v6 server; the same OnlineClient handles Browser and Douyin transports. No credential or temporary code was logged.
+
+IDE CDP runtime check:
+{"storage":true,"haptics":"invoked without throw","width":393,"height":852,"pixelRatio":3,"safeArea":{"top":59,"bottom":818}}
+Documented tt.vibrateShort({success, fail}) returned: vibrateShort:ok.
+
+Canvas screenshot: m2-10-ide-board.png.
+CDP touch swipe screenshot: m2-10-ide-touch.png (two initial tiles merged to one higher-tier tile).
+
+New M2.10 lifecycle adapter/loop passed repeated show/hide automated tests; real IDE background/foreground was not triggered in this run. Physical vibration, cross-network socket and account exchange are not asserted here.

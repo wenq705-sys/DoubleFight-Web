@@ -270,6 +270,15 @@ Do not claim formal Douyin account login is complete until a server-side code ex
 
 ## Completion
 
+### Implementation and evidence
+
+- `src/platform/types.ts` defines transport, lifecycle, storage, haptics, normalized system information and typed account bootstrap. Browser and Douyin adapters implement it; `OnlineClient` takes `SocketTransport` and keeps its v6 reconnect/token/sequence behavior.
+- Browser persistence keys remain compatible through `BrowserStorage`; denied storage is non-fatal. Douyin uses synchronous local storage, `tt.onShow/onHide`, `tt.vibrateShort`, normalized safe-area data and one `tt.login({force:false})` Promise per bootstrap instance. Temporary codes are never treated as stable IDs.
+- Douyin entry uses the shared `OnlineClient`, M2.9 canvas/Three.js board and shared-core swipe input. Legacy M2.9 probe code/evidence is retained only for historical tests, not used by the M2.10 runtime entry.
+- Browser: Home/Solo/theme persistence passed in a real local browser; two-browser quick match/private room passed; production WSS smoke passed quick/private/reconnect.
+- IDE: canvas and touch merge visible in [screenshots](../platform/douyin/evidence/m2-10-ide-board.png); [runtime evidence](../platform/douyin/evidence/m2-10-ide-runtime.txt) records v6 welcome/pong, storage round-trip, haptics invocation and typed `logged_in`. Development-only generated config was used; formal release still needs the legal socket domain.
+- M2.10 actual IDE background/foreground and physical haptics/account acceptance remain manual. No server-side auth or account identity was implemented.
+
 Push the branch and create a Draft PR:
 
 Title:
