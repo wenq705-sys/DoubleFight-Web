@@ -322,6 +322,7 @@ export class DouyinSoloScene {
     this.online.remote.root.visible = false;
     this.controller.reset();
     this.configureCamera();
+    this.applyThemeLook();
     this.platform.haptics.trigger('medium');
     this.refreshHud();
   }
@@ -338,6 +339,7 @@ export class DouyinSoloScene {
     this.boardView.reset(HOME_TILES);
     this.online.open(this.currentTheme);
     this.configureCamera();
+    this.applyThemeLook();
     this.platform.haptics.trigger('medium');
     this.refreshHud();
   }
@@ -355,7 +357,24 @@ export class DouyinSoloScene {
     this.boardView.root.visible = true;
     this.boardView.reset(HOME_TILES);
     this.configureCamera();
+    this.applyThemeLook();
     this.platform.haptics.trigger('light');
+    this.refreshHud();
+  }
+
+  private returnOnlineLobby(): void {
+    this.online.leaveRoom();
+    this.exitConfirm = false;
+    this.joinPadOpen = false;
+    this.notice = null;
+    const snap = this.online.snapshot();
+    if (this.boardView.theme !== snap.selectedTheme) this.boardView.setTheme(snap.selectedTheme);
+    this.boardView.reset(HOME_TILES);
+    this.boardView.root.visible = true;
+    this.online.local.root.visible = false;
+    this.online.remote.root.visible = false;
+    this.configureCamera();
+    this.applyThemeLook();
     this.refreshHud();
   }
 
@@ -494,12 +513,17 @@ export class DouyinSoloScene {
       const width = Math.min(282, info.width - 42);
       const x0 = (info.width - width) / 2;
       const y0 = info.height * 0.6;
-      const rematch = { x: x0, y: y0, width, height: 48 };
-      const home = { x: x0, y: y0 + 58, width, height: 42 };
-      if (this.hit(x, y, rematch)) this.online.setRematchReady();
-      else if (this.hit(x, y, home)) {
-        this.online.leaveRoom();
-        this.showHome();
+      const primary = { x: x0, y: y0, width, height: 48 };
+      const lobby = { x: x0, y: y0 + 58, width, height: 42 };
+      const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
+      if (this.hit(x, y, primary)) {
+        if (opponentRoom) this.online.setRematchReady();
+        else {
+          this.online.leaveRoom();
+          this.online.quickMatch();
+        }
+      } else if (this.hit(x, y, lobby)) {
+        this.returnOnlineLobby();
       }
     }
   }
@@ -607,7 +631,7 @@ export class DouyinSoloScene {
 
     this.renderer.setViewport(0, bottom, width, height);
     this.renderer.setScissor(0, bottom, width, height);
-    this.renderer.setClearColor(board.presentation.sky, 1);
+    this.scene.background = new THREE.Color(board.presentation.sky);
     this.scene.fog = new THREE.Fog(board.presentation.fog, 20, 48);
     this.renderer.clear(true, true, false);
     this.renderer.render(this.scene, this.duelCamera);
@@ -939,22 +963,29 @@ export class DouyinSoloScene {
     ctx.font = '900 28px sans-serif';
     ctx.fillText(draw ? '平局' : won ? '胜利' : '惜败', width / 2, y + 46);
 
-    const me = snap.me;
-    const opponent = snap.opponent;
+    const resultMe = match.result?.players.find(player => player.playerId === snap.state.playerId);
+    const resultOpponent = match.result?.players.find(player => player.playerId !== snap.state.playerId);
+    const meScore = resultMe?.score ?? snap.me?.board.score ?? 0;
+    const opponentScore = resultOpponent?.score ?? snap.opponent?.board.score ?? 0;
     ctx.fillStyle = '#f2f0e6';
     ctx.font = '900 24px sans-serif';
-    ctx.fillText(`${me?.board.score ?? 0}   VS   ${opponent?.board.score ?? 0}`, width / 2, y + 92);
+    ctx.fillText(`${meScore}   VS   ${opponentScore}`, width / 2, y + 92);
     ctx.fillStyle = '#b9cacc';
     ctx.font = '700 10px sans-serif';
     ctx.fillText(this.online.resultReason(), width / 2, y + 120);
 
-    const rematch = { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 };
-    const home = { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 };
+    const primary = { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 };
+    const lobby = { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 };
     const roomMe = snap.state.room?.players.find(player => player.id === snap.state.playerId);
-    this.drawPillButton(ctx, rematch, roomMe?.rematchReady ? '取消再来一局' : '再来一局', 'primary');
-    this.drawPillButton(ctx, home, '返回大厅', 'secondary');
-
     const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
+    this.drawPillButton(
+      ctx,
+      primary,
+      opponentRoom ? (roomMe?.rematchReady ? '取消再来一局' : '再来一局') : '寻找新对手',
+      'primary',
+    );
+    this.drawPillButton(ctx, lobby, '返回对战大厅', 'secondary');
+
     if (roomMe?.rematchReady && opponentRoom) {
       ctx.fillStyle = '#b9cacc';
       ctx.font = '700 9px sans-serif';
