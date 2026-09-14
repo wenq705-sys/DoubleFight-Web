@@ -3,6 +3,7 @@ import { DouyinCommercial } from '../platform/douyin/src/commercial';
 import { DouyinSocial } from '../platform/douyin/src/social';
 import type {
   DouyinApi,
+  DouyinBannerAd,
   DouyinInterstitialAd,
   DouyinRewardedVideoAd,
   DouyinShowOptions,
@@ -72,6 +73,36 @@ describe('Douyin commercial frequency regression', () => {
     vi.advanceTimersByTime(1);
     await expect(commercial.maybeShowInterstitial()).resolves.toBe(true);
     expect(createInterstitialAd).toHaveBeenCalledOnce();
+  });
+
+  it('reuses one native banner after hide/show instead of leaking instances', async () => {
+    let load: (() => void) | undefined;
+    const banner = {
+      style: {},
+      show: vi.fn(async () => undefined),
+      hide: vi.fn(async () => undefined),
+      destroy: vi.fn(),
+      onLoad: vi.fn((listener) => { load = listener; }),
+      onError: vi.fn(),
+      onResize: vi.fn(),
+    } as DouyinBannerAd;
+    const createBannerAd = vi.fn(() => banner);
+    const commercial = new DouyinCommercial(minimalApi({ createBannerAd }));
+
+    commercial.showBanner();
+    load?.();
+    await Promise.resolve();
+    expect(createBannerAd).toHaveBeenCalledOnce();
+    expect(banner.show).toHaveBeenCalledOnce();
+
+    commercial.hideBanner();
+    await Promise.resolve();
+    commercial.showBanner();
+    await Promise.resolve();
+
+    expect(createBannerAd).toHaveBeenCalledOnce();
+    expect(banner.show).toHaveBeenCalledTimes(2);
+    expect(banner.destroy).not.toHaveBeenCalled();
   });
 });
 
