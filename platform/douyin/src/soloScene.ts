@@ -260,7 +260,8 @@ export class DouyinSoloScene {
     if (this.disposed || this.inputLocked) return;
     if (this.onboardingOpen) {
       const info = this.platform.getSystemInfo();
-      const button = { x: 46, y: info.height * 0.71, width: info.width - 92, height: 48 };
+      const panelY = info.height * 0.34;
+      const button = { x: 46, y: panelY + 260, width: info.width - 92, height: 48 };
       if (this.hit(x, y, button)) {
         this.onboardingOpen = false;
         this.platform.storage.setItem('doublefight-onboarding-complete', '1');
@@ -1299,7 +1300,7 @@ export class DouyinSoloScene {
 
     this.drawPillButton(
       ctx,
-      { x: 46, y: height * 0.71, width: width - 92, height: 48 },
+      { x: 46, y: y + 260, width: width - 92, height: 48 },
       '开始游戏',
       'primary',
     );
