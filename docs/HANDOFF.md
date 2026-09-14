@@ -2,6 +2,18 @@
 
 ## Current state
 
+**M2.9 Douyin runtime feasibility: FEASIBLE.**
+- Three.js/WebGL2 renders inside the Douyin Mini Game runtime using `tt.createCanvas()`.
+- `tt.onTouch*` drives the shared `Board2048` core.
+- `tt.connectSocket()` completed Protocol v6 `open → hello → welcome → pong` against `wss://game.whvwayfare.online/ws` in development-bypass mode.
+- Repeated real background/foreground acceptance passed without black screen, duplicate gesture handling, stuck render loops, or persistent socket failure.
+- Browser build, Douyin build, typecheck, and 49/49 tests passed on the spike branch.
+- Formal release still requires the production socket legal-domain configuration; development-only domain bypass must not be relied on for release.
+
+**Next exact task: M2.10 Douyin Platform Foundation.**
+Build a formal Browser/Douyin platform adapter around lifecycle, socket transport, storage, haptics, system/safe-area information, and account bootstrap while keeping gameplay rules/protocol authority shared.
+
+
 **M2.8.2 review branch:** Duel HUD/result/exit feedback only, based on `4211c46`.
 - One authoritative result reason, actual names, room-aware rematch/return CTA and active-match exit confirmation.
 - Wi-Fi status icon, labeled opponent energy, restrained outcome entry/one-shot victory haptic with reduced-motion support.
@@ -335,4 +347,12 @@ CI must pass:
 
 ## M2.9 runtime spike handoff
 
-The isolated Douyin mini-game build is in `platform/douyin/`; run `npm run build:douyin` and open its `dist` directory in Douyin IDE. Canvas/Three.js, touch/shared-core movement, and Protocol v6 WebSocket hello/welcome/pong worked in IDE development mode. The only remaining spike acceptance is a repeated real hide/show cycle. IDE 4.5.5 needed its development-only domain bypass checkbox enabled despite the source `urlCheck: true` setting; formal publication requires the socket domain whitelist. Exact logs and the configuration discrepancy are in `docs/DOUYIN_RUNTIME_SPIKE.md`.
+The isolated Douyin mini-game build lives in `platform/douyin/`; run `npm run build:douyin` and open its `dist` directory in Douyin IDE.
+
+Final decision: **FEASIBLE**.
+- Canvas/Three.js: PASS
+- Touch/shared core: PASS
+- Protocol v6 WebSocket: PASS in IDE development mode
+- Repeated background/foreground lifecycle acceptance: PASS
+
+The source `project.config.json` / IDE 4.5.5 `urlCheck` behavior is documented in `docs/DOUYIN_RUNTIME_SPIKE.md`. The development bypass is diagnostic only. Formal publication requires the actual mini-game AppID to register `game.whvwayfare.online` as the legal WebSocket domain and satisfy platform release requirements.
