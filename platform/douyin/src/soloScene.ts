@@ -62,6 +62,7 @@ export class DouyinSoloScene {
   private disposed = false;
   private visualTime = 0;
   private nextDynamicHudAt = 0;
+  private nextHomeHudAt = 0;
   private notice: { text: string; until: number } | null = null;
   private joinPadOpen = false;
   private joinCode = '';
@@ -268,6 +269,10 @@ export class DouyinSoloScene {
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
+    if (this.mode === 'home' && this.visualTime >= this.nextHomeHudAt) {
+      this.nextHomeHudAt = this.visualTime + 0.75;
+      this.refreshHud();
+    }
 
     if (duel) {
       this.online.local.update(delta);
@@ -372,10 +377,17 @@ export class DouyinSoloScene {
   }
 
   private showHome(): void {
+    const previousMode = this.mode;
+    const previousOnlineMode = previousMode === 'online' ? this.online.snapshot().mode : null;
     this.persistRecord();
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
-    this.commercial.showBanner();
+    const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
+    if (showInterstitial) {
+      void this.commercial.maybeShowInterstitial().finally(() => this.commercial.showBanner());
+    } else {
+      this.commercial.showBanner();
+    }
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
@@ -750,8 +762,10 @@ export class DouyinSoloScene {
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
     const scale = Math.min(2, Math.max(1, info.pixelRatio));
-    this.uiCanvas.width = Math.round(width * scale);
-    this.uiCanvas.height = Math.round(height * scale);
+    const targetCanvasWidth = Math.round(width * scale);
+    const targetCanvasHeight = Math.round(height * scale);
+    if (this.uiCanvas.width !== targetCanvasWidth) this.uiCanvas.width = targetCanvasWidth;
+    if (this.uiCanvas.height !== targetCanvasHeight) this.uiCanvas.height = targetCanvasHeight;
 
     const ctx = this.uiContext;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
