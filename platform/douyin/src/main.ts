@@ -21,7 +21,7 @@ const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, canvas, context, theme);
 
 const touch = platform.createSwipeInput(
-  (direction: Direction) => { void game.move(direction); },
+  (direction: Direction) => game.handleDirection(direction),
   (x, y) => game.handleTap(x, y),
 );
 
