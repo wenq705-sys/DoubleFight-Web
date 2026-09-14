@@ -193,7 +193,7 @@ export class DouyinOnlineFlow {
     if (!me.loadout.includes(skillId)) return { ok: false, reason: '技能未装备' };
 
     const definition = SKILL_DEFINITIONS[skillId];
-    const now = this.serverNow(snap.state.match);
+    const now = this.serverNow();
     const remaining = Math.max(0, me.skillCooldowns[skillId] - now);
     if (remaining > 0) return { ok: false, reason: `${definition.shortLabel}冷却中` };
     if (me.energy < definition.cost) return { ok: false, reason: `需要 ${definition.cost} 能量` };
@@ -205,10 +205,12 @@ export class DouyinOnlineFlow {
     return { ok: true };
   }
 
+  serverNow(): number { return Date.now() + this.serverClockOffsetMs; }
+
   remainingMs(): number {
     const match = this.client.snapshot().match;
     if (!match || match.phase === 'finished') return 0;
-    return Math.max(0, match.roundEndsAt - this.serverNow(match));
+    return Math.max(0, match.roundEndsAt - this.serverNow());
   }
 
   resultReason(): string {
@@ -260,10 +262,6 @@ export class DouyinOnlineFlow {
     if (state.room) return 'room';
     if (state.matchmaking.status === 'searching' || state.matchmaking.status === 'matched') return 'matching';
     return 'lobby';
-  }
-
-  private serverNow(_match: MatchSnapshot): number {
-    return Date.now() + this.serverClockOffsetMs;
   }
 
   private loadLoadout(): SkillLoadout {
