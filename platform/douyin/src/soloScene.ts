@@ -94,6 +94,9 @@ export class DouyinSoloScene {
     this.uiPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.uiMaterial);
     this.uiPlane.position.z = -1;
     this.uiScene.add(this.uiPlane);
+    // resize() ran once before the HUD plane existed to establish the 3D camera.
+    // Run it again now so the overlay receives the correct aspect scale.
+    this.resize();
     this.refreshHud();
   }
 
@@ -246,7 +249,7 @@ export class DouyinSoloScene {
     this.uiCamera.top = 1;
     this.uiCamera.bottom = -1;
     this.uiCamera.updateProjectionMatrix();
-    this.uiPlane.scale.set(aspect, 1, 1);
+    if (this.uiPlane) this.uiPlane.scale.set(aspect, 1, 1);
   }
 
   private applyThemeLook(): void {
