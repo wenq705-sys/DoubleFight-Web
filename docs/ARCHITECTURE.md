@@ -64,6 +64,10 @@ Adaptive quality / telemetry.
 
 ## Game server
 
+### Douyin account HTTP boundary (M2.10.3)
+
+`server/auth/` owns provider exchange, an atomic single-process JSON account repository, HMAC bearer sessions and idempotent reward claims. It is separate from `RoomSession`; Protocol v6 does not carry authenticated account identity. Server-only credentials come from runtime environment, while the Douyin client stores only the Double Fight session token. A database migration is required before horizontal scaling.
+
 ### `server/index.ts`
 HTTP health endpoint + WebSocket endpoint `/ws`, heartbeat and connection lifecycle.
 

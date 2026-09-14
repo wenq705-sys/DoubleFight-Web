@@ -11,9 +11,16 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8787"
+      DOUBLEFIGHT_DATA_DIR: /data
+      DOUYIN_APP_ID: ${DOUYIN_APP_ID:-}
+      DOUYIN_APP_SECRET: ${DOUYIN_APP_SECRET:-}
+      DOUBLEFIGHT_SESSION_SECRET: ${DOUBLEFIGHT_SESSION_SECRET:-}
+      DOUBLEFIGHT_SESSION_SECRET_PREVIOUS: ${DOUBLEFIGHT_SESSION_SECRET_PREVIOUS:-}
     ports:
       - "127.0.0.1:8787:8787"
     read_only: true
+    volumes:
+      - doublefight-data:/data
     tmpfs:
       - /tmp:size=64m,mode=1777
     cap_drop: [ALL]
@@ -33,3 +40,5 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+volumes:
+  doublefight-data:

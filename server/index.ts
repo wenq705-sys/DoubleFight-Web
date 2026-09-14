@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import process from 'node:process';
+import { join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   PROTOCOL_VERSION,
@@ -7,12 +8,23 @@ import {
   type ServerMessage,
 } from '../shared/index';
 import { RoomManager } from './RoomManager';
+import { JsonAccountRepository } from './auth/AccountRepository';
+import { createAuthHandler } from './auth/AuthHttp';
+import { OfficialDouyinProvider } from './auth/DouyinProvider';
+import { SessionToken } from './auth/SessionToken';
 
 const port = readPort(process.env.PORT, 8787);
 const host = process.env.HOST?.trim() || '0.0.0.0';
 const manager = new RoomManager();
+const accountRepository = await JsonAccountRepository.open(join(process.env.DOUBLEFIGHT_DATA_DIR || '.doublefight-data', 'accounts.json'));
+const authHandler = createAuthHandler({
+  repository: accountRepository,
+  provider: new OfficialDouyinProvider(process.env.DOUYIN_APP_ID, process.env.DOUYIN_APP_SECRET),
+  sessions: new SessionToken(process.env.DOUBLEFIGHT_SESSION_SECRET, process.env.DOUBLEFIGHT_SESSION_SECRET_PREVIOUS),
+});
 
-const httpServer = createServer((request, response) => {
+const httpServer = createServer(async (request, response) => {
+  if (await authHandler(request, response)) return;
   if (request.url === '/health' || request.url === '/healthz') {
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({

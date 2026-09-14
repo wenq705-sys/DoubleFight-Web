@@ -18,6 +18,8 @@ import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
 import { DouyinAudio } from './audio';
+import type { DouyinAuthClient } from './auth';
+import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 
 type ProductMode = 'home' | 'solo' | 'online';
@@ -90,6 +92,7 @@ export class DouyinSoloScene {
     screenCanvas: DouyinCanvas,
     context: WebGLRenderingContext,
     theme: ThemeId,
+    private readonly auth: DouyinAuthClient,
   ) {
     this.currentTheme = theme;
 
@@ -188,6 +191,8 @@ export class DouyinSoloScene {
   get currentMode(): ProductMode { return this.mode; }
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
+
+  refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
 
   openSharedRoom(code: string): void {
     const normalized = code.replace(/\D/g, '').slice(0, 6);
@@ -492,7 +497,7 @@ export class DouyinSoloScene {
     }
     if (this.hit(x, y, layout.daily)) {
       if (this.sidebarRewardReady()) {
-        this.claimSidebarReward();
+        void this.claimSidebarReward();
       } else if (this.sidebarSupported) {
         void this.social.navigateSidebar().then(ok => {
           if (!ok) {
@@ -920,6 +925,12 @@ export class DouyinSoloScene {
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
+
+    if (this.auth.current.status === 'authenticated') {
+      ctx.fillStyle = 'rgba(233,244,216,.78)';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
+    }
 
     const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
     brandGradient.addColorStop(0, '#fff6d7');
@@ -1463,17 +1474,25 @@ export class DouyinSoloScene {
     this.notice = { text: '正在准备激励视频…', until: this.visualTime + 8 };
     this.refreshHud();
     const result = await this.commercial.showRewarded();
-    this.inputLocked = false;
     if (result === 'rewarded') {
-      this.rewardedSkillClaims += 1;
-      this.skillCharges = Math.max(1, this.skillCharges);
-      this.notice = { text: '奖励到账 · 清块 +1', until: this.visualTime + 1.5 };
-      this.platform.haptics.trigger('success');
+      await this.auth.start();
+      const claim = this.auth.requiresServerLedger
+        ? await this.auth.claimAd(`${Date.now()}_${Math.random().toString(36).slice(2)}_${this.rewardedSkillClaims}`)
+        : DOUYIN_RELEASE ? 'unavailable' : 'granted';
+      if (claim === 'granted') {
+        this.rewardedSkillClaims += 1;
+        this.skillCharges = Math.max(1, this.skillCharges);
+        this.notice = { text: '奖励到账 · 清块 +1', until: this.visualTime + 1.5 };
+        this.platform.haptics.trigger('success');
+      } else {
+        this.notice = { text: claim === 'duplicate' ? '该奖励已领取' : '奖励服务暂不可用', until: this.visualTime + 1.5 };
+      }
     } else if (result === 'skipped') {
       this.notice = { text: '完整观看后才能获得奖励', until: this.visualTime + 1.5 };
     } else {
       this.notice = { text: '暂时没有可用广告', until: this.visualTime + 1.5 };
     }
+    this.inputLocked = false;
     this.refreshHud();
   }
 
@@ -1483,7 +1502,17 @@ export class DouyinSoloScene {
     return this.platform.storage.getItem('doublefight-sidebar-reward-date') !== today;
   }
 
-  private claimSidebarReward(): void {
+  private async claimSidebarReward(): Promise<void> {
+    if (this.inputLocked) return;
+    this.inputLocked = true;
+    await this.auth.start();
+    const outcome = this.auth.requiresServerLedger ? await this.auth.claimSidebar() : DOUYIN_RELEASE ? 'unavailable' : 'granted';
+    this.inputLocked = false;
+    if (outcome !== 'granted') {
+      this.notice = { text: outcome === 'duplicate' ? '今日福利已领取' : '福利服务暂不可用', until: this.visualTime + 1.5 };
+      this.refreshHud();
+      return;
+    }
     const today = new Date().toISOString().slice(0, 10);
     this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
     this.platform.storage.setItem('doublefight-next-solo-bonus', '1');

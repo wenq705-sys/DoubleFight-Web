@@ -314,3 +314,15 @@ Return:
 8. production environment variables required;
 9. explicit deferred PvP authenticated-account attribution if Protocol v6 was intentionally preserved;
 10. manual production steps.
+
+## Implementation handoff (branch)
+
+- `server/auth/` exchanges one-use credentials using the official POST code2Session API, stores a generated Double Fight account in a serialized, atomic JSON file, and signs 30-day HMAC-SHA256 bearer sessions. Only the current key signs; the optional previous key verifies during rotation. The raw provider `session_key` is discarded.
+- Production Compose mounts a named `doublefight-data` volume at `/data`; `DOUBLEFIGHT_DATA_DIR=/data`. The JSON adapter is intended for one server process only. Moving to multiple replicas requires a transactional shared database and data migration before scale-out.
+- `/auth/douyin`, `/me`, `/rewards/sidebar`, `/rewards/ad` are implemented under the existing HTTP server. Auth/reward routes are included in the repository Nginx template for the later deployment; the live Nginx host is unchanged by this PR. Browser anonymous WebSocket sessions remain unchanged.
+- Sidebar claims are one per account per UTC day; ad claims are one per account and `claimId`. The client only claims after a completed native rewarded-video callback. Neither the sidebar return flag nor native ad callback is cryptographic proof to the server. This ledger prevents retry/replay duplication, but it is **not** ad-fraud verification. A provider-verifiable callback/token is a later hardening seam.
+- These two claims preserve the existing next-Solo bonus and Solo skill refill. The reserved `currency` field is not incremented because this milestone defines no currency economy.
+- The Douyin development build may grant local anonymous rewards for preview. The release build does not grant local rewards when account/ledger service is unavailable; Home/Solo remain usable.
+- Solo score/highest and PvP counters exist in the account schema but are not promoted from untrusted client reports. Protocol v6 has no authenticated WebSocket hello/account binding, so authoritative PvP-account attribution requires a future versioned handshake extension. Solo score persistence also requires a trusted verification design; local Browser/Douyin scores remain as before.
+- Server runtime needs `DOUYIN_APP_ID`, `DOUYIN_APP_SECRET`, and a random `DOUBLEFIGHT_SESSION_SECRET` of at least 32 bytes. Keep secrets in an operator-managed server environment outside Git. Optional `DOUBLEFIGHT_SESSION_SECRET_PREVIOUS` permits one-key rotation grace. Missing secrets fail closed on auth requests. The client release API URL is HTTPS; register `game.whvwayfare.online` as a legal request domain in Douyin before publishing.
+- Run `npm run smoke:auth` for a mock-provider HTTP check. CI runs it without provider credentials. A future production rollout must mount/preserve the data volume, install and validate the reviewed Nginx route config, set secrets out-of-band, then verify authenticated endpoints and backup/restore before accepting real accounts.

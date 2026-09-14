@@ -8,6 +8,7 @@ import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import { DouyinAudio } from './audio';
+import { DouyinAuthClient } from './auth';
 
 declare const tt: DouyinApi;
 
@@ -16,6 +17,7 @@ const client = new OnlineClient(DOUYIN_PRODUCT_CONFIG.socketUrl, platform.socket
 const commercial = new DouyinCommercial(tt);
 const social = new DouyinSocial(tt);
 const audio = new DouyinAudio(tt);
+const auth = new DouyinAuthClient(tt, platform);
 const canvas = platform.createCanvas(); // First call is the single on-screen canvas.
 const context = canvas.getContext('webgl2', { antialias: true, alpha: false })
   ?? canvas.getContext('webgl', { antialias: true, alpha: false })
@@ -25,7 +27,7 @@ if (!context) throw new Error('Double Fight requires a WebGL context in the Douy
 
 const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
-const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme);
+const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
 const sharedRoom = social.launchRoomCode();
 if (sharedRoom) game.openSharedRoom(sharedRoom);
 const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
@@ -62,6 +64,9 @@ const loop = new DouyinRenderLoop(
 );
 
 platform.lifecycle.show();
-void platform.account.bootstrap().then(result => console.log(`[M2.10.2 account] ${result.status}`));
+void auth.start().then(result => {
+  console.log(`[M2.10.3 account] ${result.status}`);
+  game.refreshAccountState();
+});
 void unsubscribeRoomInvite;
 void loop;

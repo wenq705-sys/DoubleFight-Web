@@ -10,6 +10,7 @@ const projectConfigSource = release
 await build({
   configFile: false,
   publicDir: false,
+  define: { __DOUYIN_RELEASE__: JSON.stringify(release) },
   build: {
     target: 'es2020',
     outDir,

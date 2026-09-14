@@ -106,6 +106,15 @@ export interface DouyinApi {
     fail: (error: { errMsg?: string }) => void;
   }): void;
   checkSession?(options: { success?: () => void; fail?: (error: { errMsg?: string }) => void }): void;
+  request?(options: {
+    url: string;
+    method: 'GET' | 'POST';
+    header?: Record<string, string>;
+    data?: Record<string, unknown>;
+    dataType?: 'json';
+    success: (result: { statusCode: number; data: unknown }) => void;
+    fail: (error: { errMsg?: string }) => void;
+  }): { abort(): void } | void;
 
   onTouchStart(listener: (event: DouyinTouchEvent) => void): void;
   onTouchMove(listener: (event: DouyinTouchEvent) => void): void;
