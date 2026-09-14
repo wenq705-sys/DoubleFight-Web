@@ -78,7 +78,7 @@ export function normalizeDouyinSystemInfo(
     left: Math.max(0, safe?.left ?? 0),
     right: Math.max(0, raw.screenWidth - (safe?.right ?? raw.screenWidth)),
     bottom: Math.max(0, raw.screenHeight - (safe?.bottom ?? raw.screenHeight)),
-  }, menuButton };
+  }, ...(menuButton ? { menuButton } : {}) };
 }
 
 export class DouyinPlatform implements Platform {
