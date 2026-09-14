@@ -20,6 +20,13 @@ class TaskConnection implements SocketConnection {
   onError(listener: (error: unknown) => void): void { this.errorListeners.push(listener); }
   onClose(listener: () => void): void { this.closeListeners.push(listener); }
   reportError(error: unknown): void { if (this.valid()) this.errorListeners.forEach(listener => listener(error)); }
+  reportConnectFailure(error: unknown): void {
+    if (!this.valid()) return;
+    this.errorListeners.forEach(listener => listener(error));
+    this.state = 'closed';
+    this.active = false;
+    this.closeListeners.forEach(listener => listener());
+  }
   send(data: string): void { if (this.valid() && this.state === 'open') this.task.send({ data, fail: error => { if (this.valid()) this.errorListeners.forEach(listener => listener(error)); } }); }
   close(): void {
     if (!this.active) return;
@@ -41,12 +48,12 @@ export class DouyinSocketTransport implements SocketTransport {
     let pendingError: unknown = null;
     const task = this.api.connectSocket({ url, fail: error => {
       if (generation !== this.generation) return;
-      if (connection) connection.reportError(error);
+      if (connection) connection.reportConnectFailure(error);
       else pendingError = error;
     } });
     connection = new TaskConnection(task, () => generation === this.generation);
     this.current = connection;
-    if (pendingError) queueMicrotask(() => connection?.reportError(pendingError));
+    if (pendingError) queueMicrotask(() => connection?.reportConnectFailure(pendingError));
     return connection;
   }
 }
