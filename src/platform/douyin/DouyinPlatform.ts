@@ -15,8 +15,11 @@ export class DouyinStorage implements StorageAdapter {
 }
 
 export class DouyinHaptics implements HapticsAdapter {
+  private enabled = true;
   constructor(private readonly api: Pick<DouyinApi, 'vibrateShort'>) {}
+  setEnabled(enabled: boolean): void { this.enabled = enabled; }
   trigger(_intent: 'light' | 'medium' | 'success' | 'error'): void {
+    if (!this.enabled) return;
     try { this.api.vibrateShort?.({ fail: () => { /* unsupported host */ } }); }
     catch { /* PC and unsupported hosts are silent */ }
   }
