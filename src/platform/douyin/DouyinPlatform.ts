@@ -66,7 +66,10 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
   }
 }
 
-export function normalizeDouyinSystemInfo(raw: ReturnType<DouyinApi['getSystemInfoSync']>): SystemInfo {
+export function normalizeDouyinSystemInfo(
+  raw: ReturnType<DouyinApi['getSystemInfoSync']>,
+  menuButton?: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>>,
+): SystemInfo {
   const width = Math.max(0, raw.windowWidth ?? raw.screenWidth);
   const height = Math.max(0, raw.windowHeight ?? raw.screenHeight);
   const safe = raw.safeArea;
@@ -75,7 +78,7 @@ export function normalizeDouyinSystemInfo(raw: ReturnType<DouyinApi['getSystemIn
     left: Math.max(0, safe?.left ?? 0),
     right: Math.max(0, raw.screenWidth - (safe?.right ?? raw.screenWidth)),
     bottom: Math.max(0, raw.screenHeight - (safe?.bottom ?? raw.screenHeight)),
-  } };
+  }, menuButton };
 }
 
 export class DouyinPlatform implements Platform {
@@ -91,7 +94,11 @@ export class DouyinPlatform implements Platform {
     this.lifecycle = new DouyinLifecycleAdapter(api);
     this.account = new DouyinAccountBootstrap(api);
   }
-  getSystemInfo(): SystemInfo { return normalizeDouyinSystemInfo(this.api.getSystemInfoSync()); }
+  getSystemInfo(): SystemInfo {
+    let menuButton: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>> | undefined;
+    try { menuButton = this.api.getMenuButtonLayout?.(); } catch { /* optional host chrome */ }
+    return normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+  }
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
   createSwipeInput(
     onDirection: (direction: Direction) => void,
