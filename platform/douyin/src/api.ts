@@ -14,6 +14,7 @@ export interface DouyinSocketTask {
 export interface DouyinCanvas {
   width: number;
   height: number;
+  getContext(kind: '2d', options?: object): CanvasRenderingContext2D | null;
   getContext(kind: 'webgl2' | 'webgl' | 'experimental-webgl', options?: object): WebGLRenderingContext | null;
   addEventListener?: (name: string, listener: EventListener) => void;
   removeEventListener?: (name: string, listener: EventListener) => void;
