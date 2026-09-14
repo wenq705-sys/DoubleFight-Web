@@ -132,10 +132,20 @@ export class DouyinSoloScene {
     this.unsubscribeOnline = this.online.subscribe(() => {
       if (this.mode !== 'online') return;
       const onlineMode = this.online.snapshot().mode;
+      const snap = this.online.snapshot();
       if (onlineMode === 'playing' || onlineMode === 'result') {
         this.boardView.root.visible = false;
         this.online.local.root.visible = true;
         this.online.remote.root.visible = true;
+      } else {
+        if (this.boardView.theme !== snap.selectedTheme) {
+          this.boardView.setTheme(snap.selectedTheme);
+          this.boardView.reset(HOME_TILES);
+          this.applyThemeLook();
+        }
+        this.boardView.root.visible = true;
+        this.online.local.root.visible = false;
+        this.online.remote.root.visible = false;
       }
       this.refreshHud();
     });
@@ -596,6 +606,7 @@ export class DouyinSoloScene {
     this.renderer.setViewport(0, bottom, width, height);
     this.renderer.setScissor(0, bottom, width, height);
     this.renderer.setClearColor(board.presentation.sky, 1);
+    this.scene.fog = new THREE.Fog(board.presentation.fog, 20, 48);
     this.renderer.clear(true, true, false);
     this.renderer.render(this.scene, this.duelCamera);
   }
@@ -888,7 +899,7 @@ export class DouyinSoloScene {
     const rects = this.duelSkillRects(width, height);
     me?.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
-      const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - (Date.now() + ((this.client.snapshot().match?.serverTime ?? Date.now()) - Date.now())));
+      const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - this.online.serverNow());
       const ready = remaining <= 0 && me.energy >= def.cost;
       this.drawSkillButton(ctx, rects[index], `${def.icon} ${def.shortLabel}`, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost}⚡`, ready);
     });
