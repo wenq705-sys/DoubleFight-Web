@@ -22,6 +22,7 @@ export interface DouyinCanvas {
 export interface DouyinApi {
   createCanvas(): DouyinCanvas;
   getSystemInfoSync(): { screenWidth: number; screenHeight: number; windowWidth?: number; windowHeight?: number; pixelRatio?: number; safeArea?: { top: number; left: number; right: number; bottom: number } };
+  getMenuButtonLayout?(): { width: number; height: number; top: number; right: number; bottom: number; left: number };
   getStorageSync?(key: string): unknown;
   setStorageSync?(key: string, data: string): void;
   removeStorageSync?(key: string): void;
