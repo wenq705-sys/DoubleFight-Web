@@ -89,7 +89,19 @@ export class DouyinCommercial {
   }
 
   showBanner(): void {
-    if (!this.api.createBannerAd || this.bannerVisible) return;
+    if (this.bannerVisible) return;
+    if (this.banner) {
+      try {
+        void this.banner.show().then(() => { this.bannerVisible = true; }).catch(() => {
+          this.bannerVisible = false;
+        });
+      } catch {
+        this.bannerVisible = false;
+      }
+      return;
+    }
+    if (!this.api.createBannerAd) return;
+
     const info = this.api.getSystemInfoSync();
     const windowWidth = Math.max(1, info.windowWidth ?? info.screenWidth);
     const windowHeight = Math.max(1, info.windowHeight ?? info.screenHeight);
