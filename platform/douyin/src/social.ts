@@ -4,21 +4,26 @@ import { DOUYIN_PRODUCT_CONFIG } from './config';
 export class DouyinSocial {
   private latestShow: DouyinShowOptions;
   private sidebarSupported: boolean | null = null;
+  private roomListeners = new Set<(code: string) => void>();
 
   constructor(private readonly api: DouyinApi) {
     this.latestShow = this.safeLaunchOptions();
     try {
       api.onShow((options) => {
         if (options) this.latestShow = options;
+        const code = this.roomCodeFrom(options ?? this.latestShow);
+        if (code) this.roomListeners.forEach(listener => listener(code));
       });
     } catch { /* optional host signal */ }
   }
 
   launchRoomCode(): string | null {
-    const launch = this.safeLaunchOptions();
-    const value = launch.query?.room ?? launch.query?.roomCode;
-    const code = String(value ?? '').replace(/\D/g, '').slice(0, 6);
-    return code.length === 6 ? code : null;
+    return this.roomCodeFrom(this.latestShow) ?? this.roomCodeFrom(this.safeLaunchOptions());
+  }
+
+  subscribeRoomInvite(listener: (code: string) => void): () => void {
+    this.roomListeners.add(listener);
+    return () => this.roomListeners.delete(listener);
   }
 
   async shareRoom(roomCode: string): Promise<boolean> {
@@ -135,6 +140,12 @@ export class DouyinSocial {
         resolve(false);
       }
     });
+  }
+
+  private roomCodeFrom(options?: DouyinShowOptions | DouyinLaunchOptions): string | null {
+    const value = options?.query?.room ?? options?.query?.roomCode;
+    const code = String(value ?? '').replace(/\D/g, '').slice(0, 6);
+    return code.length === 6 ? code : null;
   }
 
   private safeLaunchOptions(): DouyinLaunchOptions {
