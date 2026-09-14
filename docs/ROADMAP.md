@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current milestone — M2.10 Douyin Platform Foundation ← NEXT
+## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
 
 M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
 
@@ -13,6 +13,8 @@ M2.10 formalizes the spike into production architecture:
 - system/safe-area abstraction
 - Douyin account bootstrap (`tt.login` client side; code exchange remains server-side)
 - no ads/payment yet until the platform foundation is stable
+
+Implementation on `refactor/m2-10-platform-foundation`: shared Platform contract and Browser/Douyin adapters are wired through the existing OnlineClient. Browser flow and Douyin IDE canvas/touch/v6/storage/haptics/account bootstrap have been exercised. M2.10 IDE background/foreground and physical-device haptics/login remain acceptance; server-side code2Session/session-token auth and release socket-domain registration are later work.
 
 ## M2.8.1 — Mobile gameplay visual system (Draft review)
 

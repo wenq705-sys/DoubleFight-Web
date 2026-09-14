@@ -2,6 +2,12 @@
 
 ## Current state
 
+**M2.10 platform foundation on `refactor/m2-10-platform-foundation` (Draft PR preparation).**
+- `src/platform` now owns Browser/Douyin socket, lifecycle, storage, haptics, system/safe-area, and account bootstrap adapters. `OnlineClient` accepts an injected transport; Protocol v6, reconnect token, sequence streams and server authority remain unchanged. Douyin's entry uses the same `OnlineClient` and shared board core without DOM UI.
+- Browser Home/Solo/theme persistence and a two-browser quick/private flow passed. Production WSS smoke passed quick/private/reconnect. Final typecheck, 61 tests and both builds passed.
+- Douyin IDE 4.5.5 showed the board and a touch-driven merge; v6 welcome/pong, storage round-trip and haptics invocation were observed. `tt.login({force:false})` returned typed `logged_in` in this IDE session; no code/identity was stored. See `platform/douyin/evidence/m2-10-ide-runtime.txt` and screenshots.
+- New lifecycle adapter has code-level repeated show/hide coverage; M2.10 actual IDE background/foreground acceptance remains. Development socket bypass is not a release configuration. Production auth code2Session/session token, legal socket domain, ads and sharing remain deferred.
+
 **M2.9 Douyin runtime feasibility: FEASIBLE.**
 - Three.js/WebGL2 renders inside the Douyin Mini Game runtime using `tt.createCanvas()`.
 - `tt.onTouch*` drives the shared `Board2048` core.

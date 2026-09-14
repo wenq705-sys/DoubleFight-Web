@@ -20,7 +20,12 @@ export interface DouyinCanvas {
 }
 export interface DouyinApi {
   createCanvas(): DouyinCanvas;
-  getSystemInfoSync(): { screenWidth: number; screenHeight: number; pixelRatio?: number };
+  getSystemInfoSync(): { screenWidth: number; screenHeight: number; windowWidth?: number; windowHeight?: number; pixelRatio?: number; safeArea?: { top: number; left: number; right: number; bottom: number } };
+  getStorageSync?(key: string): unknown;
+  setStorageSync?(key: string, data: string): void;
+  removeStorageSync?(key: string): void;
+  vibrateShort?(options?: { fail?: (error: { errMsg?: string }) => void }): void;
+  login?(options: { force: false; success: (result: { isLogin: boolean; code?: string; anonymousCode?: string }) => void; fail: (error: { errMsg?: string }) => void }): void;
   onTouchStart(listener: (event: DouyinTouchEvent) => void): void;
   onTouchMove(listener: (event: DouyinTouchEvent) => void): void;
   onTouchEnd(listener: (event: DouyinTouchEvent) => void): void;
