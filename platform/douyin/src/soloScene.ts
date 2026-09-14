@@ -17,6 +17,8 @@ import {
 import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
+import { DouyinAudio } from './audio';
+import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
@@ -67,6 +69,9 @@ export class DouyinSoloScene {
   private joinPadOpen = false;
   private joinCode = '';
   private exitConfirm = false;
+  private settingsOpen = false;
+  private soundEnabled = true;
+  private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
 
@@ -75,6 +80,7 @@ export class DouyinSoloScene {
     private readonly client: OnlineClient,
     private readonly commercial: DouyinCommercial,
     private readonly social: DouyinSocial,
+    private readonly audio: DouyinAudio,
     screenCanvas: DouyinCanvas,
     context: WebGLRenderingContext,
     theme: ThemeId,
@@ -104,9 +110,15 @@ export class DouyinSoloScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.autoClear = false;
 
-    this.boardView = new BattleBoardView(theme, 'full', undefined, undefined, true);
+    this.soundEnabled = this.platform.storage.getItem('doublefight-sound-enabled') !== '0';
+    this.hapticsEnabled = this.platform.storage.getItem('doublefight-haptics-enabled') !== '0';
+    this.audio.setEnabled(this.soundEnabled);
+    this.platform.haptics.setEnabled(this.hapticsEnabled);
+
+    const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
+    this.boardView = new BattleBoardView(theme, 'full', undefined, presentation, true);
     this.controller = new SoloController(this.boardView);
-    this.online = new DouyinOnlineFlow(platform, client, theme);
+    this.online = new DouyinOnlineFlow(platform, client, theme, presentation);
     this.scene.add(this.boardView.root, this.online.local.root, this.online.remote.root);
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
@@ -334,7 +346,15 @@ export class DouyinSoloScene {
     this.uiPlane.geometry.dispose();
     this.renderer.dispose();
     this.commercial.dispose();
+    this.audio.dispose();
     setTextureCanvasFactory(null);
+  }
+
+  private handlePresentationFeedback(event: PresentationEvent): void {
+    this.audio.playEvent(event);
+    if (event.type === 'merge') {
+      this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
+    }
   }
 
   private startSolo(): void {
