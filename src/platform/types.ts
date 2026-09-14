@@ -28,6 +28,7 @@ export interface SystemInfo {
   pixelRatio: number;
   runtime: 'browser' | 'douyin';
   safeArea: { top: number; right: number; bottom: number; left: number };
+  menuButton?: { top: number; right: number; bottom: number; left: number; width: number; height: number };
 }
 export type AccountBootstrapResult =
   | { status: 'local'; isLoggedIn: false; identity: 'browser-anonymous' }
