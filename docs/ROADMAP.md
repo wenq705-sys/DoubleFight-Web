@@ -1,5 +1,19 @@
 # Roadmap
 
+## Current milestone — M2.10 Douyin Platform Foundation ← NEXT
+
+M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
+
+M2.10 formalizes the spike into production architecture:
+- BrowserPlatform + DouyinPlatform adapter
+- lifecycle abstraction
+- WebSocket transport abstraction
+- storage abstraction
+- haptics abstraction
+- system/safe-area abstraction
+- Douyin account bootstrap (`tt.login` client side; code exchange remains server-side)
+- no ads/payment yet until the platform foundation is stable
+
 ## M2.8.1 — Mobile gameplay visual system (Draft review)
 
 - Tier-aware sizing, readable tactical opponent board, compact Solo/Duel/setup UI and safe-area tokens implemented.
@@ -120,7 +134,7 @@
 - protocol v5 adds matchmaking state/messages
 - no MMR/region split yet; wait for real concurrency data
 
-### M2.6 production server + real-device network hardening ← NEXT
+### M2.6 production server + real-device network hardening ✅
 
 - deploy the existing Docker game server behind public TLS `wss://`
 - connect GitHub Pages / later Douyin client to the production endpoint
@@ -137,14 +151,38 @@
 - authored Theme Islands
 - shared materials / atlases / instancing
 
+## M2.9 — Douyin runtime feasibility ✅
+
+- Three.js/WebGL2 rendered on `tt.createCanvas()`
+- `tt.onTouch*` drove the shared 2048 core
+- `tt.connectSocket()` completed Protocol v6 hello/welcome/pong against production WSS in development mode
+- repeated real background/foreground lifecycle acceptance passed
+- browser and Douyin builds remained green
+
+## M2.10 — Douyin Platform Foundation ← NEXT
+
+- formal Browser/Douyin platform adapter
+- lifecycle / socket / storage / haptics / system-info abstractions
+- account bootstrap
+- keep gameplay rules and protocol shared
+- preserve browser product
+
+## M2.11 — Douyin Commercial & Social
+
+- rewarded video ads
+- restrained interstitial policy
+- share/invite and room deep links
+- mandatory return/side-panel capability where applicable
+- ranking/social hooks
+- ad/reward integrity and analytics
+
 ## M4 — Douyin mini-game release
 
-- platform adapter
-- lifecycle / storage / audio / haptics
-- account identity where required
-- share/invite
+- final account/privacy compliance
 - packaging/performance budget
-- production server deployment and observability
+- production legal-domain configuration
+- release-time observability
+- store/review assets and submission
 
 ## M5 — WeChat mini-game
 

@@ -1,0 +1,8 @@
+Douyin IDE 4.5.5, iPhone 15 Pro simulator; development-only domain-check checkbox enabled.
+[M2.9 gate1] WebGL WebGL 2.0 (OpenGL ES 3.0 Chromium); Three.js 179; 393x852
+[M2.9 lifecycle] show
+[M2.9 socket] connect wss://game.whvwayfare.online/ws
+[M2.9 socket] open
+[M2.9 socket] hello v6
+[M2.9 socket] welcome v6
+[M2.9 socket] pong 302ms
