@@ -67,6 +67,25 @@ describe('platform socket contract', () => {
     tasks[0].events.get('close')!(); expect(closed).toHaveBeenCalledOnce();
   });
 
+  it('turns Douyin connectSocket fail into a terminal close so OnlineClient retries', async () => {
+    vi.useFakeTimers();
+    const connectSocket = vi.fn((options: { fail?: (error: { errMsg?: string }) => void }) => {
+      options.fail?.({ errMsg: 'connectSocket:fail temporary' });
+      return {
+        send: vi.fn(), close: vi.fn(),
+        onOpen: vi.fn(), onMessage: vi.fn(), onError: vi.fn(), onClose: vi.fn(),
+      } as unknown as DouyinSocketTask;
+    });
+    const client = new OnlineClient('wss://example/ws', new DouyinSocketTransport({ connectSocket }));
+    client.connect();
+    await Promise.resolve();
+    expect(client.snapshot().status).toBe('reconnecting');
+    expect(client.snapshot().lastError).toBe('无法连接联机服务器。');
+    vi.advanceTimersByTime(500);
+    expect(connectSocket).toHaveBeenCalledTimes(2);
+    client.close();
+  });
+
   it('keeps OnlineClient backoff, reconnect token, and sequence streams with injected transport', () => {
     vi.useFakeTimers();
     const sockets: FakeSocket[] = [];
