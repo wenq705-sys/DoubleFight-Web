@@ -18,7 +18,7 @@ if (!context) throw new Error('Double Fight requires a WebGL context in the Douy
 
 const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
-const game = new DouyinSoloScene(platform, canvas, context, theme);
+const game = new DouyinSoloScene(platform, client, canvas, context, theme);
 
 const touch = platform.createSwipeInput(
   (direction: Direction) => game.handleDirection(direction),
