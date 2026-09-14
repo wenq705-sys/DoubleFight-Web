@@ -24,6 +24,6 @@ await Promise.all(['game.json', 'project.config.json'].map(name =>
   copyFile(`platform/douyin/${name}`, `${outDir}/${name}`),
 ));
 const projectConfig = JSON.parse(await readFile(`${outDir}/project.config.json`, 'utf8'));
-if (projectConfig.setting?.urlCheck !== true) {
-  throw new Error('Douyin development build requires setting.urlCheck=true in dist/project.config.json');
+if (projectConfig.setting?.urlCheck !== false) {
+  throw new Error('Douyin IDE development build requires setting.urlCheck=false so local WSS testing is not reset on rebuild. Release packaging must re-enable domain checks.');
 }
