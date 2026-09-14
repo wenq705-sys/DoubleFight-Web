@@ -14,6 +14,7 @@ export class DouyinCommercial {
   private bannerVisible = false;
   private readonly startedAt = Date.now();
   private lastInterstitialAt = 0;
+  private lastRewardedAt = 0;
   private interstitialBusy = false;
 
   constructor(private readonly api: DouyinApi) {
@@ -34,6 +35,7 @@ export class DouyinCommercial {
         resolve(value);
       };
       const onClose = (result: { isEnded?: boolean; count?: number }) => {
+        this.lastRewardedAt = Date.now();
         finish(result.isEnded ? 'rewarded' : 'skipped');
       };
       const onError = () => finish('unavailable');
@@ -56,6 +58,7 @@ export class DouyinCommercial {
     if (!force) {
       if (now - this.startedAt < 30_000) return false;
       if (this.lastInterstitialAt > 0 && now - this.lastInterstitialAt < 60_000) return false;
+      if (this.lastRewardedAt > 0 && now - this.lastRewardedAt < 60_000) return false;
     }
 
     this.interstitialBusy = true;
