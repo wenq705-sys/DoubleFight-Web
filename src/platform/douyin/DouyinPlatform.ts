@@ -93,5 +93,8 @@ export class DouyinPlatform implements Platform {
   }
   getSystemInfo(): SystemInfo { return normalizeDouyinSystemInfo(this.api.getSystemInfoSync()); }
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
-  createSwipeInput(onDirection: (direction: Direction) => void): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection); }
+  createSwipeInput(
+    onDirection: (direction: Direction) => void,
+    onTap?: (x: number, y: number) => void,
+  ): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection, onTap); }
 }
