@@ -155,10 +155,17 @@ Development-only performance telemetry should expose FPS, frame time, DPR, quali
 
 ## J. Additional retention capabilities
 
-Recommended, not required for the first M2.12 client commit:
-- shortcut/add-to-home entry in Benefits/Today area;
-- subscription-message opt-in for daily S refresh / season-end reminders;
-- analytics events for onboarding, discovery, ascension, ads, theme trial/unlock, rank and retention funnels.
+Implemented on the client branch:
+- World Center and named-piece Collection overlays;
+- Today/Benefits center with sidebar return, add-to-home shortcut and account refresh;
+- subscription-message opt-in path gated by configured approved template IDs;
+- analytics for Home, Solo, discovery, Ascension, matchmaking, PvP results/rating settlement, ads, rank opens and retention actions;
+- native Douyin Solo weekly leaderboard;
+- native theme-scoped Ascension leaderboard using formatted time + inverted enum priority so lower time ranks first;
+- native PvP social mirror while the official 14-day season leaderboard remains server-authoritative;
+- authoritative profile refresh after match settlement so Rating/W-L-D is not one match behind.
+
+The client never fabricates S Coin grants or future-theme ownership while the server ledger is absent.
 
 ## Delivery split
 
@@ -166,9 +173,11 @@ Recommended, not required for the first M2.12 client commit:
 - visual/meta vocabulary and theme catalogue
 - new-highest/ascension client feedback
 - profile/S Coin presentation using existing account data
-- leaderboard/theme/collection product UI shells where data is already available
-- PvP timer/lobby/matching visual redesign
+- World Center, Collection, Today/Benefits and ranking product surfaces
+- native Douyin weekly/Ascension/social-rank integration where platform data is sufficient
+- PvP timer/lobby/matching/skill-dock/result visual redesign
 - client performance pass
+- retention/ad/rank analytics adapters
 - tests and CI
 
 ### Server-heavy follow-up
