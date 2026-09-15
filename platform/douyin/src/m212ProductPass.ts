@@ -3,7 +3,6 @@ import {
   formatMatchClock,
   matchTimerPhase,
   type Direction,
-  type MatchPlayerState,
 } from '../../../shared/index';
 import {
   MAX_PIECE_VALUE,
@@ -39,15 +38,15 @@ interface MetaPassState {
   perfTime: number;
   perfFrames: number;
   goodWindows: number;
+  nextFlightHudAt: number;
 }
 
 /**
  * M2.12 presentation extension.
  *
  * Kept outside the already-large DouyinSoloScene so the meta/retention pass can
- * be reviewed and removed independently. TypeScript `private` members compile
- * to normal instance members here; this adapter intentionally decorates only
- * presentation/runtime methods and never mutates Board2048/PvP protocol rules.
+ * be reviewed independently. It decorates presentation/runtime methods only;
+ * Board2048 rules and Protocol v6 remain untouched.
  */
 export function installM212ProductPass(
   game: DouyinSoloScene,
@@ -67,11 +66,13 @@ export function installM212ProductPass(
     perfTime: 0,
     perfFrames: 0,
     goodWindows: 0,
+    nextFlightHudAt: 0,
   };
 
-  // Premium Home/Battle surfaces stay ad-free. Rewarded and interstitial flows
-  // remain available; Banner can be reintroduced on future secondary surfaces.
+  // Home/Solo/PvP are premium ad-free surfaces. Rewarded/interstitial flows
+  // remain; Banner can return later on secondary pages such as Theme/Collection.
   commercial.hideBanner();
+  (commercial as DouyinCommercial & Record<string, any>).showBanner = () => {};
 
   const originalShowHome = scene.showHome.bind(scene);
   scene.showHome = () => {
@@ -90,15 +91,13 @@ export function installM212ProductPass(
     originalStartSolo();
   };
 
-  // Use the first successful move as the Solo run clock origin. visualTime is
-  // tied to the render loop, so time spent backgrounded is naturally excluded.
+  // First successful move starts the run clock. visualTime follows the active
+  // render loop, so background time does not inflate the local mastery PB.
   const originalMove = game.move.bind(game);
   game.move = async (direction: Direction) => {
-    const candidateStart = scene.visualTime as number;
+    const candidateStart = Number(scene.visualTime ?? 0);
     const changed = await originalMove(direction);
-    if (changed && game.currentMode === 'solo' && state.runStartedAt === null) {
-      state.runStartedAt = candidateStart;
-    }
+    if (changed && game.currentMode === 'solo' && state.runStartedAt === null) state.runStartedAt = candidateStart;
     return changed;
   };
 
@@ -109,16 +108,16 @@ export function installM212ProductPass(
 
     state.runHighest = event.value;
     recordDiscovery(platform.storage, game.theme, event.value);
-    state.highestFlight = { value: event.value, startedAt: scene.visualTime, duration: 0.72 };
+    state.highestFlight = { value: event.value, startedAt: Number(scene.visualTime ?? 0), duration: 0.72 };
 
     if (event.value >= MAX_PIECE_VALUE && !state.ascended && state.runStartedAt !== null) {
       state.ascended = true;
-      const elapsedMs = Math.max(1, Math.round((scene.visualTime - state.runStartedAt) * 1000));
+      const elapsedMs = Math.max(1, Math.round((Number(scene.visualTime ?? 0) - state.runStartedAt) * 1000));
       const result = recordAscension(platform.storage, game.theme, elapsedMs);
       const badge = result.first ? '首次登顶' : result.personalBest ? 'NEW PB' : '登顶成功';
       scene.notice = {
         text: `${badge} · ${pieceName(game.theme, MAX_PIECE_VALUE)} · ${formatDuration(elapsedMs)}`,
-        until: scene.visualTime + 2.4,
+        until: Number(scene.visualTime ?? 0) + 2.4,
       };
       platform.haptics.trigger('success');
     }
@@ -137,7 +136,7 @@ export function installM212ProductPass(
       const panel = rankingLayout(info.width, info.height);
       if (hit(x, y, panel.solo)) {
         void scene.social.openSoloRank().then((ok: boolean) => {
-          if (!ok) scene.notice = { text: 'Solo 周榜暂不可用', until: scene.visualTime + 1.3 };
+          if (!ok) scene.notice = { text: 'Solo 周榜暂不可用', until: Number(scene.visualTime ?? 0) + 1.3 };
           scene.refreshHud();
         });
         return;
@@ -148,14 +147,14 @@ export function installM212ProductPass(
           text: mastery.bestAscensionMs
             ? `${THEMES[game.theme].label} · PB ${formatDuration(mastery.bestAscensionMs)}`
             : '先完成一次登顶，解锁竞速纪录',
-          until: scene.visualTime + 1.6,
+          until: Number(scene.visualTime ?? 0) + 1.6,
         };
         scene.refreshHud();
         return;
       }
       if (hit(x, y, panel.pvp)) {
         const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-        scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: scene.visualTime + 1.6 };
+        scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: Number(scene.visualTime ?? 0) + 1.6 };
         scene.refreshHud();
         return;
       }
@@ -164,7 +163,7 @@ export function installM212ProductPass(
       return;
     }
 
-    if (game.currentMode === 'home') {
+    if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       const profile = profileRect(info.width, scene.hudTop());
       if (hit(x, y, profile)) {
         state.profileOpen = true;
@@ -193,12 +192,28 @@ export function installM212ProductPass(
     const scale = Math.min(2, Math.max(1, info.pixelRatio));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
-    if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, game, platform, state);
-    if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene, client);
-    if (state.profileOpen) drawProfile(ctx, width, height, auth, platform);
-    if (state.rankingOpen) drawRankingHub(ctx, width, height, game.theme, auth, platform);
+    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen);
+    if (!nativeModal && !scene.onboardingOpen) {
+      if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
+      if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, game, platform, state, Number(scene.visualTime ?? 0));
+      if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene);
+      if (state.profileOpen) drawProfile(ctx, width, height, auth, platform);
+      if (state.rankingOpen) drawRankingHub(ctx, width, height, game.theme, auth, platform);
+    }
+    if (scene.onboardingOpen) drawOnboardingMeta(ctx, width, height);
     scene.uiTexture.needsUpdate = true;
+  };
+
+  // A short UI flight needs more than the normal event-driven Solo HUD refresh.
+  const originalRender = game.render.bind(game);
+  game.render = () => {
+    originalRender();
+    const now = Number(scene.visualTime ?? 0);
+    if (state.highestFlight && now >= state.nextFlightHudAt) {
+      state.nextFlightHudAt = now + 1 / 30;
+      scene.refreshHud();
+      if (now - state.highestFlight.startedAt >= state.highestFlight.duration) state.highestFlight = null;
+    }
   };
 
   // Replace Douyin's high-first adaptation with a medium-first policy.
@@ -245,9 +260,8 @@ export function installM212ProductPass(
     object.shadow.map = null;
   });
   scene.applyQuality('medium', 1.2);
-
-  // Initial redraw must happen after all wrappers are installed.
   scene.refreshHud();
+  void client;
 }
 
 function drawHomeMeta(
@@ -265,7 +279,7 @@ function drawHomeMeta(
 
   const profile = profileRect(width, top);
   round(ctx, profile.x, profile.y, profile.width, profile.height, 15);
-  ctx.fillStyle = 'rgba(8,27,35,.84)';
+  ctx.fillStyle = 'rgba(8,27,35,.88)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,225,145,.35)';
   ctx.lineWidth = 1;
@@ -281,17 +295,16 @@ function drawHomeMeta(
 
   const coinWidth = 74;
   const coinX = width - 16 - coinWidth;
-  round(ctx, coinX, top + 7, coinWidth, 36, 18);
-  ctx.fillStyle = 'rgba(31,50,57,.90)';
+  round(ctx, coinX, profile.y, coinWidth, 40, 18);
+  ctx.fillStyle = 'rgba(31,50,57,.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.48)';
   ctx.stroke();
   ctx.textAlign = 'center';
   ctx.fillStyle = '#f7d66d';
   ctx.font = '900 11px sans-serif';
-  ctx.fillText(`S ${balance}`, coinX + coinWidth / 2, top + 25);
+  ctx.fillText(`S ${balance}`, coinX + coinWidth / 2, profile.y + 20);
 
-  // Cover the old numeric highest/BEST line with the player-facing piece name.
   const y = Math.max(top + 72, platform.getSystemInfo().height * 0.56) + 60;
   ctx.fillStyle = 'rgba(12,28,36,.94)';
   ctx.fillRect(width / 2 - 108, y - 8, 216, 17);
@@ -308,15 +321,16 @@ function drawSoloMeta(
   game: DouyinSoloScene,
   platform: DouyinPlatform,
   state: MetaPassState,
+  visualTime: number,
 ): void {
-  const top = Math.max(12, platform.getSystemInfo().safeArea.top + 8, (platform.getSystemInfo().menuButton?.bottom ?? 0) + 8);
+  const info = platform.getSystemInfo();
+  const top = Math.max(12, info.safeArea.top + 8, (info.menuButton?.bottom ?? 0) + 8);
   const highest = game.highest;
   const label = pieceName(game.theme, highest);
   const mastery = loadThemeMastery(platform.storage, game.theme);
 
-  // Cover the old `最高 64` style text without touching the piece art itself.
   ctx.fillStyle = 'rgba(14,34,43,.97)';
-  ctx.fillRect(width - 150, top + 33, 132, 18);
+  ctx.fillRect(width - 156, top + 33, 138, 18);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#dfe9e6';
   ctx.font = '800 10px sans-serif';
@@ -330,13 +344,9 @@ function drawSoloMeta(
   }
 
   if (state.highestFlight) {
-    const t = Math.max(0, Math.min(1, (state.visualNow ?? 0)));
-    void t;
-    const elapsed = Math.max(0, (performanceNowSeconds(sceneVisualFallback(game)) - state.highestFlight.startedAt) / state.highestFlight.duration);
+    const elapsed = Math.max(0, (visualTime - state.highestFlight.startedAt) / state.highestFlight.duration);
     const p = Math.min(1, elapsed);
-    if (p >= 1) {
-      state.highestFlight = null;
-    } else {
+    if (p < 1) {
       const ease = 1 - Math.pow(1 - p, 3);
       const startX = width * 0.52;
       const startY = height * 0.48;
@@ -359,12 +369,11 @@ function drawSoloMeta(
     }
   }
 
-  // Replace the legacy numeric onboarding hint at the bottom.
-  const safeBottom = Math.max(14, platform.getSystemInfo().safeArea.bottom + 10);
+  const safeBottom = Math.max(14, info.safeArea.bottom + 10);
   const hintY = height - safeBottom - 65;
-  ctx.fillStyle = 'rgba(8,20,27,.62)';
-  ctx.fillRect(width / 2 - 100, hintY - 8, 200, 17);
-  ctx.fillStyle = 'rgba(255,255,255,.72)';
+  ctx.fillStyle = 'rgba(8,20,27,.68)';
+  ctx.fillRect(width / 2 - 108, hintY - 8, 216, 17);
+  ctx.fillStyle = 'rgba(255,255,255,.76)';
   ctx.font = '650 10px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('相同棋子合成 · 解锁更高阶', width / 2, hintY);
@@ -375,15 +384,13 @@ function drawOnlineMeta(
   width: number,
   height: number,
   scene: InternalScene,
-  client: OnlineClient,
 ): void {
   const snap = scene.online.snapshot();
   const top = scene.hudTop();
 
   if (snap.mode === 'lobby') {
-    // Premium battle-loadout title block over the old configuration header.
-    ctx.fillStyle = 'rgba(10,26,34,.92)';
     round(ctx, width / 2 - 120, top + 7, 240, 62, 20);
+    ctx.fillStyle = 'rgba(10,26,34,.94)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(242,205,105,.42)';
     ctx.stroke();
@@ -398,10 +405,10 @@ function drawOnlineMeta(
   }
 
   if (snap.mode === 'matching') {
-    const pulse = (Math.sin((scene.visualTime as number) * 4.2) + 1) / 2;
+    const pulse = (Math.sin(Number(scene.visualTime ?? 0) * 4.2) + 1) / 2;
     const cy = height * 0.40;
-    ctx.fillStyle = 'rgba(5,17,24,.68)';
     round(ctx, width / 2 - 132, cy - 92, 264, 184, 28);
+    ctx.fillStyle = 'rgba(5,17,24,.80)';
     ctx.fill();
     ctx.strokeStyle = `rgba(242,205,105,${0.28 + pulse * 0.35})`;
     ctx.lineWidth = 1.5;
@@ -425,16 +432,16 @@ function drawOnlineMeta(
   const remaining = scene.online.remainingMs();
   const phase = matchTimerPhase(remaining);
   const timer = formatMatchClock(remaining);
-  const pulse = phase === 'final_countdown' ? 1 + Math.sin((scene.visualTime as number) * 12) * 0.06 : 1;
+  const pulse = phase === 'final_countdown' ? 1 + Math.sin(Number(scene.visualTime ?? 0) * 12) * 0.06 : 1;
   const rect = { x: width / 2 - 49 * pulse, y: top + 8, width: 98 * pulse, height: 43 };
   round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
   ctx.fillStyle = phase === 'final_countdown'
-    ? 'rgba(125,35,31,.94)'
+    ? 'rgba(125,35,31,.96)'
     : phase === 'decisive'
-      ? 'rgba(117,69,25,.93)'
+      ? 'rgba(117,69,25,.95)'
       : phase === 'last_minute'
-        ? 'rgba(80,65,25,.92)'
-        : 'rgba(8,30,38,.93)';
+        ? 'rgba(80,65,25,.94)'
+        : 'rgba(8,30,38,.95)';
   ctx.fill();
   ctx.strokeStyle = phase === 'normal' ? '#77d7cf' : '#ffd36d';
   ctx.lineWidth = 1.4;
@@ -448,8 +455,6 @@ function drawOnlineMeta(
     ctx.font = '800 8px sans-serif';
     ctx.fillText(phase === 'last_minute' ? '最后一分钟' : phase === 'decisive' ? '决胜时刻' : '最终倒计时', width / 2, top + 54);
   }
-
-  void client;
 }
 
 function drawProfile(
@@ -459,14 +464,14 @@ function drawProfile(
   auth: DouyinAuthClient,
   platform: DouyinPlatform,
 ): void {
-  ctx.fillStyle = 'rgba(3,10,15,.76)';
+  ctx.fillStyle = 'rgba(3,10,15,.78)';
   ctx.fillRect(0, 0, width, height);
   const panelW = Math.min(318, width - 28);
   const x = (width - panelW) / 2;
   const y = height * 0.18;
   const panelH = Math.min(470, height * 0.66);
   round(ctx, x, y, panelW, panelH, 28);
-  ctx.fillStyle = 'rgba(9,28,36,.97)';
+  ctx.fillStyle = 'rgba(9,28,36,.98)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.5)';
   ctx.lineWidth = 1.2;
@@ -527,7 +532,7 @@ function drawRankingHub(
   auth: DouyinAuthClient,
   platform: DouyinPlatform,
 ): void {
-  ctx.fillStyle = 'rgba(3,10,15,.76)';
+  ctx.fillStyle = 'rgba(3,10,15,.78)';
   ctx.fillRect(0, 0, width, height);
   const layout = rankingLayout(width, height);
   const panel = layout.panel;
@@ -556,6 +561,26 @@ function drawRankingHub(
   ctx.fillText('点击空白处返回', width / 2, panel.y + panel.height - 20);
 }
 
+function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const y = height * 0.34;
+  ctx.fillStyle = 'rgba(14,42,50,.98)';
+  ctx.fillRect(width / 2 - 125, y + 66, 250, 116);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#d5e1df';
+  ctx.font = '700 11px sans-serif';
+  ctx.fillText('角色进阶 × 技能 × 实时对决', width / 2, y + 76);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#efc968';
+  ctx.font = '900 10px sans-serif';
+  ctx.fillText('01', width / 2 - 133, y + 112);
+  ctx.fillStyle = '#f3f2e9';
+  ctx.font = '850 12px sans-serif';
+  ctx.fillText('滑动棋盘', width / 2 - 103, y + 106);
+  ctx.fillStyle = '#9fb3b5';
+  ctx.font = '650 9px sans-serif';
+  ctx.fillText('相同棋子合成，解锁更高阶角色', width / 2 - 103, y + 124);
+}
+
 function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string): void {
   round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
   ctx.fillStyle = 'rgba(21,54,64,.9)';
@@ -572,7 +597,7 @@ function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, 
 }
 
 function profileRect(width: number, top: number): Rect {
-  return { x: 16, y: top + 7, width: Math.min(126, width * 0.34), height: 40 };
+  return { x: 16, y: top + 76, width: Math.min(126, width * 0.34), height: 40 };
 }
 
 function rankingLayout(width: number, height: number) {
@@ -606,12 +631,4 @@ function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: numbe
   ctx.lineTo(x, y + r);
   ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
-}
-
-function sceneVisualFallback(game: DouyinSoloScene): number {
-  return Number((game as InternalScene).visualTime ?? 0);
-}
-
-function performanceNowSeconds(fallback: number): number {
-  return fallback;
 }
