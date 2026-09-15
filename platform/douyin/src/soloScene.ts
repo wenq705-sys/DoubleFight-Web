@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
 import { THEMES, type ThemeId } from '../../../src/config/themes';
-import { FINAL_PIECE_VALUE, formatDuration, isFinalPiece, pieceName, ratingRank } from '../../../src/meta/progression';
+import { FINAL_PIECE_VALUE, PIECE_VALUES, formatDuration, isFinalPiece, pieceName, ratingRank } from '../../../src/meta/progression';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
