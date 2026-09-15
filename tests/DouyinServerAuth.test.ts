@@ -142,6 +142,7 @@ describe('Double Fight session', () => {
     expect(current.verify(token, expiresAt)).toBeNull();
     expect(current.verify(`${token.slice(0, -1)}x`, 1000)).toBeNull();
     expect(new SessionToken('new-rotation-key-with-at-least-thirty-two-bytes', secret).verify(token, 1000)).toBe('account-1');
+    expect(new SessionToken('new-rotation-key-with-at-least-thirty-two-bytes', 'short').verify(token, 1000)).toBeNull();
     expect(new SessionToken(undefined).verify(token, 1000)).toBeNull();
   });
 });
