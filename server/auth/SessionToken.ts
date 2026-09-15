@@ -20,7 +20,9 @@ export class SessionToken {
     if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1])) return null;
     const [payload, signature] = parts;
     const actual = Buffer.from(signature, 'base64url');
-    const valid = [this.current, this.previous].filter((key): key is string => Boolean(key)).some(key => {
+    const valid = [this.current, this.previous]
+      .filter((key): key is string => Boolean(key) && Buffer.byteLength(key!) >= 32)
+      .some(key => {
       const expected = Buffer.from(this.sign(payload, key), 'base64url');
       return actual.length === expected.length && timingSafeEqual(actual, expected);
     });
