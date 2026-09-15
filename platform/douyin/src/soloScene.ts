@@ -1033,18 +1033,26 @@ export class DouyinSoloScene {
 
     const skill = this.soloSkillRect(width, height, safeBottom);
     const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
+
+    this.roundedRect(ctx, skill.x - 8, skill.y - 7, skill.width + 16, skill.height + 14, 22);
+    ctx.fillStyle = 'rgba(6,24,31,.78)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,151,.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     this.drawSkillButton(
       ctx,
       skill,
-      canReward ? '▶ 看广告 +1 清块' : '✦ 清块',
-      canReward ? '可选激励' : `×${this.skillCharges}`,
+      canReward ? '▶ 补充清块' : '✦ 清块',
+      canReward ? '完整观看广告 · +1 次' : `剩余 ${this.skillCharges} 次 · 随机清除 2 格`,
       this.skillCharges > 0 || canReward,
     );
 
-    ctx.fillStyle = 'rgba(255,255,255,.68)';
-    ctx.font = '650 10px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.font = '700 11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 13);
+    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 18);
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1586,12 +1594,12 @@ export class DouyinSoloScene {
   }
 
   private soloSkillRect(width: number, height: number, safeBottom: number): Rect {
-    const skillWidth = 176;
+    const skillWidth = Math.min(226, width - 56);
     return {
       x: width / 2 - skillWidth / 2,
-      y: height - safeBottom - 52,
+      y: height - safeBottom - 66,
       width: skillWidth,
-      height: 44,
+      height: 54,
     };
   }
 
