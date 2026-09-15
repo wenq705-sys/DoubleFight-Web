@@ -254,7 +254,7 @@ function drawHomeMeta(
   ctx.font = '850 11px sans-serif';
   ctx.fillText(player?.displayName ?? '游客玩家', profile.x + 12, profile.y + 15);
   ctx.fillStyle = '#a9c1c2';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText(competitiveRankLabel(rating), profile.x + 12, profile.y + 31);
 
   const coinW = 74;
@@ -300,7 +300,7 @@ function drawSoloMeta(
   if (mastery.bestAscensionMs !== null) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,240,190,.82)';
-    ctx.font = '700 9px sans-serif';
+    ctx.font = '700 10px sans-serif';
     ctx.fillText(`登顶 PB ${formatDuration(mastery.bestAscensionMs)}`, width / 2, top + 74);
   }
 
@@ -319,7 +319,7 @@ function drawSoloMeta(
       ctx.shadowBlur = 0;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#4b3420';
-      ctx.font = '900 8px sans-serif';
+      ctx.font = '900 10px sans-serif';
       ctx.fillText('NEW', x, y + 1);
     }
   }
@@ -347,7 +347,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.font = '900 21px sans-serif';
     ctx.fillText('准备出战', width / 2, top + 29);
     ctx.fillStyle = '#a8c4c5';
-    ctx.font = '750 9px sans-serif';
+    ctx.font = '750 10px sans-serif';
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 51);
     return;
   }
@@ -373,7 +373,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
       ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000)
       : 0;
     ctx.fillStyle = '#9fbabc';
-    ctx.font = '700 9px sans-serif';
+    ctx.font = '700 10px sans-serif';
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, cy + 49);
     ctx.fillStyle = '#c8d7d6';
     ctx.font = '800 10px sans-serif';
@@ -400,7 +400,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillText(formatMatchClock(remaining), width / 2, top + 29);
   if (phase !== 'normal' && phase !== 'finished') {
     ctx.fillStyle = '#ffd877';
-    ctx.font = '800 8px sans-serif';
+    ctx.font = '800 10px sans-serif';
     ctx.fillText(phase === 'last_minute' ? '最后一分钟' : phase === 'decisive' ? '决胜时刻' : '最终倒计时', width / 2, top + 54);
   }
 }
@@ -454,7 +454,7 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#82999b';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('点击任意位置返回', width / 2, y + panelH - 24);
 }
 
@@ -472,7 +472,7 @@ function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.font = '900 23px sans-serif';
   ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
   ctx.fillStyle = '#9eb4b6';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 60);
 
   const mastery = loadThemeMastery(platform.storage, theme);
@@ -481,7 +481,7 @@ function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: nu
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
   drawRankCard(ctx, layout.pvp, '⚔ 竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`);
   ctx.fillStyle = '#819799';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
 }
 
@@ -501,7 +501,7 @@ function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height
   ctx.font = '850 12px sans-serif';
   ctx.fillText('滑动棋盘', width / 2 - 103, y + 106);
   ctx.fillStyle = '#9fb3b5';
-  ctx.font = '650 9px sans-serif';
+  ctx.font = '650 10px sans-serif';
   ctx.fillText('相同棋子合成，解锁更高阶角色', width / 2 - 103, y + 124);
 }
 
@@ -516,7 +516,7 @@ function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, 
   ctx.font = '850 13px sans-serif';
   ctx.fillText(title, rect.x + 16, rect.y + 23);
   ctx.fillStyle = '#a9bec0';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText(subtitle, rect.x + 16, rect.y + 43);
 }
 
