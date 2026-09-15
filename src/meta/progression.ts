@@ -1,5 +1,6 @@
 import { KINGDOM_RANKS, PALACE_RANKS, type ThemeId } from '../config/themes';
 
+export const PIECE_VALUES = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048] as const;
 export const FINAL_PIECE_VALUE = 2048;
 
 const RANKS: Record<ThemeId, Record<number, string>> = {
