@@ -215,7 +215,7 @@ export class DouyinSocial {
           dataType: 0,
           rankType: 'all',
           suffix: ' RP',
-          rankTitle: '双数对决 · 竞技赛季',
+          rankTitle: '双数对决 · 竞技好友榜',
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.pvpZone,
           success: () => resolve(true),
           fail: () => resolve(false),
