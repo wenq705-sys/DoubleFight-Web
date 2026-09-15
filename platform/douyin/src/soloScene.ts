@@ -71,7 +71,7 @@ export class DouyinSoloScene {
   private perfTime = 0;
   private perfFrames = 0;
   private goodPerfWindows = 0;
-  private quality: 'high' | 'medium' | 'low' = 'high';
+  private quality: 'high' | 'medium' | 'low' = 'medium';
   private currentDpr = 1;
   private notice: { text: string; until: number } | null = null;
   private joinPadOpen = false;
@@ -195,7 +195,7 @@ export class DouyinSoloScene {
     });
 
     this.refreshHud();
-    this.commercial.showBanner();
+    this.commercial.hideBanner();
     void this.social.supportsSidebar().then((supported) => {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
@@ -333,6 +333,7 @@ export class DouyinSoloScene {
     const delta = Math.min(0.033, this.clock.getDelta());
     this.visualTime += delta;
     this.samplePerformance(delta);
+    const frame = this.platform.getSystemInfo();
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
@@ -344,7 +345,7 @@ export class DouyinSoloScene {
     if (duel) {
       this.online.local.update(delta);
       this.online.remote.update(delta);
-      this.renderDuel();
+      this.renderDuel(frame.width, frame.height);
       if (onlineState?.mode === 'playing') this.updateDuelTimerFeedback();
       if (this.visualTime >= this.nextDynamicHudAt) {
         this.nextDynamicHudAt = this.visualTime + 0.1;
@@ -377,7 +378,7 @@ export class DouyinSoloScene {
       this.camera.position.copy(home);
       this.camera.lookAt(this.cameraTarget);
       this.renderer.setScissorTest(false);
-      this.renderer.setViewport(0, 0, this.platform.getSystemInfo().width, this.platform.getSystemInfo().height);
+      this.renderer.setViewport(0, 0, frame.width, frame.height);
       this.renderer.setClearColor(this.boardView.presentation.sky, 1);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
@@ -401,7 +402,6 @@ export class DouyinSoloScene {
 
     this.renderer.clearDepth();
     this.renderer.setScissorTest(false);
-    const frame = this.platform.getSystemInfo();
     this.renderer.setViewport(0, 0, frame.width, frame.height);
     this.renderer.render(this.uiScene, this.uiCamera);
   }
@@ -480,6 +480,12 @@ export class DouyinSoloScene {
     this.online.remote.root.visible = false;
     this.controller.reset();
     this.runHighestValue = this.highest;
+    const discovered = this.discoveredValues(this.currentTheme);
+    for (const tile of this.controller.board.tiles()) discovered.add(tile.value);
+    this.platform.storage.setItem(
+      `doublefight-discovered-${this.currentTheme}`,
+      JSON.stringify([...discovered].sort((a, b) => a - b)),
+    );
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
@@ -519,11 +525,8 @@ export class DouyinSoloScene {
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
-    if (showInterstitial) {
-      void this.commercial.maybeShowInterstitial().finally(() => this.commercial.showBanner());
-    } else {
-      this.commercial.showBanner();
-    }
+    if (showInterstitial) void this.commercial.maybeShowInterstitial();
+    this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
@@ -840,7 +843,7 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const width = Math.max(1, info.width);
     const height = Math.max(1, info.height);
-    const dpr = Math.min(1.65, Math.max(1, info.pixelRatio));
+    const dpr = Math.min(1.20, Math.max(1, info.pixelRatio));
     this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
@@ -871,18 +874,18 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyQuality('low', 1.12);
+      this.applyQuality('low', 1.00);
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyQuality('medium', 1.32);
+      this.applyQuality('medium', 1.20);
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
-      if (this.goodPerfWindows >= 2) {
-        this.applyQuality('high', 1.65);
+      if (this.goodPerfWindows >= 3) {
+        this.applyQuality('high', 1.45);
         this.goodPerfWindows = 0;
       }
     } else {
@@ -898,6 +901,7 @@ export class DouyinSoloScene {
     this.currentDpr = targetDpr;
     this.renderer.setPixelRatio(targetDpr);
     this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
+    this.renderer.shadowMap.enabled = quality !== 'low';
     this.boardView.setQuality(quality);
     this.online.local.setQuality(quality);
     this.online.remote.setQuality(quality);
@@ -917,10 +921,9 @@ export class DouyinSoloScene {
     this.camera.lookAt(this.cameraTarget);
   }
 
-  private renderDuel(): void {
-    const info = this.platform.getSystemInfo();
-    const width = Math.max(1, info.width);
-    const height = Math.max(1, info.height);
+  private renderDuel(frameWidth: number, frameHeight: number): void {
+    const width = Math.max(1, frameWidth);
+    const height = Math.max(1, frameHeight);
     const localHeight = Math.round(height * 0.56);
     const remoteHeight = height - localHeight;
 
@@ -969,7 +972,7 @@ export class DouyinSoloScene {
     const sun = new THREE.DirectionalLight(0xffd9a0, 3.25);
     sun.position.set(-7, 14, 9);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(768, 768);
+    sun.shadow.mapSize.set(512, 512);
     sun.shadow.camera.left = -9;
     sun.shadow.camera.right = 9;
     sun.shadow.camera.top = 10;
