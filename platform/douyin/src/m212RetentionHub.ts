@@ -13,13 +13,13 @@ import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { DouyinAuthClient } from './auth';
 import type { DouyinEngagement } from './engagement';
-import { formatDuration, loadThemeMastery } from './metaProgress';
+import { formatDuration, loadThemeMastery, recordWeeklySolo } from './metaProgress';
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
 
 type Rect = { x: number; y: number; width: number; height: number };
-type HubScreen = 'themes' | 'collection' | 'daily' | null;
+type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | null;
 type SceneInternals = Record<string, any>;
 
 const TIER_LABELS = ['一阶', '二阶', '三阶', '四阶', '五阶', '六阶', '七阶', '八阶', '九阶', '十阶', '十一阶'] as const;
@@ -66,6 +66,9 @@ export function installM212RetentionHub(
     state.shortcutAdded = value;
     if (!scene.disposed && state.screen === 'daily') scene.refreshHud();
   });
+  void auth.start().then(current => {
+    if (current.status === 'authenticated') void social.setPvpRank(current.player.pvp.rating);
+  });
 
   const originalStartSolo = scene.startSolo.bind(scene) as () => void;
   scene.startSolo = () => {
@@ -73,6 +76,17 @@ export function installM212RetentionHub(
     state.ascensionTracked = false;
     engagement.track('solo_start', { theme: game.theme });
     originalStartSolo();
+  };
+
+  const originalPersistRecord = scene.persistRecord.bind(scene) as (forceSync?: boolean) => void;
+  scene.persistRecord = (forceSync = false) => {
+    originalPersistRecord(forceSync);
+    if (game.currentMode !== 'solo') return;
+    const weekly = recordWeeklySolo(platform.storage, game.score);
+    if (weekly.improved) {
+      void social.setSoloRank(weekly.progress.best);
+      engagement.track('solo_weekly_best', { score: weekly.progress.best });
+    }
   };
 
   const originalShowHome = scene.showHome.bind(scene) as () => void;
@@ -111,6 +125,7 @@ export function installM212RetentionHub(
         count: mastery.ascensionCount,
         best_ms: mastery.bestAscensionMs ?? 0,
       });
+      if (mastery.bestAscensionMs) void social.setAscensionRank(game.theme, mastery.bestAscensionMs);
     }
   };
 
@@ -150,6 +165,7 @@ export function installM212RetentionHub(
               rating: refreshed.player.pvp.rating,
               delta: state.resultRatingDelta,
             });
+            void social.setPvpRank(refreshed.player.pvp.rating);
           }
           if (!scene.disposed) scene.refreshHud();
         });
@@ -184,6 +200,13 @@ export function installM212RetentionHub(
         scene.refreshHud();
         return;
       }
+      if (layout?.rank && hit(x, y, layout.rank)) {
+        state.screen = 'rankings';
+        platform.haptics.trigger('light');
+        engagement.track('ranking_center_open', { theme: game.theme });
+        scene.refreshHud();
+        return;
+      }
     }
 
     originalTap(x, y);
@@ -208,6 +231,7 @@ export function installM212RetentionHub(
     if (state.screen === 'themes') drawThemeCenter(ctx, width, height, game, platform, state);
     if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
+    if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
 
     scene.uiTexture.needsUpdate = true;
   };
@@ -278,6 +302,49 @@ function handleHubTap(
       state.collectionTheme = 'palace';
       engagement.track('collection_theme', { theme: 'palace' });
       scene.refreshHud();
+      return;
+    }
+    return;
+  }
+
+  if (state.screen === 'rankings') {
+    const layout = rankingCenterLayout(info.width, info.height);
+    if (hit(x, y, layout.close)) {
+      state.screen = null;
+      scene.refreshHud();
+      return;
+    }
+    if (hit(x, y, layout.ascension)) {
+      void social.openAscensionRank(game.theme).then(ok => {
+        scene.notice = {
+          text: ok ? '已打开登顶竞速榜' : '当前环境暂不支持登顶榜',
+          until: number(scene.visualTime) + 1.4,
+        };
+        engagement.track('rank_open', { board: 'ascension', success: ok, theme: game.theme });
+        scene.refreshHud();
+      });
+      return;
+    }
+    if (hit(x, y, layout.solo)) {
+      void social.openSoloRank().then(ok => {
+        scene.notice = {
+          text: ok ? '已打开 Solo 周榜' : '当前环境暂不支持 Solo 周榜',
+          until: number(scene.visualTime) + 1.4,
+        };
+        engagement.track('rank_open', { board: 'solo_weekly', success: ok });
+        scene.refreshHud();
+      });
+      return;
+    }
+    if (hit(x, y, layout.pvp)) {
+      void social.openPvpRank().then(ok => {
+        scene.notice = {
+          text: ok ? '已打开竞技赛季榜' : '当前环境暂不支持竞技榜',
+          until: number(scene.visualTime) + 1.4,
+        };
+        engagement.track('rank_open', { board: 'pvp_season', success: ok });
+        scene.refreshHud();
+      });
       return;
     }
     return;
@@ -356,6 +423,56 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
     scene.sidebarRewardReady?.() ? '🎁 今日可领' : '🎁 今日福利',
     scene.sidebarRewardReady?.() ? 'primary' : 'secondary',
   );
+}
+
+function drawRankingCenter(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  game: DouyinSoloScene,
+  platform: DouyinPlatform,
+  auth: DouyinAuthClient,
+): void {
+  const layout = rankingCenterLayout(width, height);
+  shade(ctx, width, height);
+  panel(ctx, layout.panel);
+  closeGlyph(ctx, layout.close);
+
+  const mastery = loadThemeMastery(platform.storage, game.theme);
+  const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffe5a0';
+  ctx.font = '900 24px sans-serif';
+  ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
+  ctx.fillStyle = '#9db5b7';
+  ctx.font = '700 10px sans-serif';
+  ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 62);
+
+  actionCard(
+    ctx,
+    layout.ascension,
+    '⚡ 登顶竞速',
+    `${THEMES[game.theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '尚未登顶'}`,
+    Boolean(mastery.bestAscensionMs),
+  );
+  actionCard(
+    ctx,
+    layout.solo,
+    '🏆 Solo 周榜',
+    '本周最高分 · 抖音好友与总榜',
+    true,
+  );
+  actionCard(
+    ctx,
+    layout.pvp,
+    '⚔ 竞技赛季',
+    `${competitiveRankLabel(rating)} · Rating ${rating}`,
+    true,
+  );
+
+  ctx.fillStyle = '#73898b';
+  ctx.font = '700 9px sans-serif';
+  ctx.fillText('平台原生榜单支持好友关系与快捷分享', width / 2, layout.panel.y + layout.panel.height - 22);
 }
 
 function drawThemeCenter(
@@ -672,6 +789,21 @@ function drawOnlinePolish(
     const deltaText = delta === null ? '' : ` · ${delta >= 0 ? '+' : ''}${delta}`;
     ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2, y + 16);
   }
+}
+
+function rankingCenterLayout(width: number, height: number) {
+  const panelW = Math.min(330, width - 24);
+  const panelH = Math.min(430, height * 0.60);
+  const panel = { x: (width - panelW) / 2, y: height * 0.19, width: panelW, height: panelH };
+  const x = panel.x + 16;
+  const w = panel.width - 32;
+  return {
+    panel,
+    close: { x: panel.x + panel.width - 42, y: panel.y + 14, width: 28, height: 28 },
+    ascension: { x, y: panel.y + 88, width: w, height: 72 },
+    solo: { x, y: panel.y + 172, width: w, height: 72 },
+    pvp: { x, y: panel.y + 256, width: w, height: 72 },
+  };
 }
 
 function themeCenterLayout(width: number, height: number) {
