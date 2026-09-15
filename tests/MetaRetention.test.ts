@@ -34,6 +34,14 @@ describe('local-first theme mastery', () => {
     expect(loadThemeMastery(storage, 'palace').highestDiscoveredTier).toBe(7);
   });
 
+  it('migrates the pre-M2.12 highest-piece cache into the collection', () => {
+    const storage = storageFixture();
+    storage.setItem('doublefight-highest-kingdom', '512');
+    expect(loadThemeMastery(storage, 'kingdom').highestDiscoveredTier).toBe(9);
+    storage.setItem('doublefight-highest-kingdom', '128');
+    expect(loadThemeMastery(storage, 'kingdom').highestDiscoveredTier).toBe(9);
+  });
+
   it('keeps first ascension and improves personal best without ending progression', () => {
     const storage = storageFixture();
     const first = recordAscension(storage, 'kingdom', 620_430);
