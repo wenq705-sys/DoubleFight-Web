@@ -66,6 +66,20 @@ export class DouyinSocial {
     });
   }
 
+  async addShortcut(): Promise<boolean> {
+    if (!this.api.addShortcut) return false;
+    return new Promise(resolve => {
+      try {
+        this.api.addShortcut?.({
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
   async supportsSidebar(): Promise<boolean> {
     if (this.sidebarSupported !== null) return this.sidebarSupported;
     if (!this.api.checkScene) {
