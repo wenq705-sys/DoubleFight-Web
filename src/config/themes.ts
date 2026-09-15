@@ -26,7 +26,9 @@ export const PIECE_VALUES = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048] as 
 export type PieceValue = typeof PIECE_VALUES[number];
 export const MAX_PIECE_VALUE: PieceValue = 2048;
 
-export const PALACE_RANKS: Record<PieceValue, string> = {
+// Keep these tables number-indexable because existing render factories receive
+// numeric BoardTile values. Product helpers below normalize into known tiers.
+export const PALACE_RANKS: Record<number, string> = {
   2: '宫女',
   4: '答应',
   8: '常在',
@@ -40,7 +42,7 @@ export const PALACE_RANKS: Record<PieceValue, string> = {
   2048: '母仪天下',
 };
 
-export const KINGDOM_RANKS: Record<PieceValue, string> = {
+export const KINGDOM_RANKS: Record<number, string> = {
   2: '边境营地',
   4: '强化营地',
   8: '瞭望塔',
@@ -62,7 +64,7 @@ export interface PieceMeta {
   isFinal: boolean;
 }
 
-const rankTable = (theme: ThemeId) => theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
+const rankTable = (theme: ThemeId): Record<number, string> => theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
 
 export function normalizePieceValue(value: number): PieceValue {
   if (!Number.isFinite(value) || value <= 2) return 2;
@@ -79,7 +81,8 @@ export function pieceTier(value: number): number {
 }
 
 export function pieceName(theme: ThemeId, value: number): string {
-  return rankTable(theme)[normalizePieceValue(value)];
+  const normalized = normalizePieceValue(value);
+  return rankTable(theme)[normalized] ?? String(normalized);
 }
 
 export function maxPieceName(theme: ThemeId): string {
