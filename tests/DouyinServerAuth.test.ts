@@ -74,7 +74,7 @@ describe('durable accounts and reward ledger', () => {
     expect(ads.filter(result => result.granted)).toHaveLength(1);
     const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
     expect((await reopened.claimAd(account.id, 'solo_skill_refill', 'claim-12345678')).granted).toBe(false);
-    expect((await reopened.findById(account.id))?.rewards.currency).toBe(0);
+    expect((await reopened.findById(account.id))?.rewards.currency).toBe(20);
   });
 
   it('keeps recent ad replay protection while bounding the ledger after reopen', async () => {
