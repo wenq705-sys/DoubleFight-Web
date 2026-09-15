@@ -14,7 +14,7 @@ import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform
 import type { DouyinAuthClient } from './auth';
 import type { DouyinEngagement } from './engagement';
 import type { DouyinCommercial } from './commercial';
-import { formatDuration, loadThemeMastery, recordWeeklySolo } from './metaProgress';
+import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } from './metaProgress';
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
@@ -520,6 +520,7 @@ function drawRankingCenter(
   closeGlyph(ctx, layout.close);
 
   const mastery = loadThemeMastery(platform.storage, game.theme);
+  const weekly = loadWeeklySolo(platform.storage);
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe5a0';
@@ -540,8 +541,8 @@ function drawRankingCenter(
     ctx,
     layout.solo,
     '🏆 Solo 周榜',
-    '本周最高分 · 抖音好友与总榜',
-    true,
+    weekly.best > 0 ? `本周 BEST ${weekly.best.toLocaleString('zh-CN')} · 好友/总榜` : '本周尚未留下成绩 · 好友/总榜',
+    weekly.best > 0,
   );
   actionCard(
     ctx,
