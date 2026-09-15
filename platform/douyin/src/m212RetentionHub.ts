@@ -8,7 +8,7 @@ import {
   pieceTier,
   type ThemeId,
 } from '../../../src/config/themes';
-import { S_COIN } from '../../../src/meta/productMeta';
+import { S_COIN, competitiveRankLabel } from '../../../src/meta/productMeta';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { DouyinAuthClient } from './auth';
@@ -20,6 +20,8 @@ import type { DouyinSoloScene } from './soloScene';
 type Rect = { x: number; y: number; width: number; height: number };
 type HubScreen = 'themes' | 'collection' | 'daily' | null;
 type SceneInternals = Record<string, any>;
+
+const TIER_LABELS = ['一阶', '二阶', '三阶', '四阶', '五阶', '六阶', '七阶', '八阶', '九阶', '十阶', '十一阶'] as const;
 
 interface RetentionState {
   screen: HubScreen;
@@ -186,7 +188,7 @@ export function installM212RetentionHub(
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen);
     if (!nativeModal && !state.screen) {
       if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene);
-      if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state);
+      if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state, auth);
     }
 
     if (state.screen === 'themes') drawThemeCenter(ctx, width, height, game, platform, state);
@@ -525,10 +527,19 @@ function drawOnlinePolish(
   height: number,
   scene: SceneInternals,
   state: RetentionState,
+  auth: DouyinAuthClient,
 ): void {
   const snap = scene.online.snapshot();
   if (snap.mode === 'lobby') {
     const layout = scene.onlineLobbyLayout(width, height);
+    const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
+    round(ctx, width / 2 - 76, scene.hudTop() + 70, 152, 20, 10);
+    ctx.fillStyle = 'rgba(8,28,36,.82)';
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#b9d5d2';
+    ctx.font = '800 8px sans-serif';
+    ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, scene.hudTop() + 80);
     snap.loadout.forEach((skillId: keyof typeof SKILL_DEFINITIONS, index: number) => {
       const rect = layout.skills[index] as Rect;
       const def = SKILL_DEFINITIONS[skillId];
@@ -609,8 +620,9 @@ function drawOnlinePolish(
   }
 
   if (snap.mode === 'result') {
-    const y = height * 0.26 - 15;
-    round(ctx, width / 2 - 74, y, 148, 28, 14);
+    const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
+    const y = height * 0.26 - 18;
+    round(ctx, width / 2 - 94, y, 188, 32, 16);
     ctx.fillStyle = 'rgba(13,38,46,.96)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(242,205,105,.48)';
@@ -618,7 +630,7 @@ function drawOnlinePolish(
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f2d273';
     ctx.font = '900 9px sans-serif';
-    ctx.fillText('⚔ 竞技结算 · 3分钟标准局', width / 2, y + 14);
+    ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating} · 3分钟标准局`, width / 2, y + 16);
   }
 }
 
