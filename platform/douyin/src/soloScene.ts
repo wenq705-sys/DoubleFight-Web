@@ -180,7 +180,8 @@ export class DouyinSoloScene {
     });
 
     this.refreshHud();
-    this.commercial.showBanner();
+    // Core Home/Solo/PvP surfaces are intentionally banner-free in M2.12.
+    // Rewarded and interstitial placements remain explicit user/product flows.
     void this.social.supportsSidebar().then((supported) => {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
