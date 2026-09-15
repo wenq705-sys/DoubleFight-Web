@@ -97,6 +97,7 @@ export class DouyinSoloScene {
   } | null = null;
   private profileOpen = false;
   private lastDuelTimerSecond: number | null = null;
+  private themeTransition: { startedAt: number; duration: number; label: string } | null = null;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -332,6 +333,7 @@ export class DouyinSoloScene {
   setTheme(theme: ThemeId): void {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
+    this.themeTransition = { startedAt: this.visualTime, duration: 0.46, label: THEMES[theme].label };
     this.platform.storage.setItem('doublefight-theme', theme);
     this.social.report('theme_switch', { theme });
     this.boardView.setTheme(theme);
@@ -397,6 +399,17 @@ export class DouyinSoloScene {
       this.renderer.setClearColor(this.boardView.presentation.sky, 1);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
+    }
+
+    if (this.themeTransition) {
+      const progress = (this.visualTime - this.themeTransition.startedAt) / this.themeTransition.duration;
+      if (progress >= 1) {
+        this.themeTransition = null;
+        this.refreshHud();
+      } else if (this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 1 / 30;
+        this.refreshHud();
+      }
     }
 
     if (this.highestFlight && this.mode === 'solo') {
@@ -1058,6 +1071,7 @@ export class DouyinSoloScene {
     else this.drawOnlineHud(ctx, width, height);
 
     if (this.highestFlight && this.mode === 'solo') this.drawHighestFlight(ctx, width, height);
+    if (this.themeTransition) this.drawThemeTransition(ctx, width, height);
     if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
@@ -1646,6 +1660,32 @@ export class DouyinSoloScene {
         ctx.font = '800 11px sans-serif';
         ctx.fillText(`本次登顶 ${formatDuration(this.soloAscendedAt - this.soloRunStartedAt)}`, width / 2, boxY + 58);
       }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawThemeTransition(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const transition = this.themeTransition;
+    if (!transition) return;
+    const p = Math.max(0, Math.min(1, (this.visualTime - transition.startedAt) / transition.duration));
+    const alpha = Math.sin(p * Math.PI);
+    const wash = ctx.createLinearGradient(0, 0, width, height);
+    wash.addColorStop(0, `rgba(255,235,178,${0.10 * alpha})`);
+    wash.addColorStop(0.5, `rgba(255,255,255,${0.22 * alpha})`);
+    wash.addColorStop(1, `rgba(102,208,211,${0.10 * alpha})`);
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, width, height);
+
+    if (p > 0.24 && p < 0.82) {
+      const textAlpha = Math.min(1, Math.min((p - 0.24) / 0.12, (0.82 - p) / 0.12));
+      ctx.globalAlpha = Math.max(0, textAlpha);
+      this.roundedRect(ctx, width / 2 - 88, height * 0.44, 176, 44, 20);
+      ctx.fillStyle = 'rgba(9,27,34,.78)';
+      ctx.fill();
+      ctx.fillStyle = '#fff0bd';
+      ctx.font = '900 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(transition.label, width / 2, height * 0.44 + 22);
       ctx.globalAlpha = 1;
     }
   }
