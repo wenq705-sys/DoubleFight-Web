@@ -184,6 +184,7 @@ export class JsonAccountRepository implements AccountRepository {
       const accounts = result.players.map(player => player.accountId
         ? this.state.accounts.find(account => account.id === player.accountId) ?? null : null);
       const ratings = accounts.map(account => account?.pvp.rating ?? 1000);
+      const competitiveRating = accounts.every((account): account is PlayerAccount => Boolean(account));
       const now = Date.now();
       for (let index = 0; index < 2; index += 1) {
         const account = accounts[index];
@@ -193,8 +194,11 @@ export class JsonAccountRepository implements AccountRepository {
         if (score === 1) account.pvp.wins += 1;
         else if (score === 0) account.pvp.losses += 1;
         else account.pvp.draws += 1;
-        const expected = 1 / (1 + 10 ** ((ratings[1 - index] - ratings[index]) / 400));
-        account.pvp.rating = Math.max(0, ratings[index] + Math.round(PVP_ELO_K * (score - expected)));
+        // Guest/browser matches still count in W/L/D, but cannot farm competitive Elo.
+        if (competitiveRating) {
+          const expected = 1 / (1 + 10 ** ((ratings[1 - index] - ratings[index]) / 400));
+          account.pvp.rating = Math.max(0, ratings[index] + Math.round(PVP_ELO_K * (score - expected)));
+        }
         account.updatedAt = now;
       }
       this.state.processedMatches.push(result.matchId);
