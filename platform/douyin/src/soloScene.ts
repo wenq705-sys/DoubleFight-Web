@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
 import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { FINAL_PIECE_VALUE, formatDuration, isFinalPiece, pieceName, ratingRank } from '../../../src/meta/progression';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -82,6 +83,20 @@ export class DouyinSoloScene {
   private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
+  private soloRunStartedAt: number | null = null;
+  private soloAscendedAt: number | null = null;
+  private runHighestValue = 2;
+  private highestFlight: {
+    value: number;
+    startedAt: number;
+    duration: number;
+    fromX: number;
+    fromY: number;
+    newDiscovery: boolean;
+    ascended: boolean;
+  } | null = null;
+  private profileOpen = false;
+  private lastDuelTimerSecond: number | null = null;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -191,6 +206,7 @@ export class DouyinSoloScene {
   get currentMode(): ProductMode { return this.mode; }
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
+  get highestName(): string { return pieceName(this.currentTheme, this.highest); }
 
   refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
 
@@ -236,6 +252,7 @@ export class DouyinSoloScene {
       this.platform.haptics.trigger('light');
       return false;
     }
+    if (this.soloRunStartedAt === null) this.soloRunStartedAt = Date.now();
     this.inputLocked = true;
     this.platform.haptics.trigger(result.merges.length > 0 ? 'medium' : 'light');
     await result.finished;
@@ -281,6 +298,10 @@ export class DouyinSoloScene {
         this.platform.haptics.trigger('light');
         this.refreshHud();
       }
+      return;
+    }
+    if (this.profileOpen) {
+      this.handleProfileTap(x, y);
       return;
     }
     if (this.settingsOpen) {
@@ -384,9 +405,39 @@ export class DouyinSoloScene {
 
   private handlePresentationFeedback(event: PresentationEvent): void {
     this.audio.playEvent(event);
-    if (event.type === 'merge') {
-      this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
+    if (event.type !== 'merge') return;
+
+    this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
+    if (this.mode !== 'solo' || event.value <= this.runHighestValue) return;
+
+    this.runHighestValue = event.value;
+    const discovered = this.discoveredValues(this.currentTheme);
+    const newDiscovery = !discovered.has(event.value);
+    if (newDiscovery) {
+      discovered.add(event.value);
+      this.platform.storage.setItem(
+        `doublefight-discovered-${this.currentTheme}`,
+        JSON.stringify([...discovered].sort((a, b) => a - b)),
+      );
     }
+
+    const info = this.platform.getSystemInfo();
+    const world = this.boardView.cellWorldPosition(event.at.row, event.at.col).clone().project(this.camera);
+    const fromX = (world.x * 0.5 + 0.5) * info.width;
+    const fromY = (-world.y * 0.5 + 0.5) * info.height;
+    const ascended = isFinalPiece(event.value) && this.soloAscendedAt === null;
+    this.highestFlight = {
+      value: event.value,
+      startedAt: this.visualTime,
+      duration: ascended ? 1.15 : 0.82,
+      fromX,
+      fromY,
+      newDiscovery,
+      ascended,
+    };
+
+    if (ascended) this.recordAscension();
+    this.refreshHud();
   }
 
   private startSolo(): void {
@@ -395,6 +446,11 @@ export class DouyinSoloScene {
     this.platform.storage.removeItem('doublefight-next-solo-bonus');
     this.skillCharges = 3 + bonus;
     this.rewardedSkillClaims = 0;
+    this.soloRunStartedAt = null;
+    this.soloAscendedAt = null;
+    this.runHighestValue = 2;
+    this.highestFlight = null;
+    this.profileOpen = false;
     this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
