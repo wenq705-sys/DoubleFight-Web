@@ -28,6 +28,20 @@ class FakeSocket implements SocketConnection {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('platform socket contract', () => {
+  it('sends the Double Fight session in the Douyin socket header only', () => {
+    const connectSocket = vi.fn((_options: Parameters<NonNullable<DouyinApi['connectSocket']>>[0]) => ({
+      send: vi.fn(), close: vi.fn(), onOpen: vi.fn(), onMessage: vi.fn(), onError: vi.fn(), onClose: vi.fn(),
+    } as unknown as DouyinSocketTask));
+    const transport = new DouyinSocketTransport({ connectSocket });
+    transport.setAuthorization('payload.signature');
+    const socket = transport.connect('wss://game.example/ws');
+    expect(connectSocket.mock.calls[0]?.[0]).toMatchObject({ url: 'wss://game.example/ws', header: { Authorization: 'Bearer payload.signature' } });
+    expect(connectSocket.mock.calls[0]?.[0].url).not.toContain('payload.signature');
+    socket.close();
+    transport.setAuthorization(null);
+    transport.connect('wss://game.example/ws');
+    expect(connectSocket.mock.calls[1]?.[0]).not.toHaveProperty('header');
+  });
   it('maps native Browser WebSocket events and sends and closes', () => {
     const listeners = new Map<string, Function>();
     const native = { readyState: 0, send: vi.fn(), close: vi.fn(), addEventListener: vi.fn((name: string, fn: Function) => listeners.set(name, fn)) };

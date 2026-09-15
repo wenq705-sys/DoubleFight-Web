@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Direction } from '../../game/board/types';
 import { ART } from '../../config/artDirection';
+import { createTextureCanvas } from '../TextureCanvasFactory';
 
 const C = ART.colors;
 const gradient = (() => {
@@ -84,9 +85,7 @@ interface EnergyMote {
 }
 
 function numberTexture(value: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  const canvas = createTextureCanvas(256, 256);
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Canvas2D is required for kingdom number totems.');
   context.clearRect(0, 0, 256, 256);

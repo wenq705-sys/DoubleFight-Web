@@ -1,5 +1,17 @@
 # Handoff
 
+## Douyin Full Product RC code-side hardening
+
+`rc/douyin-full-product-release-candidate` adds release preflight, safe `/ready`, production environment categories, reviewed Nginx readiness route and CI smokes. The release client no longer ships M2.9/M2.10 probe log prefixes, and its guest nickname is fixed rather than read from customizable storage. Operator bundle deployment and real-device PASS/FAIL instructions are in `docs/DOUYIN_RC_DEPLOYMENT.md` and `docs/DOUYIN_RC_DEVICE_ACCEPTANCE.md`. A code-side green build is not real-device RC acceptance: provider secrets, legal domains, live account/ad behavior and the complete matrix remain manual. No production deployment occurs on this branch.
+
+## M2.10.4 account-bound progress branch
+
+`feat/m2-10-4-account-bound-pvp-progress` binds Douyin sockets with the Double Fight bearer in the `Authorization` header, while Browser and invalid-header sockets remain guests. Protocol v6 stays unchanged. Authenticated room names come from the account; `RoomSession` finishes record durable W/L/D and Elo K=24 once per recent match ID. `/progress/solo` max-merges each theme; the Douyin client syncs without blocking and restores higher server values. Recent ad claims and match IDs are bounded (256/512). Production secrets, legal domains, backups and real-device account acceptance remain operator work; this branch does not deploy. See `docs/M2_10_4_ACCOUNT_BOUND_PVP_PROGRESS.md`.
+
+## M2.10.3 Douyin server auth branch
+
+`feat/m2-10-3-douyin-server-auth` adds server-side code2Session, durable single-host accounts, signed expiring sessions, `/auth/douyin` and `/me`, and replay-safe sidebar/ad reward endpoints. Douyin restores the session or exchanges a fresh one-use login credential without delaying the product shell. Production secrets and data volume are operator-managed; this branch does not deploy. Protocol v6 and anonymous Browser PvP stay intact. M2.10.4 supplies account-bound PvP attribution through a WebSocket header without a protocol version change. See `docs/M2_10_3_DOUYIN_SERVER_AUTH.md` for storage and reward-integrity limits.
+
 ## Current state
 
 **M2.10 platform foundation on `refactor/m2-10-platform-foundation` (Draft PR preparation).**

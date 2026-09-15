@@ -64,8 +64,14 @@ Adaptive quality / telemetry.
 
 ## Game server
 
+### Douyin account HTTP boundary (M2.10.3)
+
+`server/auth/` owns provider exchange, an atomic single-process JSON account repository, HMAC bearer sessions and idempotent reward claims. M2.10.4 resolves the bearer from the WebSocket `Authorization` header before registering a connection, then carries server-only `accountId` through `RoomSession` to its authoritative finish callback. Protocol v6 does not carry account identity. The repository records W/L/D/rating once per recent match ID and max-merges Solo progress. Server-only credentials come from runtime environment, while the Douyin client stores only the Double Fight session token. A database migration is required before horizontal scaling.
+
 ### `server/index.ts`
 HTTP health endpoint + WebSocket endpoint `/ws`, heartbeat and connection lifecycle.
+
+The RC adds a distinct `GET /ready` operator signal. `/health` remains backward-compatible liveness for Browser/guest PvP; `/ready` returns only `authConfigured`, `sessionSigningConfigured`, actual data-directory write access, Protocol v6 and aggregate ready state. Missing auth secrets produce HTTP 503 without stopping guest gameplay. The reviewed TLS proxy routes `/ready` with a rate limit; provider and signing values are never returned.
 
 ### `server/RoomManager.ts`
 Owns:

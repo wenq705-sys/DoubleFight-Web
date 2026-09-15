@@ -1,11 +1,13 @@
 node_modules/
 dist/
+platform/douyin/dist-release/
 .vite/
 coverage/
 playwright-report/
 test-results/
 .DS_Store
 *.log
+.doublefight-data/
 .env
 .env.*
 !.env.example

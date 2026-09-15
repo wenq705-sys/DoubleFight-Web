@@ -1,49 +1,69 @@
-import { Board2048 } from '../../../shared/game/Board2048';
 import type { Direction } from '../../../shared/game/types';
 import type { DouyinApi } from './api';
-import { DouyinBoardProbe } from './board';
 import { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import { DouyinRenderLoop } from '../../../src/platform/douyin/DouyinRenderLoop';
 import { OnlineClient } from '../../../src/network/OnlineClient';
+import { DouyinSoloScene } from './soloScene';
+import { DouyinCommercial } from './commercial';
+import { DouyinSocial } from './social';
+import { DOUYIN_PRODUCT_CONFIG } from './config';
+import { DouyinAudio } from './audio';
+import { DouyinAuthClient } from './auth';
 
 declare const tt: DouyinApi;
 
 const platform = new DouyinPlatform(tt);
-const client = new OnlineClient('wss://game.whvwayfare.online/ws', platform.socket);
-const canvas = platform.createCanvas(); // The first call obtains the on-screen canvas.
+const client = new OnlineClient(DOUYIN_PRODUCT_CONFIG.socketUrl, platform.socket);
+const commercial = new DouyinCommercial(tt);
+const social = new DouyinSocial(tt);
+const audio = new DouyinAudio(tt);
+const auth = new DouyinAuthClient(tt, platform, DOUYIN_PRODUCT_CONFIG.apiUrl, token => {
+  platform.socket.setAuthorization(token);
+  if (!token) client.close();
+});
+const canvas = platform.createCanvas(); // First call is the single on-screen canvas.
 const context = canvas.getContext('webgl2', { antialias: true, alpha: false })
   ?? canvas.getContext('webgl', { antialias: true, alpha: false })
   ?? canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
-let presentation: DouyinBoardProbe | null = null;
-if (context) {
-  try { presentation = new DouyinBoardProbe(platform.getSystemInfo(), canvas, context); }
-  catch (error) { console.error('[M2.9 gate1] Three.js renderer failed:', error); }
-} else {
-  console.error('[M2.9 gate1] tt.createCanvas() did not provide a WebGL context');
-}
 
-// The shared board remains testable even when a device cannot construct WebGL.
-const fallbackBoard = presentation ? null : new Board2048(() => 0.42);
-fallbackBoard?.reset();
-const touch = platform.createSwipeInput((direction: Direction) => {
-  if (presentation) presentation.move(direction);
-  else fallbackBoard!.move(direction);
+if (!context) throw new Error('Double Fight requires a WebGL context in the Douyin runtime.');
+
+const savedTheme = platform.storage.getItem('doublefight-theme');
+const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
+const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
+const sharedRoom = social.launchRoomCode();
+if (sharedRoom) game.openSharedRoom(sharedRoom);
+const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
+
+const touch = platform.createSwipeInput(
+  (direction: Direction) => game.handleDirection(direction),
+  (x, y) => game.handleTap(x, y),
+);
+
+client.subscribe((_state, message) => {
+  if (message?.type === 'welcome') client.ping();
 });
-client.subscribe((state, message) => {
-  if (message?.type === 'welcome') { console.log(`[M2.10 socket] welcome v${message.protocolVersion}`); client.ping(); }
-  if (message?.type === 'pong') console.log(`[M2.10 socket] pong ${state.latencyMs ?? 0}ms`);
-  if (state.lastError) console.warn(`[M2.10 socket] ${state.lastError}`);
-});
-const loop = new DouyinRenderLoop(platform.lifecycle, {
-  request: callback => requestAnimationFrame(callback),
-  cancel: handle => cancelAnimationFrame(handle),
-}, () => presentation?.render(), () => {
-  touch.setActive(true);
-  client.connect();
-}, () => {
-  touch.setActive(false);
-  client.close();
-});
+
+const loop = new DouyinRenderLoop(
+  platform.lifecycle,
+  {
+    request: callback => requestAnimationFrame(callback),
+    cancel: handle => cancelAnimationFrame(handle),
+  },
+  () => game.render(),
+  () => {
+    touch.setActive(true);
+    void auth.start().then(() => client.connect());
+  },
+  () => {
+    touch.setActive(false);
+    client.close();
+  },
+);
+
 platform.lifecycle.show();
-void platform.account.bootstrap().then(result => console.log(`[M2.10 account] ${result.status}`));
+void auth.start().then(() => {
+  game.refreshAccountState();
+});
+void unsubscribeRoomInvite;
 void loop;

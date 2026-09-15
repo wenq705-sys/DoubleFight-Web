@@ -1,0 +1,9 @@
+{
+  "description": "Double Fight Douyin release project",
+  "appid": "tta405d2b83b08e6f207",
+  "compileType": "game",
+  "setting": {
+    "es6": true,
+    "urlCheck": true
+  }
+}
