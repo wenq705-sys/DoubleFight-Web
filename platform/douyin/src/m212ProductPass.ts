@@ -56,7 +56,6 @@ export function installM212ProductPass(
 
   // Premium gameplay surfaces remain Banner-free. Rewarded/interstitial stay.
   commercial.hideBanner();
-  (commercial as unknown as SceneInternals).showBanner = () => {};
 
   const originalShowHome = scene.showHome.bind(scene) as () => void;
   scene.showHome = () => { originalShowHome(); commercial.hideBanner(); };
