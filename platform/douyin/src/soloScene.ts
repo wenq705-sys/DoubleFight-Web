@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
-import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -1233,6 +1233,16 @@ export class DouyinSoloScene {
     ctx.fillStyle = '#b9cacc';
     ctx.font = '700 10px sans-serif';
     ctx.fillText(this.online.resultReason(), width / 2, y + 120);
+    if (resultMe && resultOpponent) {
+      const meHighest = pieceName(resultMe.theme, resultMe.highest);
+      const opponentHighest = pieceName(resultOpponent.theme, resultOpponent.highest);
+      const spaces = match.result?.tieBreaker === 'usable_space'
+        ? ` · 空位 ${resultMe.usableEmptyCells} : ${resultOpponent.usableEmptyCells}`
+        : '';
+      ctx.fillStyle = '#c9d8d6';
+      ctx.font = '750 10px sans-serif';
+      ctx.fillText(`最高 ${meHighest}  VS  ${opponentHighest}${spaces}`, width / 2, y + 142);
+    }
 
     const { primary, lobby, share } = this.resultActionRects(width, height);
     const roomMe = snap.state.room?.players.find(player => player.id === snap.state.playerId);
