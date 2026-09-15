@@ -194,6 +194,12 @@ export class DouyinSoloScene {
 
   refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
 
+  refreshSystemLayout(): void {
+    if (this.disposed) return;
+    this.resize();
+    this.refreshHud();
+  }
+
   openSharedRoom(code: string): void {
     const normalized = code.replace(/\D/g, '').slice(0, 6);
     if (normalized.length !== 6) return;
