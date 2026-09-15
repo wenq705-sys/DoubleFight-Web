@@ -29,6 +29,9 @@ type PassState = {
   goodWindows: number;
   nextFlightHudAt: number;
   nextOnlineHudAt: number;
+  ascensionCelebrateStartedAt: number;
+  ascensionCelebrateUntil: number;
+  ascensionDurationMs: number | null;
 };
 
 /** Adds M2.12 product presentation without changing Board2048 or Protocol v6. */
@@ -52,6 +55,9 @@ export function installM212ProductPass(
     goodWindows: 0,
     nextFlightHudAt: 0,
     nextOnlineHudAt: 0,
+    ascensionCelebrateStartedAt: 0,
+    ascensionCelebrateUntil: 0,
+    ascensionDurationMs: null,
   };
 
   // Premium gameplay surfaces remain Banner-free. Rewarded/interstitial stay.
@@ -66,6 +72,9 @@ export function installM212ProductPass(
     state.runHighest = 2;
     state.ascended = false;
     state.flight = null;
+    state.ascensionCelebrateStartedAt = 0;
+    state.ascensionCelebrateUntil = 0;
+    state.ascensionDurationMs = null;
     state.profileOpen = false;
     state.rankingOpen = false;
     originalStartSolo();
@@ -94,9 +103,13 @@ export function installM212ProductPass(
       const elapsedMs = Math.max(1, Math.round((number(scene.visualTime) - state.runStartedAt) * 1000));
       const result = recordAscension(platform.storage, game.theme, elapsedMs);
       const badge = result.first ? '首次登顶' : result.personalBest ? 'NEW PB' : '登顶成功';
+      const now = number(scene.visualTime);
+      state.ascensionCelebrateStartedAt = now;
+      state.ascensionCelebrateUntil = now + 1.8;
+      state.ascensionDurationMs = elapsedMs;
       scene.notice = {
         text: `${badge} · ${pieceName(game.theme, MAX_PIECE_VALUE)} · ${formatDuration(elapsedMs)}`,
-        until: number(scene.visualTime) + 2.4,
+        until: now + 2.4,
       };
       platform.haptics.trigger('success');
     }
@@ -192,6 +205,15 @@ export function installM212ProductPass(
     // HUD uploads. Refresh at a modest cadence for elapsed time + scan pulse.
     if (game.currentMode === 'online' && scene.online.snapshot().mode === 'matching' && now >= state.nextOnlineHudAt) {
       state.nextOnlineHudAt = now + 1 / 12;
+      scene.refreshHud();
+    }
+
+    if (game.currentMode === 'solo' && now < state.ascensionCelebrateUntil && now >= state.nextOnlineHudAt) {
+      state.nextOnlineHudAt = now + 1 / 12;
+      scene.refreshHud();
+    }
+    if (state.ascensionCelebrateUntil > 0 && now >= state.ascensionCelebrateUntil) {
+      state.ascensionCelebrateUntil = 0;
       scene.refreshHud();
     }
   };
@@ -301,6 +323,29 @@ function drawSoloMeta(
     ctx.fillStyle = 'rgba(255,240,190,.82)';
     ctx.font = '700 10px sans-serif';
     ctx.fillText(`登顶 PB ${formatDuration(mastery.bestAscensionMs)}`, width / 2, top + 74);
+  }
+
+  if (state.ascensionCelebrateUntil > visualTime && state.ascensionDurationMs !== null) {
+    const age = Math.max(0, visualTime - state.ascensionCelebrateStartedAt);
+    const remaining = Math.max(0, state.ascensionCelebrateUntil - visualTime);
+    const alpha = Math.min(1, age / 0.18, remaining / 0.28);
+    const panelW = Math.min(278, width - 42);
+    const x = (width - panelW) / 2;
+    const y = height * 0.315;
+    round(ctx, x, y, panelW, 82, 24);
+    ctx.fillStyle = `rgba(8,27,34,${0.72 + alpha * 0.22})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(247,211,111,${0.35 + alpha * 0.55})`;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = `rgba(255,231,154,${Math.max(0.25, alpha)})`;
+    ctx.font = '900 20px sans-serif';
+    ctx.fillText(`登顶 · ${pieceName(game.theme, MAX_PIECE_VALUE)}`, width / 2, y + 30);
+    ctx.fillStyle = `rgba(207,224,220,${Math.max(0.25, alpha)})`;
+    ctx.font = '800 11px sans-serif';
+    ctx.fillText(`本局用时 ${formatDuration(state.ascensionDurationMs)} · 继续挑战更高分`, width / 2, y + 56);
   }
 
   if (state.flight) {
