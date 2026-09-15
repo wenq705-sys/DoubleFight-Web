@@ -4,14 +4,9 @@ import {
   matchTimerPhase,
   type Direction,
 } from '../../../shared/index';
-import {
-  MAX_PIECE_VALUE,
-  THEMES,
-  pieceName,
-  type ThemeId,
-} from '../../../src/config/themes';
-import { competitiveRankLabel } from '../../../src/meta/productMeta';
+import { MAX_PIECE_VALUE, THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
+import { competitiveRankLabel } from '../../../src/meta/productMeta';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { OnlineClient } from '../../../src/network/OnlineClient';
 import type { DouyinAuthClient } from './auth';
@@ -20,34 +15,22 @@ import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } fr
 import type { DouyinSoloScene } from './soloScene';
 
 type Rect = { x: number; y: number; width: number; height: number };
-type InternalScene = DouyinSoloScene & Record<string, any>;
+type SceneInternals = Record<string, any>;
 
-type HighestFlight = {
-  value: number;
-  startedAt: number;
-  duration: number;
-};
-
-interface MetaPassState {
+type PassState = {
   runStartedAt: number | null;
   runHighest: number;
   ascended: boolean;
-  highestFlight: HighestFlight | null;
+  flight: { value: number; startedAt: number; duration: number } | null;
   profileOpen: boolean;
   rankingOpen: boolean;
   perfTime: number;
   perfFrames: number;
   goodWindows: number;
   nextFlightHudAt: number;
-}
+};
 
-/**
- * M2.12 presentation extension.
- *
- * Kept outside the already-large DouyinSoloScene so the meta/retention pass can
- * be reviewed independently. It decorates presentation/runtime methods only;
- * Board2048 rules and Protocol v6 remain untouched.
- */
+/** Adds M2.12 product presentation without changing Board2048 or Protocol v6. */
 export function installM212ProductPass(
   game: DouyinSoloScene,
   platform: DouyinPlatform,
@@ -55,12 +38,12 @@ export function installM212ProductPass(
   auth: DouyinAuthClient,
   commercial: DouyinCommercial,
 ): void {
-  const scene = game as InternalScene;
-  const state: MetaPassState = {
+  const scene = game as unknown as SceneInternals;
+  const state: PassState = {
     runStartedAt: null,
     runHighest: 2,
     ascended: false,
-    highestFlight: null,
+    flight: null,
     profileOpen: false,
     rankingOpen: false,
     perfTime: 0,
@@ -69,92 +52,83 @@ export function installM212ProductPass(
     nextFlightHudAt: 0,
   };
 
-  // Home/Solo/PvP are premium ad-free surfaces. Rewarded/interstitial flows
-  // remain; Banner can return later on secondary pages such as Theme/Collection.
+  // Premium gameplay surfaces remain Banner-free. Rewarded/interstitial stay.
   commercial.hideBanner();
-  (commercial as DouyinCommercial & Record<string, any>).showBanner = () => {};
+  (commercial as unknown as SceneInternals).showBanner = () => {};
 
-  const originalShowHome = scene.showHome.bind(scene);
-  scene.showHome = () => {
-    originalShowHome();
-    commercial.hideBanner();
-  };
+  const originalShowHome = scene.showHome.bind(scene) as () => void;
+  scene.showHome = () => { originalShowHome(); commercial.hideBanner(); };
 
-  const originalStartSolo = scene.startSolo.bind(scene);
+  const originalStartSolo = scene.startSolo.bind(scene) as () => void;
   scene.startSolo = () => {
     state.runStartedAt = null;
     state.runHighest = 2;
     state.ascended = false;
-    state.highestFlight = null;
+    state.flight = null;
     state.profileOpen = false;
     state.rankingOpen = false;
     originalStartSolo();
+    state.runHighest = game.highest;
+    recordDiscovery(platform.storage, game.theme, state.runHighest);
   };
 
-  // First successful move starts the run clock. visualTime follows the active
-  // render loop, so background time does not inflate the local mastery PB.
   const originalMove = game.move.bind(game);
   game.move = async (direction: Direction) => {
-    const candidateStart = Number(scene.visualTime ?? 0);
+    const candidate = number(scene.visualTime);
     const changed = await originalMove(direction);
-    if (changed && game.currentMode === 'solo' && state.runStartedAt === null) state.runStartedAt = candidateStart;
+    if (changed && game.currentMode === 'solo' && state.runStartedAt === null) state.runStartedAt = candidate;
     return changed;
   };
 
-  const originalFeedback = scene.handlePresentationFeedback.bind(scene);
+  const originalFeedback = scene.handlePresentationFeedback.bind(scene) as (event: PresentationEvent) => void;
   scene.handlePresentationFeedback = (event: PresentationEvent) => {
     originalFeedback(event);
     if (game.currentMode !== 'solo' || event.type !== 'merge' || event.value <= state.runHighest) return;
-
     state.runHighest = event.value;
     recordDiscovery(platform.storage, game.theme, event.value);
-    state.highestFlight = { value: event.value, startedAt: Number(scene.visualTime ?? 0), duration: 0.72 };
+    state.flight = { value: event.value, startedAt: number(scene.visualTime), duration: 0.72 };
 
     if (event.value >= MAX_PIECE_VALUE && !state.ascended && state.runStartedAt !== null) {
       state.ascended = true;
-      const elapsedMs = Math.max(1, Math.round((Number(scene.visualTime ?? 0) - state.runStartedAt) * 1000));
+      const elapsedMs = Math.max(1, Math.round((number(scene.visualTime) - state.runStartedAt) * 1000));
       const result = recordAscension(platform.storage, game.theme, elapsedMs);
       const badge = result.first ? '首次登顶' : result.personalBest ? 'NEW PB' : '登顶成功';
       scene.notice = {
         text: `${badge} · ${pieceName(game.theme, MAX_PIECE_VALUE)} · ${formatDuration(elapsedMs)}`,
-        until: Number(scene.visualTime ?? 0) + 2.4,
+        until: number(scene.visualTime) + 2.4,
       };
       platform.haptics.trigger('success');
     }
     scene.refreshHud();
   };
 
-  const originalHandleTap = game.handleTap.bind(game);
+  const originalTap = game.handleTap.bind(game);
   game.handleTap = (x: number, y: number) => {
     const info = platform.getSystemInfo();
-    if (state.profileOpen) {
-      state.profileOpen = false;
-      scene.refreshHud();
-      return;
-    }
+    if (state.profileOpen) { state.profileOpen = false; scene.refreshHud(); return; }
     if (state.rankingOpen) {
-      const panel = rankingLayout(info.width, info.height);
-      if (hit(x, y, panel.solo)) {
+      const layout = rankingLayout(info.width, info.height);
+      if (hit(x, y, layout.solo)) {
         void scene.social.openSoloRank().then((ok: boolean) => {
-          if (!ok) scene.notice = { text: 'Solo 周榜暂不可用', until: Number(scene.visualTime ?? 0) + 1.3 };
+          if (!ok) scene.notice = { text: 'Solo 周榜暂不可用', until: number(scene.visualTime) + 1.3 };
           scene.refreshHud();
         });
         return;
       }
-      if (hit(x, y, panel.ascension)) {
-        const mastery = loadThemeMastery(platform.storage, game.theme);
+      if (hit(x, y, layout.ascension)) {
+        const progress = loadThemeMastery(platform.storage, game.theme);
         scene.notice = {
-          text: mastery.bestAscensionMs
-            ? `${THEMES[game.theme].label} · PB ${formatDuration(mastery.bestAscensionMs)}`
+          text: progress.bestAscensionMs
+            ? `${THEMES[game.theme].label} · PB ${formatDuration(progress.bestAscensionMs)}`
             : '先完成一次登顶，解锁竞速纪录',
-          until: Number(scene.visualTime ?? 0) + 1.6,
+          until: number(scene.visualTime) + 1.5,
         };
         scene.refreshHud();
         return;
       }
-      if (hit(x, y, panel.pvp)) {
+      if (hit(x, y, layout.pvp)) {
         const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-        scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: Number(scene.visualTime ?? 0) + 1.6 };
+        scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: number(scene.visualTime) + 1.5 };
         scene.refreshHud();
         return;
       }
@@ -164,27 +138,26 @@ export function installM212ProductPass(
     }
 
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
-      const profile = profileRect(info.width, scene.hudTop());
-      if (hit(x, y, profile)) {
+      if (hit(x, y, profileRect(info.width, scene.hudTop()))) {
         state.profileOpen = true;
         platform.haptics.trigger('light');
         scene.refreshHud();
         return;
       }
-      const homeLayout = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
-      if (homeLayout?.rank && hit(x, y, homeLayout.rank)) {
+      const home = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
+      if (home?.rank && hit(x, y, home.rank)) {
         state.rankingOpen = true;
         platform.haptics.trigger('light');
         scene.refreshHud();
         return;
       }
     }
-    originalHandleTap(x, y);
+    originalTap(x, y);
   };
 
-  const originalRefreshHud = scene.refreshHud.bind(scene);
+  const originalRefresh = scene.refreshHud.bind(scene) as () => void;
   scene.refreshHud = () => {
-    originalRefreshHud();
+    originalRefresh();
     const info = platform.getSystemInfo();
     const ctx = scene.uiContext as CanvasRenderingContext2D;
     const width = Math.max(1, Math.round(info.width));
@@ -195,7 +168,7 @@ export function installM212ProductPass(
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen);
     if (!nativeModal && !scene.onboardingOpen) {
       if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
-      if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, game, platform, state, Number(scene.visualTime ?? 0));
+      if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, game, platform, state, number(scene.visualTime));
       if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene);
       if (state.profileOpen) drawProfile(ctx, width, height, auth, platform);
       if (state.rankingOpen) drawRankingHub(ctx, width, height, game.theme, auth, platform);
@@ -204,22 +177,21 @@ export function installM212ProductPass(
     scene.uiTexture.needsUpdate = true;
   };
 
-  // A short UI flight needs more than the normal event-driven Solo HUD refresh.
   const originalRender = game.render.bind(game);
   game.render = () => {
     originalRender();
-    const now = Number(scene.visualTime ?? 0);
-    if (state.highestFlight && now >= state.nextFlightHudAt) {
+    const now = number(scene.visualTime);
+    if (state.flight && now >= state.nextFlightHudAt) {
       state.nextFlightHudAt = now + 1 / 30;
       scene.refreshHud();
-      if (now - state.highestFlight.startedAt >= state.highestFlight.duration) state.highestFlight = null;
+      if (now - state.flight.startedAt >= state.flight.duration) state.flight = null;
     }
   };
 
-  // Replace Douyin's high-first adaptation with a medium-first policy.
-  const originalApplyQuality = scene.applyQuality.bind(scene);
-  scene.applyQuality = (quality: 'high' | 'medium' | 'low', maxDpr: number) => {
-    originalApplyQuality(quality, maxDpr);
+  // Medium-first quality avoids the current "start high, stutter, then drop" path.
+  const originalApply = scene.applyQuality.bind(scene) as (quality: 'high' | 'medium' | 'low', dpr: number) => void;
+  scene.applyQuality = (quality: 'high' | 'medium' | 'low', dpr: number) => {
+    originalApply(quality, dpr);
     scene.renderer.shadowMap.enabled = quality === 'high';
   };
   scene.samplePerformance = (delta: number) => {
@@ -230,31 +202,16 @@ export function installM212ProductPass(
     const fps = state.perfFrames / state.perfTime;
     state.perfTime = 0;
     state.perfFrames = 0;
-
-    if (fps < 44) {
-      state.goodWindows = 0;
-      scene.applyQuality('low', 1);
-      return;
-    }
-    if (fps < 54) {
-      state.goodWindows = 0;
-      scene.applyQuality('medium', 1.2);
-      return;
-    }
+    if (fps < 44) { state.goodWindows = 0; scene.applyQuality('low', 1); return; }
+    if (fps < 54) { state.goodWindows = 0; scene.applyQuality('medium', 1.2); return; }
     if (fps >= 58) {
       state.goodWindows += 1;
-      if (state.goodWindows >= 4) {
-        scene.applyQuality('high', 1.45);
-        state.goodWindows = 0;
-      }
-    } else {
-      state.goodWindows = Math.max(0, state.goodWindows - 1);
-    }
+      if (state.goodWindows >= 4) { scene.applyQuality('high', 1.45); state.goodWindows = 0; }
+    } else state.goodWindows = Math.max(0, state.goodWindows - 1);
   };
 
-  // Smaller shadow maps are sufficient for the cardboard/toy aesthetic.
-  scene.scene.traverse((object: any) => {
-    if (!object?.isDirectionalLight || !object.castShadow || !object.shadow) return;
+  scene.scene.traverse((object: SceneInternals) => {
+    if (!object.isDirectionalLight || !object.castShadow || !object.shadow) return;
     object.shadow.mapSize.set(512, 512);
     object.shadow.map?.dispose?.();
     object.shadow.map = null;
@@ -276,15 +233,13 @@ function drawHomeMeta(
   const rating = player?.pvp.rating ?? 1000;
   const balance = player?.rewards.currency ?? 0;
   const highest = Number(platform.storage.getItem(`doublefight-highest-${game.theme}`) ?? 2);
-
   const profile = profileRect(width, top);
+
   round(ctx, profile.x, profile.y, profile.width, profile.height, 15);
   ctx.fillStyle = 'rgba(8,27,35,.88)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,225,145,.35)';
-  ctx.lineWidth = 1;
   ctx.stroke();
-
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff0bf';
   ctx.font = '850 11px sans-serif';
@@ -293,9 +248,9 @@ function drawHomeMeta(
   ctx.font = '700 9px sans-serif';
   ctx.fillText(competitiveRankLabel(rating), profile.x + 12, profile.y + 31);
 
-  const coinWidth = 74;
-  const coinX = width - 16 - coinWidth;
-  round(ctx, coinX, profile.y, coinWidth, 40, 18);
+  const coinW = 74;
+  const coinX = width - 16 - coinW;
+  round(ctx, coinX, profile.y, coinW, 40, 18);
   ctx.fillStyle = 'rgba(31,50,57,.92)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.48)';
@@ -303,14 +258,13 @@ function drawHomeMeta(
   ctx.textAlign = 'center';
   ctx.fillStyle = '#f7d66d';
   ctx.font = '900 11px sans-serif';
-  ctx.fillText(`S ${balance}`, coinX + coinWidth / 2, profile.y + 20);
+  ctx.fillText(`S ${balance}`, coinX + coinW / 2, profile.y + 20);
 
   const y = Math.max(top + 72, platform.getSystemInfo().height * 0.56) + 60;
-  ctx.fillStyle = 'rgba(12,28,36,.94)';
+  ctx.fillStyle = 'rgba(12,28,36,.95)';
   ctx.fillRect(width / 2 - 108, y - 8, 216, 17);
   ctx.fillStyle = '#f6e9c5';
   ctx.font = '750 10px sans-serif';
-  ctx.textAlign = 'center';
   ctx.fillText(`最高 · ${pieceName(game.theme, highest)}`, width / 2, y);
 }
 
@@ -320,13 +274,11 @@ function drawSoloMeta(
   height: number,
   game: DouyinSoloScene,
   platform: DouyinPlatform,
-  state: MetaPassState,
+  state: PassState,
   visualTime: number,
 ): void {
   const info = platform.getSystemInfo();
   const top = Math.max(12, info.safeArea.top + 8, (info.menuButton?.bottom ?? 0) + 8);
-  const highest = game.highest;
-  const label = pieceName(game.theme, highest);
   const mastery = loadThemeMastery(platform.storage, game.theme);
 
   ctx.fillStyle = 'rgba(14,34,43,.97)';
@@ -334,7 +286,7 @@ function drawSoloMeta(
   ctx.textAlign = 'right';
   ctx.fillStyle = '#dfe9e6';
   ctx.font = '800 10px sans-serif';
-  ctx.fillText(`最高 · ${label}`, width - 32, top + 43);
+  ctx.fillText(`最高 · ${pieceName(game.theme, game.highest)}`, width - 32, top + 43);
 
   if (mastery.bestAscensionMs !== null) {
     ctx.textAlign = 'center';
@@ -343,20 +295,14 @@ function drawSoloMeta(
     ctx.fillText(`登顶 PB ${formatDuration(mastery.bestAscensionMs)}`, width / 2, top + 74);
   }
 
-  if (state.highestFlight) {
-    const elapsed = Math.max(0, (visualTime - state.highestFlight.startedAt) / state.highestFlight.duration);
-    const p = Math.min(1, elapsed);
+  if (state.flight) {
+    const p = Math.min(1, Math.max(0, (visualTime - state.flight.startedAt) / state.flight.duration));
     if (p < 1) {
       const ease = 1 - Math.pow(1 - p, 3);
-      const startX = width * 0.52;
-      const startY = height * 0.48;
-      const endX = width - 70;
-      const endY = top + 43;
-      const x = startX + (endX - startX) * ease;
-      const y = startY + (endY - startY) * ease - Math.sin(Math.PI * p) * 58;
-      const radius = 15 - p * 5;
+      const x = width * 0.52 + (width - 70 - width * 0.52) * ease;
+      const y = height * 0.48 + (top + 43 - height * 0.48) * ease - Math.sin(Math.PI * p) * 58;
       ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.arc(x, y, 15 - p * 5, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(249,211,105,${0.9 - p * 0.25})`;
       ctx.shadowColor = '#ffe58a';
       ctx.shadowBlur = 18;
@@ -369,8 +315,7 @@ function drawSoloMeta(
     }
   }
 
-  const safeBottom = Math.max(14, info.safeArea.bottom + 10);
-  const hintY = height - safeBottom - 65;
+  const hintY = height - Math.max(14, info.safeArea.bottom + 10) - 65;
   ctx.fillStyle = 'rgba(8,20,27,.68)';
   ctx.fillRect(width / 2 - 108, hintY - 8, 216, 17);
   ctx.fillStyle = 'rgba(255,255,255,.76)';
@@ -379,15 +324,9 @@ function drawSoloMeta(
   ctx.fillText('相同棋子合成 · 解锁更高阶', width / 2, hintY);
 }
 
-function drawOnlineMeta(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  scene: InternalScene,
-): void {
+function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals): void {
   const snap = scene.online.snapshot();
   const top = scene.hudTop();
-
   if (snap.mode === 'lobby') {
     round(ctx, width / 2 - 120, top + 7, 240, 62, 20);
     ctx.fillStyle = 'rgba(10,26,34,.94)';
@@ -403,9 +342,8 @@ function drawOnlineMeta(
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 51);
     return;
   }
-
   if (snap.mode === 'matching') {
-    const pulse = (Math.sin(Number(scene.visualTime ?? 0) * 4.2) + 1) / 2;
+    const pulse = (Math.sin(number(scene.visualTime) * 4.2) + 1) / 2;
     const cy = height * 0.40;
     round(ctx, width / 2 - 132, cy - 92, 264, 184, 28);
     ctx.fillStyle = 'rgba(5,17,24,.80)';
@@ -427,21 +365,16 @@ function drawOnlineMeta(
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, cy + 49);
     return;
   }
-
   if (snap.mode !== 'playing' && snap.mode !== 'result') return;
+
   const remaining = scene.online.remainingMs();
   const phase = matchTimerPhase(remaining);
-  const timer = formatMatchClock(remaining);
-  const pulse = phase === 'final_countdown' ? 1 + Math.sin(Number(scene.visualTime ?? 0) * 12) * 0.06 : 1;
+  const pulse = phase === 'final_countdown' ? 1 + Math.sin(number(scene.visualTime) * 12) * 0.06 : 1;
   const rect = { x: width / 2 - 49 * pulse, y: top + 8, width: 98 * pulse, height: 43 };
   round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
-  ctx.fillStyle = phase === 'final_countdown'
-    ? 'rgba(125,35,31,.96)'
-    : phase === 'decisive'
-      ? 'rgba(117,69,25,.95)'
-      : phase === 'last_minute'
-        ? 'rgba(80,65,25,.94)'
-        : 'rgba(8,30,38,.95)';
+  ctx.fillStyle = phase === 'final_countdown' ? 'rgba(125,35,31,.96)'
+    : phase === 'decisive' ? 'rgba(117,69,25,.95)'
+      : phase === 'last_minute' ? 'rgba(80,65,25,.94)' : 'rgba(8,30,38,.95)';
   ctx.fill();
   ctx.strokeStyle = phase === 'normal' ? '#77d7cf' : '#ffd36d';
   ctx.lineWidth = 1.4;
@@ -449,21 +382,15 @@ function drawOnlineMeta(
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff2c5';
   ctx.font = phase === 'final_countdown' ? '900 22px sans-serif' : '900 20px sans-serif';
-  ctx.fillText(timer, width / 2, top + 29);
-  if (phase === 'last_minute' || phase === 'decisive' || phase === 'final_countdown') {
+  ctx.fillText(formatMatchClock(remaining), width / 2, top + 29);
+  if (phase !== 'normal' && phase !== 'finished') {
     ctx.fillStyle = '#ffd877';
     ctx.font = '800 8px sans-serif';
     ctx.fillText(phase === 'last_minute' ? '最后一分钟' : phase === 'decisive' ? '决胜时刻' : '最终倒计时', width / 2, top + 54);
   }
 }
 
-function drawProfile(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  auth: DouyinAuthClient,
-  platform: DouyinPlatform,
-): void {
+function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number, auth: DouyinAuthClient, platform: DouyinPlatform): void {
   ctx.fillStyle = 'rgba(3,10,15,.78)';
   ctx.fillRect(0, 0, width, height);
   const panelW = Math.min(318, width - 28);
@@ -474,16 +401,10 @@ function drawProfile(
   ctx.fillStyle = 'rgba(9,28,36,.98)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.5)';
-  ctx.lineWidth = 1.2;
   ctx.stroke();
 
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const rating = player?.pvp.rating ?? 1000;
-  const wins = player?.pvp.wins ?? 0;
-  const losses = player?.pvp.losses ?? 0;
-  const draws = player?.pvp.draws ?? 0;
-  const coin = player?.rewards.currency ?? 0;
-
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe5a0';
   ctx.font = '900 23px sans-serif';
@@ -493,14 +414,12 @@ function drawProfile(
   ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, y + 70);
   ctx.fillStyle = '#f2cf70';
   ctx.font = '900 16px sans-serif';
-  ctx.fillText(`S ${coin}`, width / 2, y + 102);
-
+  ctx.fillText(`S ${player?.rewards.currency ?? 0}`, width / 2, y + 102);
   ctx.fillStyle = '#d8e5e3';
   ctx.font = '800 11px sans-serif';
-  ctx.fillText(`PvP  ${wins}胜  ${losses}负  ${draws}平`, width / 2, y + 132);
+  ctx.fillText(`PvP  ${player?.pvp.wins ?? 0}胜  ${player?.pvp.losses ?? 0}负  ${player?.pvp.draws ?? 0}平`, width / 2, y + 132);
 
-  const themes: ThemeId[] = ['kingdom', 'palace'];
-  themes.forEach((theme, index) => {
+  (['kingdom', 'palace'] as ThemeId[]).forEach((theme, index) => {
     const rowY = y + 174 + index * 88;
     const highest = Number(platform.storage.getItem(`doublefight-highest-${theme}`) ?? 2);
     const best = Number(platform.storage.getItem(`doublefight-best-${theme}`) ?? 0);
@@ -524,41 +443,31 @@ function drawProfile(
   ctx.fillText('点击任意位置返回', width / 2, y + panelH - 24);
 }
 
-function drawRankingHub(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  theme: ThemeId,
-  auth: DouyinAuthClient,
-  platform: DouyinPlatform,
-): void {
+function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: number, theme: ThemeId, auth: DouyinAuthClient, platform: DouyinPlatform): void {
   ctx.fillStyle = 'rgba(3,10,15,.78)';
   ctx.fillRect(0, 0, width, height);
   const layout = rankingLayout(width, height);
-  const panel = layout.panel;
-  round(ctx, panel.x, panel.y, panel.width, panel.height, 28);
+  round(ctx, layout.panel.x, layout.panel.y, layout.panel.width, layout.panel.height, 28);
   ctx.fillStyle = 'rgba(9,28,36,.98)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.5)';
   ctx.stroke();
-
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe4a0';
   ctx.font = '900 23px sans-serif';
-  ctx.fillText('排行榜', width / 2, panel.y + 38);
+  ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
   ctx.fillStyle = '#9eb4b6';
   ctx.font = '700 9px sans-serif';
-  ctx.fillText('探索 · Solo · 竞技', width / 2, panel.y + 60);
+  ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 60);
 
   const mastery = loadThemeMastery(platform.storage, theme);
   drawRankCard(ctx, layout.ascension, '⚡ 登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`);
   drawRankCard(ctx, layout.solo, '🏆 Solo 周榜', '每周最高分 · 好友排行');
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
   drawRankCard(ctx, layout.pvp, '⚔ 竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`);
-
   ctx.fillStyle = '#819799';
   ctx.font = '700 9px sans-serif';
-  ctx.fillText('点击空白处返回', width / 2, panel.y + panel.height - 20);
+  ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
 }
 
 function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -612,6 +521,10 @@ function rankingLayout(width: number, height: number) {
     solo: { x: cardX, y: panel.y + 156, width: cardW, height: 62 },
     pvp: { x: cardX, y: panel.y + 228, width: cardW, height: 62 },
   };
+}
+
+function number(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
 function hit(x: number, y: number, rect: Rect): boolean {
