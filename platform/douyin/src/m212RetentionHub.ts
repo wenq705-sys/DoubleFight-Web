@@ -131,6 +131,13 @@ export function installM212RetentionHub(
         result: match?.winnerId === null ? 'draw' : won ? 'win' : 'loss',
         reason: match?.endReason ?? 'unknown',
       });
+      // The server records Elo/W-L-D after match_end. Pull the authoritative
+      // profile so the next Home/Profile render is not one match behind.
+      setTimeout(() => {
+        void auth.refresh().then(() => {
+          if (!scene.disposed) scene.refreshHud();
+        });
+      }, 450);
     }
     scene.refreshHud();
   });
@@ -298,7 +305,7 @@ function handleHubTap(
       return;
     }
     if (hit(x, y, layout.refreshAccount)) {
-      void auth.start().then(() => {
+      void auth.refresh().then(() => {
         scene.notice = {
           text: auth.current.status === 'authenticated' ? '账号进度已同步' : '当前为本地游客进度',
           until: number(scene.visualTime) + 1.4,
