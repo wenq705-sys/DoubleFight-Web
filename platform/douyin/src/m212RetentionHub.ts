@@ -1,4 +1,5 @@
-import { SKILL_DEFINITIONS, type DouyinOnlineMode } from '../../../shared/index';
+import { SKILL_DEFINITIONS } from '../../../shared/index';
+import type { DouyinOnlineMode } from './onlineFlow';
 import {
   MAX_PIECE_VALUE,
   PIECE_VALUES,
