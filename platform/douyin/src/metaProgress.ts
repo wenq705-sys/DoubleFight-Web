@@ -9,6 +9,7 @@ export interface ThemeMasteryProgress {
 }
 
 const keyFor = (theme: ThemeId) => `doublefight-meta-${theme}`;
+const legacyHighestKey = (theme: ThemeId) => `doublefight-highest-${theme}`;
 
 const empty = (): ThemeMasteryProgress => ({
   highestDiscoveredTier: 1,
@@ -18,20 +19,33 @@ const empty = (): ThemeMasteryProgress => ({
 });
 
 export function loadThemeMastery(storage: StorageAdapter, theme: ThemeId): ThemeMasteryProgress {
+  let progress = empty();
   try {
     const raw = storage.getItem(keyFor(theme));
-    if (!raw) return empty();
-    const value = JSON.parse(raw) as Partial<ThemeMasteryProgress>;
-    const highestDiscoveredTier = Number.isInteger(value.highestDiscoveredTier)
-      ? Math.min(11, Math.max(1, Number(value.highestDiscoveredTier))) : 1;
-    const firstAscensionMs = validDuration(value.firstAscensionMs) ? Number(value.firstAscensionMs) : null;
-    const bestAscensionMs = validDuration(value.bestAscensionMs) ? Number(value.bestAscensionMs) : null;
-    const ascensionCount = Number.isInteger(value.ascensionCount)
-      ? Math.max(0, Number(value.ascensionCount)) : 0;
-    return { highestDiscoveredTier, firstAscensionMs, bestAscensionMs, ascensionCount };
+    if (raw) {
+      const value = JSON.parse(raw) as Partial<ThemeMasteryProgress>;
+      const highestDiscoveredTier = Number.isInteger(value.highestDiscoveredTier)
+        ? Math.min(11, Math.max(1, Number(value.highestDiscoveredTier))) : 1;
+      const firstAscensionMs = validDuration(value.firstAscensionMs) ? Number(value.firstAscensionMs) : null;
+      const bestAscensionMs = validDuration(value.bestAscensionMs) ? Number(value.bestAscensionMs) : null;
+      const ascensionCount = Number.isInteger(value.ascensionCount)
+        ? Math.max(0, Number(value.ascensionCount)) : 0;
+      progress = { highestDiscoveredTier, firstAscensionMs, bestAscensionMs, ascensionCount };
+    }
   } catch {
-    return empty();
+    progress = empty();
   }
+
+  // M2.12 shipped after Solo already persisted each world's highest numeric tile.
+  // Fold that cache into the named catalogue once so existing players do not
+  // appear to have lost discoveries when opening the new collection screen.
+  const cachedHighest = Number(storage.getItem(legacyHighestKey(theme)) ?? 2);
+  const migratedTier = pieceTier(cachedHighest);
+  if (migratedTier > progress.highestDiscoveredTier) {
+    progress = { ...progress, highestDiscoveredTier: migratedTier };
+    save(storage, theme, progress);
+  }
+  return progress;
 }
 
 export function recordDiscovery(
