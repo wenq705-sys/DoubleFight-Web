@@ -16,5 +16,9 @@ export const DOUYIN_PRODUCT_CONFIG = {
   ranking: {
     soloZone: 'solo',
     pvpZone: 'pvp',
+    ascensionZones: {
+      kingdom: 'ascension-kingdom',
+      palace: 'ascension-palace',
+    },
   },
 } as const;
