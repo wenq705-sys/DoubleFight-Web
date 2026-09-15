@@ -870,23 +870,6 @@ function drawOnlinePolish(
     const deltaText = delta === null ? '' : ` · ${delta >= 0 ? '+' : ''}${delta}`;
     ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2, y + 16);
 
-    const result = snap.state.match?.result;
-    const me = result?.players.find((player: any) => player.playerId === snap.state.playerId);
-    const rival = result?.players.find((player: any) => player.playerId !== snap.state.playerId);
-    if (me && rival) {
-      const detailY = height * 0.26 + 139;
-      ctx.fillStyle = 'rgba(8,25,32,.92)';
-      round(ctx, width / 2 - 128, detailY - 12, 256, 25, 12);
-      ctx.fill();
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#b9cdcc';
-      ctx.font = '750 10px sans-serif';
-      const mePiece = pieceName(me.theme, me.highest);
-      const rivalPiece = pieceName(rival.theme, rival.highest);
-      const tie = result?.tieBreaker;
-      const spaces = tie === 'usable_space' ? ` · 空位 ${me.usableEmptyCells} : ${rival.usableEmptyCells}` : '';
-      ctx.fillText(`最高 ${mePiece}  VS  ${rivalPiece}${spaces}`, width / 2, detailY);
-    }
   }
 }
 
