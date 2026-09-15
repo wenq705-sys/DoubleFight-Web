@@ -450,11 +450,7 @@ export class DouyinSoloScene {
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
-    if (showInterstitial) {
-      void this.commercial.maybeShowInterstitial().finally(() => this.commercial.showBanner());
-    } else {
-      this.commercial.showBanner();
-    }
+    if (showInterstitial) void this.commercial.maybeShowInterstitial();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
