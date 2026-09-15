@@ -110,10 +110,13 @@ export function installM212RetentionHub(
   const unsubscribeOnline = scene.online.subscribe(() => {
     const snap = scene.online.snapshot();
     const mode = snap.mode as DouyinOnlineMode;
+    if (game.currentMode !== 'online') {
+      state.lastOnlineMode = null;
+      return;
+    }
     if (mode === state.lastOnlineMode) return;
     const previous = state.lastOnlineMode;
     state.lastOnlineMode = mode;
-    if (game.currentMode !== 'online') return;
 
     if (mode === 'lobby') engagement.track('pvp_lobby_view');
     if (mode === 'matching') engagement.track('matchmaking_start', { theme: snap.selectedTheme });
@@ -382,7 +385,6 @@ function drawThemeCenter(
   ctx.textAlign = 'center';
   ctx.fillText('更多主题世界将在后续版本加入', width / 2, layout.panel.y + layout.panel.height - 22);
 
-  void state;
 }
 
 function drawCollection(
@@ -507,7 +509,7 @@ function drawDailyCenter(
 
   ctx.fillStyle = '#748b8d';
   ctx.font = '700 9px sans-serif';
-  ctx.fillText('S币正式任务/主题购买由服务器账本结算，不在客户端伪造余额', width / 2, layout.panel.y + layout.panel.height - 21);
+  ctx.fillText('S币用于未来主题世界与长期收藏 · 不影响 PvP 强度', width / 2, layout.panel.y + layout.panel.height - 21);
 }
 
 function drawOnlinePolish(
