@@ -28,9 +28,14 @@ export class DouyinAuthClient {
   get requiresServerLedger(): boolean { return this.token !== null; }
 
   start(): Promise<AuthState> {
+    if (this.state.status === 'authenticated') return Promise.resolve(this.state);
     if (this.starting) return this.starting;
-    this.starting = this.initialize();
-    return this.starting;
+    const attempt = this.initialize();
+    this.starting = attempt;
+    void attempt.finally(() => {
+      if (this.starting === attempt) this.starting = null;
+    });
+    return attempt;
   }
 
   private async initialize(): Promise<AuthState> {
@@ -54,17 +59,28 @@ export class DouyinAuthClient {
       this.platform.account.bootstrap(),
       new Promise<{ status: 'failed'; isLoggedIn: false }>(resolve => setTimeout(() => resolve({ status: 'failed', isLoggedIn: false }), 5000)),
     ]);
-    if (login.status !== 'logged_in' && login.status !== 'anonymous') return this.state;
+    if (login.status !== 'logged_in' && login.status !== 'anonymous') {
+      this.platform.account.reset?.();
+      return this.state;
+    }
     try {
       const payload = await this.call('POST', '/auth/douyin', {
         ...(login.status === 'logged_in' ? { code: login.code } : {}),
         ...(login.anonymousCode ? { anonymousCode: login.anonymousCode } : {}),
       });
-      if (typeof payload.token !== 'string' || !this.isPlayer(payload.player)) return this.state;
+      if (typeof payload.token !== 'string' || !this.isPlayer(payload.player)) {
+        this.platform.account.reset?.();
+        return this.state;
+      }
       this.token = payload.token;
       this.platform.storage.setItem(TOKEN_KEY, payload.token);
       this.state = { status: 'authenticated', player: payload.player };
-    } catch { /* local anonymous mode keeps Home/Solo responsive */ }
+    } catch (error) {
+      // A provider 401 means the one-use code was consumed/rejected. Allow the
+      // next foreground/reward attempt to obtain a fresh tt.login credential.
+      if (error instanceof HttpError && error.status === 401) this.platform.account.reset?.();
+      // Transient failures keep the cached login result for one retry.
+    }
     return this.state;
   }
 
