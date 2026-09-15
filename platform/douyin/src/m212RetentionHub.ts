@@ -34,6 +34,8 @@ interface RetentionState {
   ascensionTracked: boolean;
   matchStartRating: number | null;
   resultRatingDelta: number | null;
+  telemetryStartedAt: number;
+  telemetryFrames: number;
 }
 
 /**
@@ -61,6 +63,8 @@ export function installM212RetentionHub(
     ascensionTracked: false,
     matchStartRating: null,
     resultRatingDelta: null,
+    telemetryStartedAt: number(scene.visualTime),
+    telemetryFrames: 0,
   };
 
   engagement.track('home_view', { theme: game.theme });
@@ -262,6 +266,28 @@ export function installM212RetentionHub(
     if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
 
     scene.uiTexture.needsUpdate = true;
+  };
+
+  const originalRender = game.render.bind(game);
+  game.render = () => {
+    originalRender();
+    state.telemetryFrames += 1;
+    const now = number(scene.visualTime);
+    const elapsed = now - state.telemetryStartedAt;
+    if (elapsed < 30) return;
+
+    const rendererInfo = scene.renderer?.info?.render;
+    const fps = elapsed > 0 ? Math.round((state.telemetryFrames / elapsed) * 10) / 10 : 0;
+    engagement.track('performance_sample', {
+      fps,
+      quality: String(scene.quality ?? 'unknown'),
+      dpr: Math.round(number(scene.currentDpr) * 100) / 100,
+      calls: Number(rendererInfo?.calls ?? 0),
+      triangles: Number(rendererInfo?.triangles ?? 0),
+      mode: game.currentMode,
+    });
+    state.telemetryStartedAt = now;
+    state.telemetryFrames = 0;
   };
 
   const originalDispose = game.dispose.bind(game);
