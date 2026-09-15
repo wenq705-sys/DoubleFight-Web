@@ -71,6 +71,8 @@ Adaptive quality / telemetry.
 ### `server/index.ts`
 HTTP health endpoint + WebSocket endpoint `/ws`, heartbeat and connection lifecycle.
 
+The RC adds a distinct `GET /ready` operator signal. `/health` remains backward-compatible liveness for Browser/guest PvP; `/ready` returns only `authConfigured`, `sessionSigningConfigured`, actual data-directory write access, Protocol v6 and aggregate ready state. Missing auth secrets produce HTTP 503 without stopping guest gameplay. The reviewed TLS proxy routes `/ready` with a rate limit; provider and signing values are never returned.
+
 ### `server/RoomManager.ts`
 Owns:
 - active connections

@@ -156,9 +156,10 @@ describe('Douyin social retention services', () => {
   it('checks/navigates sidebar and writes/opens the Solo rank', async () => {
     const setImRankData = vi.fn((options: Parameters<NonNullable<DouyinApi['setImRankData']>>[0]) => options.success?.());
     const getImRankList = vi.fn((options: Parameters<NonNullable<DouyinApi['getImRankList']>>[0]) => options.success?.());
+    const navigateToScene = vi.fn((options: Parameters<NonNullable<DouyinApi['navigateToScene']>>[0]) => options.success?.());
     const api = minimalApi({
       checkScene: vi.fn((options) => options.success?.({ isExist: true })),
-      navigateToScene: vi.fn((options) => options.success?.()),
+      navigateToScene,
       setImRankData,
       getImRankList,
     });
@@ -166,6 +167,7 @@ describe('Douyin social retention services', () => {
 
     await expect(social.supportsSidebar()).resolves.toBe(true);
     await expect(social.navigateSidebar()).resolves.toBe(true);
+    expect(navigateToScene).toHaveBeenCalledWith(expect.objectContaining({ scene: 'sidebar' }));
     await expect(social.setSoloRank(2048)).resolves.toBe(true);
     await expect(social.openSoloRank()).resolves.toBe(true);
 

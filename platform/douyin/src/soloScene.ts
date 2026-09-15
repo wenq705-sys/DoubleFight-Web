@@ -992,7 +992,7 @@ export class DouyinSoloScene {
     this.drawPillButton(
       ctx,
       layout.daily,
-      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 每日福利',
+      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 侧边栏福利',
       this.sidebarRewardReady() ? 'primary' : 'secondary',
     );
 

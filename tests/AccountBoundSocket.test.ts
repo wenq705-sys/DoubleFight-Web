@@ -20,7 +20,7 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-async function runServer() {
+async function runServer(configured = false) {
   const folder = await mkdtemp(join(tmpdir(), 'doublefight-socket-account-'));
   const repository = await JsonAccountRepository.open(join(folder, 'accounts.json'));
   const account = (await repository.findOrCreate('fake-provider-openid')).account;
@@ -29,7 +29,8 @@ async function runServer() {
   const child: ChildProcess = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], {
     cwd: process.cwd(),
     env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), DOUBLEFIGHT_DATA_DIR: folder,
-      DOUBLEFIGHT_SESSION_SECRET: secret, DOUYIN_APP_ID: '', DOUYIN_APP_SECRET: '' },
+      DOUBLEFIGHT_SESSION_SECRET: secret, DOUYIN_APP_ID: configured ? 'ttmockappid' : '',
+      DOUYIN_APP_SECRET: configured ? 'mock-only-provider-secret' : '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let output = '';
@@ -68,6 +69,25 @@ async function connect(base: string, bearer?: string) {
 }
 
 describe('real WebSocket account handshake without Protocol v6 changes', () => {
+  it('keeps /health compatible while /ready signals production auth status safely', async () => {
+    for (const configured of [false, true]) {
+      const server = await runServer(configured);
+      try {
+        const health = await fetch(server.base + '/health');
+        expect(health.status).toBe(200);
+        expect((await health.json()).ok).toBe(true);
+        const response = await fetch(server.base + '/ready');
+        expect(response.status).toBe(configured ? 200 : 503);
+        const readiness = await response.json();
+        expect(readiness).toEqual({ ready: configured, authConfigured: configured,
+          sessionSigningConfigured: true, dataDirectoryWritable: true, protocolVersion: 6 });
+        expect(response.headers.get('cache-control')).toBe('no-store');
+        expect(JSON.stringify(readiness)).not.toContain('mock-only-provider-secret');
+        expect((await fetch(server.base + '/ready?operator=1')).status).toBe(configured ? 200 : 503);
+        expect((await fetch(server.base + '/ready', { method: 'POST' })).status).toBe(405);
+      } finally { await server.close(); }
+    }
+  });
   it('preserves account identity through quick matchmaking with a guest', async () => {
     const server = await runServer();
     const sockets: WebSocket[] = [];

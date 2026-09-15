@@ -183,6 +183,10 @@ describe('account HTTP endpoints', () => {
       expect((await me.json()).player.id).toBe(data.player.id);
       expect(site.logs).toContainEqual({ event: 'auth_success', account: 'reused' });
       expect(JSON.stringify(site.logs)).not.toContain('temporary-code');
+      expect(JSON.stringify(site.logs)).not.toContain(data.token);
+      expect(JSON.stringify(site.logs)).not.toContain('private-provider-id');
+      expect(JSON.stringify(site.logs)).not.toContain('private-union-id');
+      expect(JSON.stringify(site.logs)).not.toContain(secret);
     } finally { await site.close(); }
   });
 

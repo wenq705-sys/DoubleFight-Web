@@ -13,10 +13,12 @@ import { createAuthHandler } from './auth/AuthHttp';
 import { OfficialDouyinProvider } from './auth/DouyinProvider';
 import { SessionToken } from './auth/SessionToken';
 import { resolveSocketIdentity } from './auth/SocketIdentity';
+import { productionReadiness } from './ops/Readiness';
 
 const port = readPort(process.env.PORT, 8787);
 const host = process.env.HOST?.trim() || '0.0.0.0';
-const accountRepository = await JsonAccountRepository.open(join(process.env.DOUBLEFIGHT_DATA_DIR || '.doublefight-data', 'accounts.json'));
+const dataDirectory = process.env.DOUBLEFIGHT_DATA_DIR || '.doublefight-data';
+const accountRepository = await JsonAccountRepository.open(join(dataDirectory, 'accounts.json'));
 const manager = new RoomManager(result => {
   void accountRepository.recordMatch(result).catch(() => {
     console.error(JSON.stringify({ area: 'account', event: 'match_record_failure' }));
@@ -31,7 +33,19 @@ const authHandler = createAuthHandler({
 
 const httpServer = createServer(async (request, response) => {
   if (await authHandler(request, response)) return;
-  if (request.url === '/health' || request.url === '/healthz') {
+  const path = request.url?.split('?')[0];
+  if (path === '/ready') {
+    response.setHeader('cache-control', 'no-store');
+    response.setHeader('content-type', 'application/json; charset=utf-8');
+    if (request.method !== 'GET') {
+      response.writeHead(405).end(JSON.stringify({ error: 'method_not_allowed' }));
+      return;
+    }
+    const status = await productionReadiness(process.env, dataDirectory, PROTOCOL_VERSION);
+    response.writeHead(status.ready ? 200 : 503).end(JSON.stringify(status));
+    return;
+  }
+  if (path === '/health' || path === '/healthz') {
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({
       ok: true,
