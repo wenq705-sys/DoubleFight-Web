@@ -73,3 +73,11 @@ export type {
   TimeLimitResolution,
   TimeLimitTieBreaker,
 } from './battle/match';
+
+export {
+  MONETIZATION_MODEL,
+  PVP_SEASON_DURATION_MS,
+  S_COIN,
+  SOLO_WEEK_DURATION_MS,
+} from './meta/economy';
+export type { SRewardReason } from './meta/economy';
