@@ -175,3 +175,18 @@ Code-side RC hardening is complete when:
 - real-device checklist is ready.
 
 Final **Douyin Full Product RC** is complete only after the operator/user supplies platform secrets/legal domains out of band and the real-device matrix passes.
+
+## Code-side RC handoff
+
+Run `npm run build:douyin:release` then `npm run preflight:douyin`. The preflight checks both source/output AppID, release `urlCheck=true`, HTTPS/WSS URLs, unique ad units, required assets and generated WAV files; it rejects server-only markers/values and obsolete probe prefixes without printing confidential contents. `npm run check:production-env` reports only validation booleans for provider variables, current/previous signing keys and release AppID equality. The running server's `/ready` also checks the container's actual data-directory write access; `/health` remains a guest-compatible liveness route.
+
+Reviewed operator instructions: `docs/DOUYIN_RC_DEPLOYMENT.md`. Real-device PASS/FAIL matrix: `docs/DOUYIN_RC_DEVICE_ACCEPTANCE.md`. This branch prepares both; it does not perform the rollout or mark device rows PASS.
+
+| Review item | Code-side evidence | Device/review acceptance |
+| --- | --- | --- |
+| Sidebar Home entry | Home labels the secondary entry “侧边栏福利”; `DouyinSocial.navigateSidebar()` calls `tt.navigateToScene({scene:'sidebar'})` and has a test. | Confirm visible and navigates on a supported account/device. |
+| No unreviewed free nickname | Douyin guest name is fixed; authenticated name is the server account profile. Browser guest naming is unchanged. | Confirm no editable nickname surface. |
+| Ads optional | Banner/interstitial are secondary surfaces; rewarded Solo refill is requested only by the player. | Observe no mandatory ad before normal play. |
+| Rewarded early close | Native `isEnded:false` returns `skipped`; Solo claims only on `rewarded`. | Confirm no currency/skill grant on device after early close. |
+| Release network | Product API is HTTPS, socket is WSS; preflight rejects insecure URLs. | Register and verify formal legal domains. |
+| Formal domain check | Release source/output `setting.urlCheck=true`; development output `false` cannot be uploaded as release. | Verify uploaded IDE project is `dist-release`. |

@@ -40,13 +40,8 @@ const touch = platform.createSwipeInput(
   (x, y) => game.handleTap(x, y),
 );
 
-client.subscribe((state, message) => {
-  if (message?.type === 'welcome') {
-    console.log(`[M2.10.2 socket] welcome v${message.protocolVersion}`);
-    client.ping();
-  }
-  if (message?.type === 'pong') console.log(`[M2.10.2 socket] pong ${state.latencyMs ?? 0}ms`);
-  if (state.lastError) console.warn(`[M2.10.2 socket] ${state.lastError}`);
+client.subscribe((_state, message) => {
+  if (message?.type === 'welcome') client.ping();
 });
 
 const loop = new DouyinRenderLoop(
@@ -67,8 +62,7 @@ const loop = new DouyinRenderLoop(
 );
 
 platform.lifecycle.show();
-void auth.start().then(result => {
-  console.log(`[M2.10.3 account] ${result.status}`);
+void auth.start().then(() => {
   game.refreshAccountState();
 });
 void unsubscribeRoomInvite;

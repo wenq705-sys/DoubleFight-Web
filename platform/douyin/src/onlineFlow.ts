@@ -55,7 +55,9 @@ export class DouyinOnlineFlow {
     this.remote = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
     this.controller = new OnlineController(this.local, this.remote);
     this.selectedTheme = initialTheme;
-    this.playerName = (platform.storage.getItem('doublefight-player-name') ?? '玩家').trim().slice(0, 16) || '玩家';
+    // The mini-game has no unreviewed free-text nickname entry. Authenticated
+    // connections receive their profile name from the server instead.
+    this.playerName = '玩家';
     this.loadout = this.loadLoadout();
     const savedTheme = platform.storage.getItem('doublefight-online-theme');
     if (savedTheme === 'kingdom' || savedTheme === 'palace') this.selectedTheme = savedTheme;
