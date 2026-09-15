@@ -13,6 +13,7 @@ import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { DouyinAuthClient } from './auth';
 import type { DouyinEngagement } from './engagement';
+import type { DouyinCommercial } from './commercial';
 import { formatDuration, loadThemeMastery, recordWeeklySolo } from './metaProgress';
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
@@ -47,6 +48,7 @@ export function installM212RetentionHub(
   platform: DouyinPlatform,
   auth: DouyinAuthClient,
   social: DouyinSocial,
+  commercial: DouyinCommercial,
   engagement: DouyinEngagement,
 ): void {
   const scene = game as unknown as SceneInternals;
@@ -62,6 +64,20 @@ export function installM212RetentionHub(
   };
 
   engagement.track('home_view', { theme: game.theme });
+
+  const originalRewarded = commercial.showRewarded.bind(commercial);
+  commercial.showRewarded = async () => {
+    engagement.track('rewarded_start', { mode: game.currentMode });
+    const result = await originalRewarded();
+    engagement.track('rewarded_complete', { mode: game.currentMode, result });
+    return result;
+  };
+  const originalInterstitial = commercial.maybeShowInterstitial.bind(commercial);
+  commercial.maybeShowInterstitial = async (force = false) => {
+    const shown = await originalInterstitial(force);
+    if (shown) engagement.track('interstitial_shown', { from_mode: game.currentMode });
+    return shown;
+  };
   void engagement.checkShortcut().then(value => {
     state.shortcutAdded = value;
     if (!scene.disposed && state.screen === 'daily') scene.refreshHud();
