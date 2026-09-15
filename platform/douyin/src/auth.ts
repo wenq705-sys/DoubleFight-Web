@@ -93,7 +93,10 @@ export class DouyinAuthClient {
       const data = await this.call('POST', '/rewards/sidebar', { source: 'sidebar_return' });
       this.updatePlayer(data.player);
       return data.granted === true ? 'granted' : 'duplicate';
-    } catch { return 'unavailable'; }
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return 'unavailable';
+    }
   }
 
   async claimAd(claimId: string): Promise<'granted' | 'duplicate' | 'unavailable'> {
@@ -102,7 +105,10 @@ export class DouyinAuthClient {
       const data = await this.call('POST', '/rewards/ad', { kind: 'solo_skill_refill', claimId });
       this.updatePlayer(data.player);
       return data.granted === true ? 'granted' : 'duplicate';
-    } catch { return 'unavailable'; }
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return 'unavailable';
+    }
   }
 
   async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
@@ -112,7 +118,18 @@ export class DouyinAuthClient {
       const data = await this.call('POST', '/progress/solo', { theme, best, highest });
       this.updatePlayer(data.player);
       return this.isPlayer(data.player);
-    } catch { return false; }
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return false;
+    }
+  }
+
+  private handleSessionFailure(error: unknown): void {
+    if (!(error instanceof HttpError) || error.status !== 401) return;
+    this.setToken(null);
+    this.platform.storage.removeItem(TOKEN_KEY);
+    this.state = { status: 'local' };
+    this.platform.account.reset?.();
   }
 
   private setToken(token: string | null): void {
