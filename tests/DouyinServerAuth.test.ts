@@ -53,6 +53,17 @@ describe('durable accounts and reward ledger', () => {
     expect((await reopened.findById(first.account.id))?.douyinOpenId).toBe('private-openid');
   });
 
+  it('promotes an anonymous account instead of splitting progression after login', async () => {
+    const { repository } = await repo();
+    const anonymous = await repository.findOrCreate('anonymous:anon-openid', undefined, 'anon-openid');
+    const promoted = await repository.findOrCreate('real-openid', 'real-union', 'anon-openid');
+    expect(promoted.created).toBe(false);
+    expect(promoted.account.id).toBe(anonymous.account.id);
+    expect(promoted.account.douyinOpenId).toBe('real-openid');
+    expect(promoted.account.unionId).toBe('real-union');
+    expect(promoted.account.anonymousOpenId).toBe('anon-openid');
+  });
+
   it('serializes concurrent sidebar/ad claims and survives reopening', async () => {
     const { folder, repository } = await repo();
     const { account } = await repository.findOrCreate('player-1');
