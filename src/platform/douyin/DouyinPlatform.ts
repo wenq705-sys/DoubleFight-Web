@@ -50,6 +50,7 @@ export class DouyinLifecycleAdapter implements LifecycleAdapter {
 export class DouyinAccountBootstrap implements AccountBootstrap {
   private result: Promise<AccountBootstrapResult> | null = null;
   constructor(private readonly api: Pick<DouyinApi, 'login'>) {}
+  reset(): void { this.result = null; }
   bootstrap(): Promise<AccountBootstrapResult> {
     if (this.result) return this.result;
     this.result = new Promise(resolve => {
