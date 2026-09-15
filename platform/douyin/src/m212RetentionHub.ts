@@ -339,10 +339,10 @@ function handleHubTap(
     if (hit(x, y, layout.pvp)) {
       void social.openPvpRank().then(ok => {
         scene.notice = {
-          text: ok ? '已打开竞技赛季榜' : '当前环境暂不支持竞技榜',
+          text: ok ? '已打开竞技好友榜' : '当前环境暂不支持竞技榜',
           until: number(scene.visualTime) + 1.4,
         };
-        engagement.track('rank_open', { board: 'pvp_season', success: ok });
+        engagement.track('rank_open', { board: 'pvp_social', success: ok });
         scene.refreshHud();
       });
       return;
@@ -465,8 +465,8 @@ function drawRankingCenter(
   actionCard(
     ctx,
     layout.pvp,
-    '⚔ 竞技赛季',
-    `${competitiveRankLabel(rating)} · Rating ${rating}`,
+    '⚔ 竞技好友榜',
+    `官方赛季由服务器结算 · ${competitiveRankLabel(rating)} · ${rating}`,
     true,
   );
 
