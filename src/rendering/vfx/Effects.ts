@@ -91,15 +91,23 @@ export class Effects {
       item.endScale.setScalar(0.05);
     }
 
-    this.ring(position, primary, 0.4, value >= 512 ? 3.8 : 3.0);
-    this.ring(position.clone().add(new THREE.Vector3(0, 0.03, 0)), 0xffffff, 0.25, 2.0);
-    if (value >= 64) this.ring(position.clone().add(new THREE.Vector3(0, 0.06, 0)), secondary, 0.45, 2.5);
+    // Merge feedback scales with progression. Low tiers stay crisp and cheap;
+    // higher tiers earn the larger rings/beam/confetti celebration.
+    const highTier = value >= 256;
+    const legendary = value >= 1024;
+    this.ring(position, primary, value < 32 ? 0.24 : 0.34, value < 32 ? 1.65 : highTier ? 3.5 : 2.45);
+    if (value >= 32) {
+      this.ring(position.clone().add(new THREE.Vector3(0, 0.045, 0)), secondary, 0.34, highTier ? 2.75 : 1.9);
+    }
+    if (highTier && this.quality === 'high') {
+      this.ring(position.clone().add(new THREE.Vector3(0, 0.075, 0)), 0xfff4d2, 0.28, legendary ? 3.25 : 2.35);
+    }
 
-    this.flash(origin, primary, value >= 512 ? 2.8 : 2.1);
-    this.rays(position, primary, Math.min(this.quality === 'high' ? 12 : 8, 5 + tier));
-    if (value >= 64 && this.quality !== 'low') this.beam(position, primary, value >= 512 ? 3.6 : 2.5);
-    if (value >= 256) this.confetti(origin, this.quality === 'high' ? 10 : 6, theme);
-    this.light(origin, primary, value >= 1024 ? 5.2 : value >= 512 ? 4 : 2.4);
+    this.flash(origin, primary, value < 32 ? 1.35 : highTier ? 2.65 : 1.9);
+    if (value >= 32) this.rays(position, primary, Math.min(this.quality === 'high' ? 10 : 6, 3 + tier));
+    if (value >= 128 && this.quality !== 'low') this.beam(position, primary, legendary ? 4.2 : 2.35);
+    if (highTier) this.confetti(origin, this.quality === 'high' ? (legendary ? 12 : 8) : 5, theme);
+    this.light(origin, primary, legendary ? 4.8 : value >= 512 ? 3.4 : value >= 64 ? 2.2 : 1.35);
   }
 
   spawn(position: THREE.Vector3, theme: EffectPalette): void {
