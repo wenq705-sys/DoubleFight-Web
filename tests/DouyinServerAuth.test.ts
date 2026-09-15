@@ -124,7 +124,7 @@ describe('durable accounts and reward ledger', () => {
     for (const reason of ['opponent_left', 'board_locked', 'petrified_lock', 'time_limit']) {
       expect(await repository.recordMatch({ matchId: `${reason}-match`, reason: reason as 'opponent_left' | 'board_locked' | 'petrified_lock' | 'time_limit', winnerId: 'auth-player', players })).toBe(true);
     }
-    expect((await repository.findById(account.id))?.pvp.wins).toBe(4);
+    expect((await repository.findById(account.id))?.pvp).toMatchObject({ wins: 4, rating: 1000 });
     for (let index = 0; index < MAX_RECENT_MATCHES + 10; index += 1) {
       await repository.recordMatch({ matchId: `bounded-${index}`, reason: 'time_limit', winnerId: null, players });
     }
