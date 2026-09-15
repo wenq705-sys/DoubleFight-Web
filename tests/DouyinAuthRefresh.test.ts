@@ -37,7 +37,7 @@ describe('DouyinAuthClient authoritative refresh', () => {
     const platform = {
       storage,
       account: {
-        bootstrap: vi.fn(async () => ({ status: 'anonymous' as const, isLoggedIn: false, anonymousCode: 'anon1234' })),
+        bootstrap: vi.fn(async () => ({ status: 'anonymous' as const, isLoggedIn: false as const, anonymousCode: 'anon1234' })),
         reset: vi.fn(),
       },
     };
