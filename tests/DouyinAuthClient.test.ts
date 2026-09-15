@@ -13,8 +13,9 @@ const player = {
 function fixture(storedToken?: string, requestBehavior?: (options: Parameters<NonNullable<DouyinApi['request']>>[0]) => void) {
   const values = new Map<string, string>(storedToken ? [['doublefight-session-token', storedToken]] : []);
   const bootstrap = vi.fn(async () => ({ status: 'logged_in' as const, isLoggedIn: true as const, code: 'one-use-code' }));
+  const reset = vi.fn();
   const platform = {
-    account: { bootstrap },
+    account: { bootstrap, reset },
     storage: {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => { values.set(key, value); },
@@ -28,7 +29,7 @@ function fixture(storedToken?: string, requestBehavior?: (options: Parameters<No
     else options.success({ statusCode: 200, data: { granted: true, player } });
   });
   const client = new DouyinAuthClient({ request }, platform, 'https://game.example');
-  return { client, values, bootstrap, request };
+  return { client, values, bootstrap, reset, request };
 }
 
 describe('Douyin account session bootstrap', () => {
@@ -55,6 +56,28 @@ describe('Douyin account session bootstrap', () => {
     const setup = fixture(undefined, options => options.fail({ errMsg: 'offline' }));
     expect(await setup.client.start()).toEqual({ status: 'local' });
     expect(setup.values.size).toBe(0);
+  });
+
+  it('retries a transient auth request instead of pinning local mode forever', async () => {
+    let authAttempts = 0;
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) {
+        authAttempts += 1;
+        if (authAttempts === 1) options.fail({ errMsg: 'temporary offline' });
+        else options.success({ statusCode: 200, data: { token: 'recovered.session', player } });
+      }
+    });
+    expect(await setup.client.start()).toEqual({ status: 'local' });
+    expect(await setup.client.start()).toEqual({ status: 'authenticated', player });
+    expect(authAttempts).toBe(2);
+  });
+
+  it('invalidates a consumed one-use login code after provider 401', async () => {
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) options.success({ statusCode: 401, data: { error: 'invalid_code' } });
+    });
+    expect(await setup.client.start()).toEqual({ status: 'local' });
+    expect(setup.reset).toHaveBeenCalledOnce();
   });
 
   it('posts reward claims with bearer and never grants when the server rejects', async () => {
