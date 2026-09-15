@@ -564,10 +564,8 @@ export class DouyinSoloScene {
       return;
     }
 
-    const skillWidth = 156;
-    const skillHeight = 44;
-    const skillY = info.height - safeBottom - 52;
-    if (x >= info.width / 2 - skillWidth / 2 && x <= info.width / 2 + skillWidth / 2 && y >= skillY && y <= skillY + skillHeight) {
+    const skill = this.soloSkillRect(info.width, info.height, safeBottom);
+    if (this.hit(x, y, skill)) {
       if (this.skillCharges > 0) void this.useRandomClear();
       else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
     }
@@ -1030,12 +1028,11 @@ export class DouyinSoloScene {
     ctx.font = '700 10px sans-serif';
     ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
 
-    const skillWidth = 176;
-    const skillY = height - safeBottom - 52;
+    const skill = this.soloSkillRect(width, height, safeBottom);
     const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
     this.drawSkillButton(
       ctx,
-      { x: width / 2 - skillWidth / 2, y: skillY, width: skillWidth, height: 44 },
+      skill,
       canReward ? '▶ 看广告 +1 清块' : '✦ 清块',
       canReward ? '可选激励' : `×${this.skillCharges}`,
       this.skillCharges > 0 || canReward,
@@ -1044,7 +1041,7 @@ export class DouyinSoloScene {
     ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = '650 10px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 向 2048 进阶', width / 2, skillY - 13);
+    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 13);
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1570,6 +1567,16 @@ export class DouyinSoloScene {
 
   private roomShareRect(width: number, height: number): Rect {
     return { x: width / 2 - 78, y: height * 0.39, width: 156, height: 34 };
+  }
+
+  private soloSkillRect(width: number, height: number, safeBottom: number): Rect {
+    const skillWidth = 176;
+    return {
+      x: width / 2 - skillWidth / 2,
+      y: height - safeBottom - 52,
+      width: skillWidth,
+      height: 44,
+    };
   }
 
   private resultActionRects(width: number, height: number): { primary: Rect; lobby: Rect; share: Rect } {
