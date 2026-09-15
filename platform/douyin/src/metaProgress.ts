@@ -1,5 +1,5 @@
 import { MAX_PIECE_VALUE, pieceTier, type ThemeId } from '../../../src/config/themes';
-import type { PlatformStorage } from '../../../src/platform/types';
+import type { StorageAdapter } from '../../../src/platform/types';
 
 export interface ThemeMasteryProgress {
   highestDiscoveredTier: number;
@@ -17,7 +17,7 @@ const empty = (): ThemeMasteryProgress => ({
   ascensionCount: 0,
 });
 
-export function loadThemeMastery(storage: PlatformStorage, theme: ThemeId): ThemeMasteryProgress {
+export function loadThemeMastery(storage: StorageAdapter, theme: ThemeId): ThemeMasteryProgress {
   try {
     const raw = storage.getItem(keyFor(theme));
     if (!raw) return empty();
@@ -35,7 +35,7 @@ export function loadThemeMastery(storage: PlatformStorage, theme: ThemeId): Them
 }
 
 export function recordDiscovery(
-  storage: PlatformStorage,
+  storage: StorageAdapter,
   theme: ThemeId,
   value: number,
 ): { progress: ThemeMasteryProgress; discovered: boolean } {
@@ -49,7 +49,7 @@ export function recordDiscovery(
 }
 
 export function recordAscension(
-  storage: PlatformStorage,
+  storage: StorageAdapter,
   theme: ThemeId,
   elapsedMs: number,
 ): { progress: ThemeMasteryProgress; first: boolean; personalBest: boolean } {
@@ -76,7 +76,7 @@ export function formatDuration(milliseconds: number | null): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(fraction).padStart(2, '0')}`;
 }
 
-function save(storage: PlatformStorage, theme: ThemeId, progress: ThemeMasteryProgress): void {
+function save(storage: StorageAdapter, theme: ThemeId, progress: ThemeMasteryProgress): void {
   storage.setItem(keyFor(theme), JSON.stringify(progress));
 }
 
