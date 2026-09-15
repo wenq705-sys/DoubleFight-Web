@@ -8,8 +8,14 @@ export interface ThemeMasteryProgress {
   ascensionCount: number;
 }
 
+export interface WeeklySoloProgress {
+  weekKey: string;
+  best: number;
+}
+
 const keyFor = (theme: ThemeId) => `doublefight-meta-${theme}`;
 const legacyHighestKey = (theme: ThemeId) => `doublefight-highest-${theme}`;
+const WEEKLY_SOLO_KEY = 'doublefight-weekly-solo';
 
 const empty = (): ThemeMasteryProgress => ({
   highestDiscoveredTier: 1,
@@ -79,6 +85,42 @@ export function recordAscension(
   };
   save(storage, theme, next);
   return { progress: next, first, personalBest };
+}
+
+export function currentWeekKey(now: number = Date.now()): string {
+  const date = new Date(now);
+  const mondayOffset = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - mondayOffset);
+  return date.toISOString().slice(0, 10);
+}
+
+export function recordWeeklySolo(
+  storage: StorageAdapter,
+  score: number,
+  now: number = Date.now(),
+): { progress: WeeklySoloProgress; improved: boolean } {
+  const weekKey = currentWeekKey(now);
+  let previous: WeeklySoloProgress = { weekKey, best: 0 };
+  try {
+    const raw = storage.getItem(WEEKLY_SOLO_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<WeeklySoloProgress>;
+      if (parsed.weekKey === weekKey && Number.isFinite(parsed.best) && Number(parsed.best) >= 0) {
+        previous = { weekKey, best: Math.floor(Number(parsed.best)) };
+      }
+    }
+  } catch { /* reset malformed weekly cache */ }
+
+  const safeScore = Math.max(0, Math.floor(Number.isFinite(score) ? score : 0));
+  const improved = safeScore > previous.best;
+  const progress = improved ? { weekKey, best: safeScore } : previous;
+  if (improved || storage.getItem(WEEKLY_SOLO_KEY) === null) {
+    storage.setItem(WEEKLY_SOLO_KEY, JSON.stringify(progress));
+  } else if (previous.weekKey !== weekKey) {
+    storage.setItem(WEEKLY_SOLO_KEY, JSON.stringify({ weekKey, best: safeScore }));
+    return { progress: { weekKey, best: safeScore }, improved: safeScore > 0 };
+  }
+  return { progress, improved };
 }
 
 export function formatDuration(milliseconds: number | null): string {
