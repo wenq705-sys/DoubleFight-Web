@@ -123,6 +123,19 @@ export interface DouyinApi {
   onShow(listener: (options?: DouyinShowOptions) => void): void;
   onHide(listener: () => void): void;
 
+  reportAnalytics?(event: string, data: Record<string, string | number | boolean>): void;
+  addShortcut?(options: {
+    success?: (result: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: () => void;
+  }): void;
+  requestSubscribeMessage?(options: {
+    tmplIds: string[];
+    success?: (result: Record<string, unknown>) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: () => void;
+  }): void;
+
   connectSocket(options: { url: string; header?: Record<string, string>; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
 
   createRewardedVideoAd?(options: {
@@ -167,6 +180,7 @@ export interface DouyinApi {
     dataType: 0 | 1;
     value: string;
     priority: number;
+    extra?: string;
     zoneId: string;
     success?: (result?: unknown) => void;
     fail?: (error: { errMsg?: string }) => void;

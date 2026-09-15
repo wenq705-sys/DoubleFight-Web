@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
 import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { FINAL_PIECE_VALUE, PIECE_VALUES, formatDuration, isFinalPiece, pieceName, ratingRank } from '../../../src/meta/progression';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -56,8 +57,8 @@ export class DouyinSoloScene {
   private readonly uiMaterial: THREE.MeshBasicMaterial;
   private readonly uiPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
-  private readonly online: DouyinOnlineFlow;
-  private readonly unsubscribeOnline: () => void;
+  private onlineInstance: DouyinOnlineFlow | null = null;
+  private unsubscribeOnline: (() => void) | null = null;
 
   private inputLocked = false;
   private skillCharges = 3;
@@ -70,7 +71,7 @@ export class DouyinSoloScene {
   private perfTime = 0;
   private perfFrames = 0;
   private goodPerfWindows = 0;
-  private quality: 'high' | 'medium' | 'low' = 'high';
+  private quality: 'high' | 'medium' | 'low' = 'medium';
   private currentDpr = 1;
   private notice: { text: string; until: number } | null = null;
   private joinPadOpen = false;
@@ -82,6 +83,25 @@ export class DouyinSoloScene {
   private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
+  private soloRunStartedAt: number | null = null;
+  private soloAscendedAt: number | null = null;
+  private runHighestValue = 2;
+  private highestFlight: {
+    value: number;
+    startedAt: number;
+    duration: number;
+    fromX: number;
+    fromY: number;
+    newDiscovery: boolean;
+    ascended: boolean;
+  } | null = null;
+  private profileOpen = false;
+  private rankingOpen = false;
+  private collectionOpen = false;
+  private themeCenterOpen = false;
+  private collectionTheme: ThemeId;
+  private lastDuelTimerSecond: number | null = null;
+  private themeTransition: { startedAt: number; duration: number; label: string } | null = null;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -95,6 +115,7 @@ export class DouyinSoloScene {
     private readonly auth: DouyinAuthClient,
   ) {
     this.currentTheme = theme;
+    this.collectionTheme = theme;
 
     setTextureCanvasFactory((width, height) => {
       const canvas = this.platform.createCanvas();
@@ -128,10 +149,7 @@ export class DouyinSoloScene {
     const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
     this.boardView = new BattleBoardView(theme, 'full', undefined, presentation, true);
     this.controller = new SoloController(this.boardView);
-    this.online = new DouyinOnlineFlow(platform, client, theme, presentation);
-    this.scene.add(this.boardView.root, this.online.local.root, this.online.remote.root);
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    this.scene.add(this.boardView.root);
 
     this.configureLighting();
     this.resize();
@@ -158,29 +176,9 @@ export class DouyinSoloScene {
     this.uiScene.add(this.uiPlane);
     this.resize();
 
-    this.unsubscribeOnline = this.online.subscribe(() => {
-      if (this.mode !== 'online') return;
-      const onlineMode = this.online.snapshot().mode;
-      const snap = this.online.snapshot();
-      if (onlineMode === 'playing' || onlineMode === 'result') {
-        this.boardView.root.visible = false;
-        this.online.local.root.visible = true;
-        this.online.remote.root.visible = true;
-      } else {
-        if (this.boardView.theme !== snap.selectedTheme) {
-          this.boardView.setTheme(snap.selectedTheme);
-          this.boardView.reset(HOME_TILES);
-          this.applyThemeLook();
-        }
-        this.boardView.root.visible = true;
-        this.online.local.root.visible = false;
-        this.online.remote.root.visible = false;
-      }
-      this.refreshHud();
-    });
-
     this.refreshHud();
-    this.commercial.showBanner();
+    this.commercial.hideBanner();
+    this.social.report('home_view', { theme: this.currentTheme });
     void this.social.supportsSidebar().then((supported) => {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
@@ -191,6 +189,44 @@ export class DouyinSoloScene {
   get currentMode(): ProductMode { return this.mode; }
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
+  get highestName(): string { return pieceName(this.currentTheme, this.highest); }
+
+  private get online(): DouyinOnlineFlow {
+    return this.ensureOnline();
+  }
+
+  private ensureOnline(): DouyinOnlineFlow {
+    if (this.onlineInstance) return this.onlineInstance;
+    const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
+    const online = new DouyinOnlineFlow(this.platform, this.client, this.currentTheme, presentation);
+    online.local.setQuality(this.quality);
+    online.remote.setQuality(this.quality);
+    online.local.root.visible = false;
+    online.remote.root.visible = false;
+    this.scene.add(online.local.root, online.remote.root);
+    this.onlineInstance = online;
+    this.unsubscribeOnline = online.subscribe(() => {
+      if (this.mode !== 'online') return;
+      const onlineMode = online.snapshot().mode;
+      const snap = online.snapshot();
+      if (onlineMode === 'playing' || onlineMode === 'result') {
+        this.boardView.root.visible = false;
+        online.local.root.visible = true;
+        online.remote.root.visible = true;
+      } else {
+        if (this.boardView.theme !== snap.selectedTheme) {
+          this.boardView.setTheme(snap.selectedTheme);
+          this.boardView.reset(HOME_TILES);
+          this.applyThemeLook();
+        }
+        this.boardView.root.visible = true;
+        online.local.root.visible = false;
+        online.remote.root.visible = false;
+      }
+      this.refreshHud();
+    });
+    return online;
+  }
 
   refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
 
@@ -231,8 +267,11 @@ export class DouyinSoloScene {
 
   async move(direction: Direction): Promise<boolean> {
     if (this.mode !== 'solo' || this.disposed || this.inputLocked) return false;
+    const provisionalStart = this.soloRunStartedAt === null;
+    if (provisionalStart) this.soloRunStartedAt = Date.now();
     const result = this.controller.move(direction);
     if (!result.changed) {
+      if (provisionalStart) this.soloRunStartedAt = null;
       this.platform.haptics.trigger('light');
       return false;
     }
@@ -283,6 +322,22 @@ export class DouyinSoloScene {
       }
       return;
     }
+    if (this.themeCenterOpen) {
+      this.handleThemeCenterTap(x, y);
+      return;
+    }
+    if (this.collectionOpen) {
+      this.handleCollectionTap(x, y);
+      return;
+    }
+    if (this.rankingOpen) {
+      this.handleRankingTap(x, y);
+      return;
+    }
+    if (this.profileOpen) {
+      this.handleProfileTap(x, y);
+      return;
+    }
     if (this.settingsOpen) {
       this.handleSettingsTap(x, y);
       return;
@@ -295,7 +350,9 @@ export class DouyinSoloScene {
   setTheme(theme: ThemeId): void {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
+    this.themeTransition = { startedAt: this.visualTime, duration: 0.46, label: THEMES[theme].label };
     this.platform.storage.setItem('doublefight-theme', theme);
+    this.social.report('theme_switch', { theme });
     this.boardView.setTheme(theme);
     this.boardView.prewarmTheme(theme);
     if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
@@ -310,6 +367,7 @@ export class DouyinSoloScene {
     const delta = Math.min(0.033, this.clock.getDelta());
     this.visualTime += delta;
     this.samplePerformance(delta);
+    const frame = this.platform.getSystemInfo();
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
@@ -321,12 +379,17 @@ export class DouyinSoloScene {
     if (duel) {
       this.online.local.update(delta);
       this.online.remote.update(delta);
-      this.renderDuel();
+      this.renderDuel(frame.width, frame.height);
+      if (onlineState?.mode === 'playing') this.updateDuelTimerFeedback();
       if (this.visualTime >= this.nextDynamicHudAt) {
-        this.nextDynamicHudAt = this.visualTime + 0.2;
+        this.nextDynamicHudAt = this.visualTime + 0.1;
         this.refreshHud();
       }
     } else {
+      if (this.mode === 'online' && onlineState?.mode === 'matching' && this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 0.1;
+        this.refreshHud();
+      }
       this.boardView.update(delta);
       const home = this.cameraScratch.copy(this.cameraHome);
       if (this.mode === 'home' || this.mode === 'online') {
@@ -349,10 +412,32 @@ export class DouyinSoloScene {
       this.camera.position.copy(home);
       this.camera.lookAt(this.cameraTarget);
       this.renderer.setScissorTest(false);
-      this.renderer.setViewport(0, 0, this.platform.getSystemInfo().width, this.platform.getSystemInfo().height);
+      this.renderer.setViewport(0, 0, frame.width, frame.height);
       this.renderer.setClearColor(this.boardView.presentation.sky, 1);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
+    }
+
+    if (this.themeTransition) {
+      const progress = (this.visualTime - this.themeTransition.startedAt) / this.themeTransition.duration;
+      if (progress >= 1) {
+        this.themeTransition = null;
+        this.refreshHud();
+      } else if (this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 1 / 30;
+        this.refreshHud();
+      }
+    }
+
+    if (this.highestFlight && this.mode === 'solo') {
+      const progress = (this.visualTime - this.highestFlight.startedAt) / this.highestFlight.duration;
+      if (progress >= 1) {
+        this.highestFlight = null;
+        this.refreshHud();
+      } else if (this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 1 / 30;
+        this.refreshHud();
+      }
     }
 
     if (this.notice && this.visualTime >= this.notice.until) {
@@ -362,7 +447,6 @@ export class DouyinSoloScene {
 
     this.renderer.clearDepth();
     this.renderer.setScissorTest(false);
-    const frame = this.platform.getSystemInfo();
     this.renderer.setViewport(0, 0, frame.width, frame.height);
     this.renderer.render(this.uiScene, this.uiCamera);
   }
@@ -370,8 +454,10 @@ export class DouyinSoloScene {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.unsubscribeOnline();
-    this.online.dispose();
+    this.unsubscribeOnline?.();
+    this.unsubscribeOnline = null;
+    this.onlineInstance?.dispose();
+    this.onlineInstance = null;
     this.boardView.dispose();
     this.uiTexture.dispose();
     this.uiMaterial.dispose();
@@ -384,9 +470,49 @@ export class DouyinSoloScene {
 
   private handlePresentationFeedback(event: PresentationEvent): void {
     this.audio.playEvent(event);
-    if (event.type === 'merge') {
-      this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
+    if (event.type !== 'merge') return;
+
+    this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
+    if (this.mode !== 'solo' || event.value <= this.runHighestValue) return;
+
+    this.runHighestValue = event.value;
+    const discovered = this.discoveredValues(this.currentTheme);
+    const newDiscovery = !discovered.has(event.value);
+    if (newDiscovery) {
+      discovered.add(event.value);
+      this.platform.storage.setItem(
+        `doublefight-discovered-${this.currentTheme}`,
+        JSON.stringify([...discovered].sort((a, b) => a - b)),
+      );
+      this.social.report('piece_discovered', {
+        theme: this.currentTheme,
+        piece: pieceName(this.currentTheme, event.value),
+        tier: Math.log2(event.value),
+      });
     }
+    this.social.report('new_highest', {
+      theme: this.currentTheme,
+      piece: pieceName(this.currentTheme, event.value),
+      tier: Math.log2(event.value),
+    });
+
+    const info = this.platform.getSystemInfo();
+    const world = this.boardView.cellWorldPosition(event.at.row, event.at.col).clone().project(this.camera);
+    const fromX = (world.x * 0.5 + 0.5) * info.width;
+    const fromY = (-world.y * 0.5 + 0.5) * info.height;
+    const ascended = isFinalPiece(event.value) && this.soloAscendedAt === null;
+    this.highestFlight = {
+      value: event.value,
+      startedAt: this.visualTime,
+      duration: ascended ? 1.15 : 0.82,
+      fromX,
+      fromY,
+      newDiscovery,
+      ascended,
+    };
+
+    if (ascended) this.recordAscension();
+    this.refreshHud();
   }
 
   private startSolo(): void {
@@ -395,18 +521,34 @@ export class DouyinSoloScene {
     this.platform.storage.removeItem('doublefight-next-solo-bonus');
     this.skillCharges = 3 + bonus;
     this.rewardedSkillClaims = 0;
+    this.soloRunStartedAt = null;
+    this.soloAscendedAt = null;
+    this.runHighestValue = 2;
+    this.highestFlight = null;
+    this.profileOpen = false;
     this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
     this.exitConfirm = false;
+    this.lastDuelTimerSecond = null;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.controller.reset();
+    this.runHighestValue = this.highest;
+    const discovered = this.discoveredValues(this.currentTheme);
+    for (const tile of this.controller.board.tiles()) discovered.add(tile.value);
+    this.platform.storage.setItem(
+      `doublefight-discovered-${this.currentTheme}`,
+      JSON.stringify([...discovered].sort((a, b) => a - b)),
+    );
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
+    this.social.report('solo_start', { theme: this.currentTheme });
     this.refreshHud();
   }
 
@@ -426,10 +568,13 @@ export class DouyinSoloScene {
     this.joinCode = '';
     this.exitConfirm = false;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.boardView.reset(HOME_TILES);
     this.online.open(this.currentTheme);
+    this.social.report('online_lobby_open', { theme: this.currentTheme });
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
@@ -439,21 +584,28 @@ export class DouyinSoloScene {
   private showHome(): void {
     const previousMode = this.mode;
     const previousOnlineMode = previousMode === 'online' ? this.online.snapshot().mode : null;
+    if (previousMode === 'solo') {
+      this.social.report('solo_end', {
+        theme: this.currentTheme,
+        score: this.score,
+        highest_tier: Math.log2(this.highest),
+        ascended: this.soloAscendedAt !== null,
+      });
+    }
     this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
-    if (showInterstitial) {
-      void this.commercial.maybeShowInterstitial().finally(() => this.commercial.showBanner());
-    } else {
-      this.commercial.showBanner();
-    }
+    if (showInterstitial) void this.commercial.maybeShowInterstitial();
+    this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
     this.exitConfirm = false;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.boardView.root.visible = true;
     this.boardView.reset(HOME_TILES);
     this.configureCamera();
@@ -472,8 +624,10 @@ export class DouyinSoloScene {
     if (this.boardView.theme !== snap.selectedTheme) this.boardView.setTheme(snap.selectedTheme);
     this.boardView.reset(HOME_TILES);
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.configureCamera();
     this.applyThemeLook();
     this.refreshHud();
@@ -489,21 +643,27 @@ export class DouyinSoloScene {
       this.refreshHud();
       return;
     }
+    if (this.hit(x, y, layout.account)) {
+      this.profileOpen = true;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
 
     if (this.hit(x, y, layout.theme)) {
-      this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
+      this.themeCenterOpen = true;
+      this.social.report('theme_center_open', { theme: this.currentTheme });
       this.platform.haptics.trigger('light');
+      this.refreshHud();
       return;
     }
     if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
     if (this.hit(x, y, layout.online)) { this.openOnline(); return; }
     if (this.hit(x, y, layout.rank)) {
-      void this.social.openSoloRank().then(ok => {
-        if (!ok) {
-          this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
-          this.refreshHud();
-        }
-      });
+      this.rankingOpen = true;
+      this.social.report('rank_center_open', { theme: this.currentTheme });
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
       return;
     }
     if (this.hit(x, y, layout.daily)) {
@@ -622,6 +782,7 @@ export class DouyinSoloScene {
         return;
       }
       if (this.hit(x, y, layout.quick)) {
+        this.social.report('pvp_queue', { mode: 'standard_3m', theme: snap.selectedTheme });
         this.online.quickMatch();
         this.platform.haptics.trigger('medium');
         return;
@@ -758,7 +919,7 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const width = Math.max(1, info.width);
     const height = Math.max(1, info.height);
-    const dpr = Math.min(1.65, Math.max(1, info.pixelRatio));
+    const dpr = Math.min(1.20, Math.max(1, info.pixelRatio));
     this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
@@ -789,18 +950,18 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyQuality('low', 1.12);
+      this.applyQuality('low', 1.00);
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyQuality('medium', 1.32);
+      this.applyQuality('medium', 1.20);
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
-      if (this.goodPerfWindows >= 2) {
-        this.applyQuality('high', 1.65);
+      if (this.goodPerfWindows >= 3) {
+        this.applyQuality('high', 1.45);
         this.goodPerfWindows = 0;
       }
     } else {
@@ -816,9 +977,10 @@ export class DouyinSoloScene {
     this.currentDpr = targetDpr;
     this.renderer.setPixelRatio(targetDpr);
     this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
+    this.renderer.shadowMap.enabled = quality !== 'low';
     this.boardView.setQuality(quality);
-    this.online.local.setQuality(quality);
-    this.online.remote.setQuality(quality);
+    this.onlineInstance?.local.setQuality(quality);
+    this.onlineInstance?.remote.setQuality(quality);
   }
 
   private configureCamera(): void {
@@ -835,10 +997,9 @@ export class DouyinSoloScene {
     this.camera.lookAt(this.cameraTarget);
   }
 
-  private renderDuel(): void {
-    const info = this.platform.getSystemInfo();
-    const width = Math.max(1, info.width);
-    const height = Math.max(1, info.height);
+  private renderDuel(frameWidth: number, frameHeight: number): void {
+    const width = Math.max(1, frameWidth);
+    const height = Math.max(1, frameHeight);
     const localHeight = Math.round(height * 0.56);
     const remoteHeight = height - localHeight;
 
@@ -887,7 +1048,7 @@ export class DouyinSoloScene {
     const sun = new THREE.DirectionalLight(0xffd9a0, 3.25);
     sun.position.set(-7, 14, 9);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(768, 768);
+    sun.shadow.mapSize.set(512, 512);
     sun.shadow.camera.left = -9;
     sun.shadow.camera.right = 9;
     sun.shadow.camera.top = 10;
@@ -926,10 +1087,16 @@ export class DouyinSoloScene {
     else if (this.mode === 'solo') this.drawSoloHud(ctx, width, height);
     else this.drawOnlineHud(ctx, width, height);
 
+    if (this.highestFlight && this.mode === 'solo') this.drawHighestFlight(ctx, width, height);
+    if (this.themeTransition) this.drawThemeTransition(ctx, width, height);
     if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
     if (this.settingsOpen) this.drawSettings(ctx, width, height);
+    if (this.profileOpen) this.drawProfile(ctx, width, height);
+    if (this.rankingOpen) this.drawRankingCenter(ctx, width, height);
+    if (this.collectionOpen) this.drawCollection(ctx, width, height);
+    if (this.themeCenterOpen) this.drawThemeCenter(ctx, width, height);
     if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
     this.uiTexture.needsUpdate = true;
   }
@@ -945,11 +1112,6 @@ export class DouyinSoloScene {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
-    if (this.auth.current.status === 'authenticated') {
-      ctx.fillStyle = 'rgba(233,244,216,.78)';
-      ctx.font = '700 10px sans-serif';
-      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
-    }
 
     const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
     brandGradient.addColorStop(0, '#fff6d7');
@@ -970,20 +1132,54 @@ export class DouyinSoloScene {
     ctx.fillText('⚙', 24, titleTop + 24);
     ctx.textAlign = 'center';
 
-    const metaY = Math.max(titleTop + 72, height * 0.56);
-    ctx.fillStyle = 'rgba(12, 28, 36, .72)';
-    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 74, 22);
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const accountRect = layout.account;
+    ctx.fillStyle = 'rgba(10,29,38,.80)';
+    this.roundedRect(ctx, accountRect.x, accountRect.y, accountRect.width, accountRect.height, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,229,155,.28)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff0c3';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(account?.displayName ?? '本地玩家', accountRect.x + 12, accountRect.y + 12);
+    ctx.fillStyle = '#9fd9cd';
+    ctx.font = '700 8px sans-serif';
+    ctx.fillText(account ? rank.short : '游客模式', accountRect.x + 12, accountRect.y + 25);
+
+    const coinRect = layout.coin;
+    ctx.fillStyle = 'rgba(10,29,38,.80)';
+    this.roundedRect(ctx, coinRect.x, coinRect.y, coinRect.width, coinRect.height, 16);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe079';
+    ctx.font = '900 11px sans-serif';
+    ctx.fillText(`S  ${account?.rewards.currency ?? 0}`, coinRect.x + coinRect.width / 2, coinRect.y + coinRect.height / 2);
+
+    const ascensionBest = Number(this.platform.storage.getItem(`doublefight-ascension-best-${this.currentTheme}`) ?? 0);
+    const metaY = Math.max(titleTop + 108, height * 0.54);
+    ctx.fillStyle = 'rgba(12, 28, 36, .74)';
+    this.roundedRect(ctx, width / 2 - 118, metaY, 236, 88, 22);
     ctx.fill();
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffe6a1';
     ctx.font = '900 18px sans-serif';
-    ctx.fillText(themeMeta.label, width / 2, metaY + 22);
+    ctx.fillText(themeMeta.label, width / 2, metaY + 19);
+    ctx.fillStyle = '#f6e9c5';
+    ctx.font = '850 12px sans-serif';
+    ctx.fillText(`最高 · ${pieceName(this.currentTheme, highest)}`, width / 2, metaY + 43);
     ctx.fillStyle = '#c9d9d8';
     ctx.font = '700 9px sans-serif';
-    ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
-    ctx.fillStyle = '#f6e9c5';
-    ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
+    ctx.fillText(
+      ascensionBest > 0
+        ? `BEST ${best.toLocaleString('zh-CN')}   ·   最速 ${formatDuration(ascensionBest)}`
+        : `BEST ${best.toLocaleString('zh-CN')}   ·   尚未登顶`,
+      width / 2,
+      metaY + 66,
+    );
 
     this.drawPillButton(ctx, layout.theme, '‹   切换主题   ›', 'secondary');
     this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
@@ -1033,7 +1229,7 @@ export class DouyinSoloScene {
     ctx.fillText(this.score.toLocaleString('zh-CN'), width - edge - 16, hudTop + 22);
     ctx.fillStyle = '#d7e7e8';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
+    ctx.fillText(`最高 · ${this.highestName}`, width - edge - 16, hudTop + 43);
 
     const skillWidth = 176;
     const skillY = height - safeBottom - 52;
@@ -1049,7 +1245,7 @@ export class DouyinSoloScene {
     ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = '650 10px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 向 2048 进阶', width / 2, skillY - 13);
+    ctx.fillText('相同棋子合并 · 不断进阶', width / 2, skillY - 13);
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1067,13 +1263,43 @@ export class DouyinSoloScene {
     this.drawBack(ctx);
     if (snap.mode === 'matching') {
       const elapsed = snap.state.matchmaking.joinedAt ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000) : 0;
+      const centerY = height * 0.39;
+      const pulse = 0.5 + Math.sin(this.visualTime * 4) * 0.5;
       ctx.textAlign = 'center';
+
+      for (let ring = 0; ring < 3; ring += 1) {
+        const radius = 38 + ((this.visualTime * 34 + ring * 28) % 84);
+        ctx.beginPath();
+        ctx.arc(width / 2, centerY, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(240,204,103,${Math.max(0.04, 0.22 - radius / 620)})`;
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#ffe18a';
+      ctx.font = '900 34px sans-serif';
+      ctx.fillText('⚔', width / 2, centerY - 4);
       ctx.fillStyle = '#fff1c9';
       ctx.font = '900 24px sans-serif';
-      ctx.fillText('正在寻找对手…', width / 2, height * 0.37);
-      ctx.fillStyle = '#bfd1d3';
-      ctx.font = '700 11px sans-serif';
-      ctx.fillText(`已等待 ${elapsed.toFixed(1)}s  ·  队列 ${Math.max(1, snap.state.matchmaking.queueSize)} 人`, width / 2, height * 0.37 + 32);
+      ctx.fillText('正在寻找对手', width / 2, centerY + 62);
+      ctx.fillStyle = pulse > 0.5 ? '#9fe3d4' : '#bfd1d3';
+      ctx.font = '800 11px sans-serif';
+      ctx.fillText('标准对决 · 3分钟实时1v1', width / 2, centerY + 88);
+      ctx.fillStyle = '#aebfc1';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(`搜索 ${elapsed.toFixed(1)}s  ·  当前队列 ${Math.max(1, snap.state.matchmaking.queueSize)} 人`, width / 2, centerY + 112);
+
+      const cardY = centerY + 134;
+      this.roundedRect(ctx, width / 2 - 112, cardY, 224, 46, 17);
+      ctx.fillStyle = 'rgba(11,31,40,.78)';
+      ctx.fill();
+      ctx.fillStyle = '#e8efea';
+      ctx.font = '800 11px sans-serif';
+      ctx.fillText('你     VS     ?', width / 2, cardY + 17);
+      ctx.fillStyle = '#87d7c7';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText('保持在线 · 匹配成功自动开战', width / 2, cardY + 33);
+
       this.drawPillButton(ctx, this.matchingCancelRect(width, height), '取消匹配', 'secondary');
       return;
     }
@@ -1119,10 +1345,10 @@ export class DouyinSoloScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff1c9';
     ctx.font = '900 24px sans-serif';
-    ctx.fillText('配置你的对决', width / 2, this.hudTop() + 30);
+    ctx.fillText('准备出战', width / 2, this.hudTop() + 30);
     ctx.fillStyle = '#b7c9cc';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(snap.state.status === 'connected' ? '服务器已连接' : '正在连接服务器…', width / 2, this.hudTop() + 54);
+    ctx.fillText(snap.state.status === 'connected' ? '标准对决 · 3分钟实时1v1' : '正在连接服务器…', width / 2, this.hudTop() + 54);
 
     this.drawPillButton(ctx, layout.theme, `‹  ${THEMES[snap.selectedTheme].label}  ›`, 'secondary');
 
@@ -1134,7 +1360,7 @@ export class DouyinSoloScene {
       this.drawSkillButton(ctx, layout.skills[index], `${def.icon} ${def.shortLabel}`, `${def.cost}⚡`, true);
     });
 
-    this.drawPillButton(ctx, layout.quick, '⚔  开始匹配', 'primary');
+    this.drawPillButton(ctx, layout.quick, '⚔  开始3分钟对决', 'primary');
     this.drawPillButton(ctx, layout.create, '创建好友房', 'secondary');
     this.drawPillButton(ctx, layout.join, '加入好友房', 'secondary');
 
@@ -1153,34 +1379,58 @@ export class DouyinSoloScene {
     const seconds = Math.ceil(timerMs / 1000);
     const timer = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
+    const timerUrgent = seconds <= 10;
+    const timerWarning = seconds <= 30;
+    const timerColor = timerUrgent ? '#ff8d78' : timerWarning ? '#ffd06f' : '#fff2cc';
+    const timerBox = { x: width / 2 - 58, y: top + 4, width: 116, height: 48 };
+    this.roundedRect(ctx, timerBox.x, timerBox.y, timerBox.width, timerBox.height, 17);
+    ctx.fillStyle = timerUrgent ? 'rgba(92,25,24,.90)' : 'rgba(10,30,39,.88)';
+    ctx.fill();
+    ctx.strokeStyle = timerUrgent ? 'rgba(255,126,105,.78)' : 'rgba(239,204,103,.42)';
+    ctx.lineWidth = timerUrgent ? 1.8 : 1;
+    ctx.stroke();
+
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff2cc';
-    ctx.font = '900 17px sans-serif';
-    ctx.fillText(timer, width / 2, top + 28);
+    ctx.fillStyle = timerWarning ? timerColor : '#9fc9c4';
+    ctx.font = '800 8px sans-serif';
+    ctx.fillText(seconds <= 30 ? '决胜时刻' : '标准对决 · 3分钟', width / 2, top + 15);
+    ctx.fillStyle = timerColor;
+    ctx.font = timerUrgent ? '900 25px sans-serif' : '900 22px sans-serif';
+    ctx.fillText(timer, width / 2, top + 36);
+
+    const timeRatio = Math.max(0, Math.min(1, timerMs / 180_000));
+    this.roundedRect(ctx, width / 2 - 54, top + 56, 108, 3, 1.5);
+    ctx.fillStyle = 'rgba(255,255,255,.15)';
+    ctx.fill();
+    if (timeRatio > 0) {
+      this.roundedRect(ctx, width / 2 - 54, top + 56, 108 * timeRatio, 3, 1.5);
+      ctx.fillStyle = timerColor;
+      ctx.fill();
+    }
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(me?.name ?? '我', 20, top + 66);
+    ctx.fillText(me?.name ?? '我', 20, top + 72);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
-    ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
+    ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 96);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 66);
+    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 72);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
-    ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 89);
+    ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 96);
 
     const remoteEnergy = opponent ? opponent.energy / Math.max(1, opponent.maxEnergy) : 0;
-    const remoteBar = { x: width / 2 - 74, y: top + 104, width: 148, height: 5 };
+    const remoteBar = { x: width / 2 - 74, y: top + 112, width: 148, height: 5 };
     this.drawEnergyBar(ctx, remoteBar, remoteEnergy, '#c870db');
     ctx.fillStyle = '#dce8e8';
     ctx.font = '650 9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 119);
+    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 127);
 
     const safeBottom = Math.max(14, this.platform.getSystemInfo().safeArea.bottom + 10);
     const energyY = height - safeBottom - 106;
@@ -1206,6 +1456,18 @@ export class DouyinSoloScene {
       ctx.font = '800 11px sans-serif';
       ctx.fillText('网络中断 · 正在重连…', width / 2, height * 0.48 + 19);
     }
+  }
+
+  private updateDuelTimerFeedback(): void {
+    const seconds = Math.max(0, Math.ceil(this.online.remainingMs() / 1000));
+    if (seconds === this.lastDuelTimerSecond) return;
+    this.lastDuelTimerSecond = seconds;
+
+    if (seconds === 60 || seconds === 30) {
+      this.platform.haptics.trigger('medium');
+      return;
+    }
+    if (seconds <= 10 && seconds > 0) this.platform.haptics.trigger('light');
   }
 
   private drawResult(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1289,6 +1551,556 @@ export class DouyinSoloScene {
     ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
+  private handleThemeCenterTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(326, info.width - 24);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.17;
+    const kingdom = { x: x0 + 18, y: y0 + 88, width: panelWidth - 36, height: 112 };
+    const palace = { x: x0 + 18, y: y0 + 212, width: panelWidth - 36, height: 112 };
+    const close = { x: x0 + 64, y: y0 + 378, width: panelWidth - 128, height: 42 };
+
+    const choose = (theme: ThemeId) => {
+      this.themeCenterOpen = false;
+      if (theme !== this.currentTheme) this.setTheme(theme);
+      this.collectionTheme = theme;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+    };
+
+    if (this.hit(x, y, kingdom)) { choose('kingdom'); return; }
+    if (this.hit(x, y, palace)) { choose('palace'); return; }
+    if (this.hit(x, y, close)) {
+      this.themeCenterOpen = false;
+      this.refreshHud();
+    }
+  }
+
+  private handleRankingTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(322, info.width - 26);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.16;
+    const ascension = { x: x0 + 18, y: y0 + 88, width: panelWidth - 36, height: 88 };
+    const solo = { x: x0 + 18, y: y0 + 188, width: panelWidth - 36, height: 88 };
+    const pvp = { x: x0 + 18, y: y0 + 288, width: panelWidth - 36, height: 88 };
+    const close = { x: x0 + 60, y: y0 + 400, width: panelWidth - 120, height: 42 };
+
+    if (this.hit(x, y, ascension)) {
+      void this.social.openAscensionRank(this.currentTheme).then(ok => {
+        if (!ok) {
+          this.rankingOpen = false;
+          this.notice = { text: '登顶好友榜暂不可用', until: this.visualTime + 1.4 };
+          this.refreshHud();
+        }
+      });
+      return;
+    }
+    if (this.hit(x, y, solo)) {
+      void this.social.openSoloRank().then(ok => {
+        if (!ok) {
+          this.rankingOpen = false;
+          this.notice = { text: 'Solo好友榜暂不可用', until: this.visualTime + 1.4 };
+          this.refreshHud();
+        }
+      });
+      return;
+    }
+    if (this.hit(x, y, pvp)) {
+      this.rankingOpen = false;
+      this.notice = { text: '竞技赛季榜将在服务端赛季系统启用后开放', until: this.visualTime + 1.8 };
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.rankingOpen = false;
+      this.refreshHud();
+    }
+  }
+
+  private handleCollectionTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(330, info.width - 22);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.105;
+    const themeToggle = { x: x0 + 48, y: y0 + 64, width: panelWidth - 96, height: 36 };
+    const close = { x: x0 + 64, y: y0 + 500, width: panelWidth - 128, height: 42 };
+    if (this.hit(x, y, themeToggle)) {
+      this.collectionTheme = this.collectionTheme === 'kingdom' ? 'palace' : 'kingdom';
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.collectionOpen = false;
+      this.profileOpen = true;
+      this.refreshHud();
+    }
+  }
+
+  private handleProfileTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(316, info.width - 30);
+    const panelX = (info.width - panelWidth) / 2;
+    const panelY = info.height * 0.15;
+    const half = (panelWidth - 58) / 2;
+    const collection = { x: panelX + 24, y: panelY + 382, width: half, height: 38 };
+    const shortcut = { x: panelX + 34 + half, y: panelY + 382, width: half, height: 38 };
+    const close = { x: panelX + 52, y: panelY + 430, width: panelWidth - 104, height: 42 };
+    if (this.hit(x, y, collection)) {
+      this.profileOpen = false;
+      this.collectionOpen = true;
+      this.collectionTheme = this.currentTheme;
+      this.social.report('collection_open', { theme: this.collectionTheme });
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, shortcut)) {
+      void this.social.addShortcut().then(ok => {
+        this.profileOpen = false;
+        this.notice = {
+          text: ok ? '已添加到桌面' : '当前环境暂不支持添加桌面',
+          until: this.visualTime + 1.5,
+        };
+        this.refreshHud();
+      });
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.profileOpen = false;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+    }
+  }
+
+  private discoveredValues(theme: ThemeId): Set<number> {
+    try {
+      const parsed = JSON.parse(this.platform.storage.getItem(`doublefight-discovered-${theme}`) ?? '[]') as unknown;
+      if (!Array.isArray(parsed)) return new Set([2]);
+      return new Set(parsed.filter(value =>
+        typeof value === 'number'
+        && Number.isInteger(Math.log2(value))
+        && value >= 2
+        && value <= FINAL_PIECE_VALUE
+      ));
+    } catch {
+      return new Set([2]);
+    }
+  }
+
+  private recordAscension(): void {
+    if (this.soloRunStartedAt === null || this.soloAscendedAt !== null) return;
+    const now = Date.now();
+    this.soloAscendedAt = now;
+    const duration = Math.max(1, now - this.soloRunStartedAt);
+    const firstKey = `doublefight-ascension-first-${this.currentTheme}`;
+    const bestKey = `doublefight-ascension-best-${this.currentTheme}`;
+    const countKey = `doublefight-ascension-count-${this.currentTheme}`;
+    const first = Number(this.platform.storage.getItem(firstKey) ?? 0);
+    const best = Number(this.platform.storage.getItem(bestKey) ?? 0);
+    const count = Number(this.platform.storage.getItem(countKey) ?? 0);
+    const newBest = !best || duration < best;
+    if (!first) this.platform.storage.setItem(firstKey, String(duration));
+    if (newBest) {
+      this.platform.storage.setItem(bestKey, String(duration));
+      void this.social.setAscensionRank(this.currentTheme, duration);
+    }
+    this.platform.storage.setItem(countKey, String(Math.max(0, count) + 1));
+    this.social.report('ascension', {
+      theme: this.currentTheme,
+      duration_ms: duration,
+      new_best: newBest,
+      count: Math.max(0, count) + 1,
+    });
+    this.platform.haptics.trigger('success');
+  }
+
+  private drawHighestFlight(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const flight = this.highestFlight;
+    if (!flight) return;
+    const p = Math.max(0, Math.min(1, (this.visualTime - flight.startedAt) / flight.duration));
+    const eased = 1 - Math.pow(1 - p, 3);
+    const targetX = width - 76;
+    const targetY = this.hudTop() + 43;
+    const controlX = (flight.fromX + targetX) / 2 - 42;
+    const controlY = Math.min(flight.fromY, targetY) - 86;
+    const inv = 1 - eased;
+    const x = inv * inv * flight.fromX + 2 * inv * eased * controlX + eased * eased * targetX;
+    const y = inv * inv * flight.fromY + 2 * inv * eased * controlY + eased * eased * targetY;
+
+    for (let index = 3; index >= 1; index -= 1) {
+      const trailP = Math.max(0, eased - index * 0.045);
+      const trailInv = 1 - trailP;
+      const tx = trailInv * trailInv * flight.fromX + 2 * trailInv * trailP * controlX + trailP * trailP * targetX;
+      const ty = trailInv * trailInv * flight.fromY + 2 * trailInv * trailP * controlY + trailP * trailP * targetY;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 3 + index, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,224,115,${0.08 + (4 - index) * 0.08})`;
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,213,82,.9)';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.arc(x, y, flight.ascended ? 15 : 11, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffe27d';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#6b4616';
+    ctx.font = flight.ascended ? '900 13px sans-serif' : '900 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('◆', x, y + 0.5);
+    ctx.restore();
+
+    if (p > 0.62) {
+      const alpha = Math.min(1, (p - 0.62) / 0.18);
+      ctx.globalAlpha = alpha;
+      const label = flight.ascended ? '登顶成功' : flight.newDiscovery ? 'NEW · 新棋子' : '最高棋子更新';
+      const name = pieceName(this.currentTheme, flight.value);
+      const boxWidth = Math.min(238, width - 44);
+      const boxY = flight.ascended ? height * 0.27 : this.hudTop() + 72;
+      this.roundedRect(ctx, width / 2 - boxWidth / 2, boxY, boxWidth, flight.ascended ? 74 : 50, 20);
+      ctx.fillStyle = 'rgba(9,24,31,.92)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,223,126,.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#ffe27d';
+      ctx.font = '900 11px sans-serif';
+      ctx.fillText(label, width / 2, boxY + 17);
+      ctx.fillStyle = '#fff3cf';
+      ctx.font = flight.ascended ? '900 18px sans-serif' : '850 14px sans-serif';
+      ctx.fillText(name, width / 2, boxY + (flight.ascended ? 39 : 34));
+      if (flight.ascended && this.soloRunStartedAt !== null && this.soloAscendedAt !== null) {
+        ctx.fillStyle = '#aee1d5';
+        ctx.font = '800 11px sans-serif';
+        ctx.fillText(`本次登顶 ${formatDuration(this.soloAscendedAt - this.soloRunStartedAt)}`, width / 2, boxY + 58);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawThemeTransition(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const transition = this.themeTransition;
+    if (!transition) return;
+    const p = Math.max(0, Math.min(1, (this.visualTime - transition.startedAt) / transition.duration));
+    const alpha = Math.sin(p * Math.PI);
+    const wash = ctx.createLinearGradient(0, 0, width, height);
+    wash.addColorStop(0, `rgba(255,235,178,${0.10 * alpha})`);
+    wash.addColorStop(0.5, `rgba(255,255,255,${0.22 * alpha})`);
+    wash.addColorStop(1, `rgba(102,208,211,${0.10 * alpha})`);
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, width, height);
+
+    if (p > 0.24 && p < 0.82) {
+      const textAlpha = Math.min(1, Math.min((p - 0.24) / 0.12, (0.82 - p) / 0.12));
+      ctx.globalAlpha = Math.max(0, textAlpha);
+      this.roundedRect(ctx, width / 2 - 88, height * 0.44, 176, 44, 20);
+      ctx.fillStyle = 'rgba(9,27,34,.78)';
+      ctx.fill();
+      ctx.fillStyle = '#fff0bd';
+      ctx.font = '900 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(transition.label, width / 2, height * 0.44 + 22);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawThemeCenter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(326, width - 24);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.17;
+
+    this.roundedRect(ctx, x, y, panelWidth, 438, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 438);
+    gradient.addColorStop(0, 'rgba(11,42,50,.98)');
+    gradient.addColorStop(1, 'rgba(17,25,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(244,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe7a2';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText('主题中心', width / 2, y + 35);
+    ctx.fillStyle = '#a8c0c1';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('每个世界拥有独立棋子图鉴与登顶纪录', width / 2, y + 58);
+
+    const drawThemeCard = (theme: ThemeId, rect: Rect) => {
+      const selected = theme === this.currentTheme;
+      const discovered = this.discoveredValues(theme).size;
+      const pb = Number(this.platform.storage.getItem(`doublefight-ascension-best-${theme}`) ?? 0);
+      const high = Number(this.platform.storage.getItem(`doublefight-highest-${theme}`) ?? 2);
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 20);
+      ctx.fillStyle = selected ? 'rgba(32,69,70,.96)' : 'rgba(21,44,53,.90)';
+      ctx.fill();
+      ctx.strokeStyle = selected ? '#f0cd70' : 'rgba(230,210,145,.22)';
+      ctx.lineWidth = selected ? 1.5 : 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#fff0c1';
+      ctx.font = '900 16px sans-serif';
+      ctx.fillText(THEMES[theme].label, rect.x + 16, rect.y + 24);
+      ctx.fillStyle = '#8ed9cb';
+      ctx.font = '800 9px sans-serif';
+      ctx.fillText('已拥有 · 免费主题', rect.x + 16, rect.y + 44);
+
+      ctx.fillStyle = '#c4d2d1';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(`图鉴 ${discovered}/11`, rect.x + 16, rect.y + 68);
+      ctx.fillText(`最高 · ${pieceName(theme, high)}`, rect.x + 16, rect.y + 86);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = selected ? '#ffe17d' : '#bbc9ca';
+      ctx.font = '850 10px sans-serif';
+      ctx.fillText(selected ? '当前使用 ✓' : '切换世界 ›', rect.x + rect.width - 16, rect.y + 28);
+      ctx.fillStyle = '#a9b9ba';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(pb ? `最速 ${formatDuration(pb)}` : '尚未登顶', rect.x + rect.width - 16, rect.y + 84);
+    };
+
+    drawThemeCard('kingdom', { x: x + 18, y: y + 88, width: panelWidth - 36, height: 112 });
+    drawThemeCard('palace', { x: x + 18, y: y + 212, width: panelWidth - 36, height: 112 });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#99abad';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('后续主题：广告试玩1局 · 500 S币永久解锁', width / 2, y + 348);
+
+    this.drawPillButton(ctx, { x: x + 64, y: y + 378, width: panelWidth - 128, height: 42 }, '返回主页', 'primary');
+  }
+
+  private drawRankingCenter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(322, width - 26);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.16;
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const bestAscension = Number(this.platform.storage.getItem(`doublefight-ascension-best-${this.currentTheme}`) ?? 0);
+    const soloBest = Number(this.platform.storage.getItem(`doublefight-best-${this.currentTheme}`) ?? 0);
+
+    this.roundedRect(ctx, x, y, panelWidth, 462, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 462);
+    gradient.addColorStop(0, 'rgba(10,39,48,.98)');
+    gradient.addColorStop(1, 'rgba(15,24,37,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe6a0';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText('排行榜', width / 2, y + 35);
+    ctx.fillStyle = '#a9c1c2';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('探索 · Solo · 竞技', width / 2, y + 57);
+
+    const card = (rect: Rect, title: string, metric: string, detail: string, accent: string, enabled = true) => {
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 19);
+      ctx.fillStyle = enabled ? 'rgba(22,48,57,.94)' : 'rgba(24,37,43,.76)';
+      ctx.fill();
+      ctx.strokeStyle = enabled ? accent : 'rgba(160,175,178,.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = enabled ? '#f4f0dc' : '#a8b3b4';
+      ctx.font = '900 13px sans-serif';
+      ctx.fillText(title, rect.x + 16, rect.y + 20);
+      ctx.fillStyle = enabled ? accent : '#8c999b';
+      ctx.font = '900 18px sans-serif';
+      ctx.fillText(metric, rect.x + 16, rect.y + 48);
+      ctx.fillStyle = '#9fb2b4';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(detail, rect.x + 16, rect.y + 69);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = enabled ? '#e7d28b' : '#788588';
+      ctx.font = '850 10px sans-serif';
+      ctx.fillText(enabled ? '好友榜  ›' : '即将开放', rect.x + rect.width - 16, rect.y + 45);
+    };
+
+    const asc = { x: x + 18, y: y + 88, width: panelWidth - 36, height: 88 };
+    const solo = { x: x + 18, y: y + 188, width: panelWidth - 36, height: 88 };
+    const pvp = { x: x + 18, y: y + 288, width: panelWidth - 36, height: 88 };
+    card(
+      asc,
+      '⚡ 主题登顶竞速',
+      bestAscension ? formatDuration(bestAscension) : '尚未登顶',
+      `${THEMES[this.currentTheme].label} · 最快抵达最终棋子`,
+      '#ffe078',
+    );
+    card(
+      solo,
+      '◆ Solo 成绩榜',
+      soloBest.toLocaleString('zh-CN'),
+      `${THEMES[this.currentTheme].label} · 现有好友成绩`,
+      '#8fe3d4',
+    );
+    card(
+      pvp,
+      '⚔ 竞技赛季',
+      account ? `${rank.label} · ${account.pvp.rating}` : '登录后参赛',
+      '14日赛季 · 全服 Rating 榜',
+      '#caa0f4',
+      false,
+    );
+
+    this.drawPillButton(ctx, { x: x + 60, y: y + 400, width: panelWidth - 120, height: 42 }, '返回主页', 'primary');
+  }
+
+  private drawCollection(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.74)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(330, width - 22);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.105;
+    const discovered = this.discoveredValues(this.collectionTheme);
+
+    this.roundedRect(ctx, x, y, panelWidth, 554, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 554);
+    gradient.addColorStop(0, 'rgba(10,41,49,.98)');
+    gradient.addColorStop(1, 'rgba(17,24,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe6a0';
+    ctx.font = '900 22px sans-serif';
+    ctx.fillText('棋子图鉴', width / 2, y + 32);
+    ctx.fillStyle = '#9fc0be';
+    ctx.font = '750 9px sans-serif';
+    ctx.fillText(`已发现 ${discovered.size} / ${PIECE_VALUES.length}`, width / 2, y + 51);
+
+    this.drawPillButton(
+      ctx,
+      { x: x + 48, y: y + 64, width: panelWidth - 96, height: 36 },
+      `‹  ${THEMES[this.collectionTheme].label}  ›`,
+      'secondary',
+    );
+
+    const gap = 8;
+    const edge = 18;
+    const cardWidth = (panelWidth - edge * 2 - gap) / 2;
+    const cardHeight = 56;
+    const startY = y + 114;
+    PIECE_VALUES.forEach((value, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const rect = {
+        x: x + edge + col * (cardWidth + gap),
+        y: startY + row * (cardHeight + 7),
+        width: cardWidth,
+        height: cardHeight,
+      };
+      const found = discovered.has(value);
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 15);
+      ctx.fillStyle = found ? 'rgba(25,57,63,.90)' : 'rgba(22,31,38,.72)';
+      ctx.fill();
+      ctx.strokeStyle = found ? 'rgba(238,205,107,.28)' : 'rgba(150,165,168,.10)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = found ? '#f1ce70' : '#697779';
+      ctx.font = '900 9px sans-serif';
+      ctx.fillText(found ? `阶位 ${index + 1}` : '未发现', rect.x + 12, rect.y + 16);
+      ctx.fillStyle = found ? '#f5f0dd' : '#879395';
+      ctx.font = found ? '850 11px sans-serif' : '800 12px sans-serif';
+      ctx.fillText(found ? pieceName(this.collectionTheme, value) : '???', rect.x + 12, rect.y + 37);
+
+      if (value === FINAL_PIECE_VALUE) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = found ? '#ffe078' : '#596669';
+        ctx.font = '900 12px sans-serif';
+        ctx.fillText('♛', rect.x + rect.width - 12, rect.y + 28);
+      }
+    });
+
+    this.drawPillButton(ctx, { x: x + 64, y: y + 500, width: panelWidth - 128, height: 42 }, '返回档案', 'primary');
+  }
+
+  private drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(316, width - 30);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.15;
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const kingdomHigh = account?.solo.highestKingdom
+      ?? Number(this.platform.storage.getItem('doublefight-highest-kingdom') ?? 2);
+    const palaceHigh = account?.solo.highestPalace
+      ?? Number(this.platform.storage.getItem('doublefight-highest-palace') ?? 2);
+
+    this.roundedRect(ctx, x, y, panelWidth, 490, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 490);
+    gradient.addColorStop(0, 'rgba(12,40,48,.98)');
+    gradient.addColorStop(1, 'rgba(16,25,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(247,210,112,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe8a0';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText(account?.displayName ?? '本地玩家', width / 2, y + 38);
+    ctx.fillStyle = '#9edccd';
+    ctx.font = '800 11px sans-serif';
+    ctx.fillText(account ? `${rank.label} · Rating ${account.pvp.rating}` : '游客模式 · 登录后同步进度', width / 2, y + 63);
+
+    const coinY = y + 92;
+    this.roundedRect(ctx, x + 72, coinY, panelWidth - 144, 34, 16);
+    ctx.fillStyle = 'rgba(236,189,72,.12)';
+    ctx.fill();
+    ctx.fillStyle = '#ffe078';
+    ctx.font = '900 14px sans-serif';
+    ctx.fillText(`S币  ${account?.rewards.currency ?? 0}`, width / 2, coinY + 17);
+
+    const rows = [
+      ['竞技战绩', account ? `${account.pvp.wins}胜 · ${account.pvp.losses}负 · ${account.pvp.draws}平` : '--'],
+      ['微缩王国', pieceName('kingdom', kingdomHigh)],
+      ['王国最速登顶', formatDuration(Number(this.platform.storage.getItem('doublefight-ascension-best-kingdom') ?? 0))],
+      ['后宫晋升', pieceName('palace', palaceHigh)],
+      ['宫廷最速登顶', formatDuration(Number(this.platform.storage.getItem('doublefight-ascension-best-palace') ?? 0))],
+      ['图鉴发现', `${this.discoveredValues('kingdom').size + this.discoveredValues('palace').size} / 22`],
+    ] as const;
+
+    rows.forEach((row, index) => {
+      const rowY = y + 148 + index * 38;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#9fb5b7';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(row[0], x + 24, rowY);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f3f0df';
+      ctx.font = '850 11px sans-serif';
+      ctx.fillText(row[1], x + panelWidth - 24, rowY);
+    });
+
+    const half = (panelWidth - 58) / 2;
+    this.drawPillButton(ctx, { x: x + 24, y: y + 382, width: half, height: 38 }, '◆  棋子图鉴', 'secondary');
+    this.drawPillButton(ctx, { x: x + 34 + half, y: y + 382, width: half, height: 38 }, '⌂  添加桌面', 'secondary');
+    this.drawPillButton(ctx, { x: x + 52, y: y + 430, width: panelWidth - 104, height: 42 }, '返回主页', 'primary');
+  }
+
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     ctx.fillStyle = 'rgba(4,10,15,.68)';
     ctx.fillRect(0, 0, width, height);
@@ -1358,10 +2170,10 @@ export class DouyinSoloScene {
     ctx.fillText('欢迎来到双数对决', width / 2, y + 48);
     ctx.fillStyle = '#d5e1df';
     ctx.font = '700 11px sans-serif';
-    ctx.fillText('2048 × 技能 × 实时对决', width / 2, y + 76);
+    ctx.fillText('角色进阶 × 技能 × 实时对决', width / 2, y + 76);
 
     const steps = [
-      ['01', '滑动棋盘', '相同数字合成，冲击 2048'],
+      ['01', '滑动棋盘', '相同棋子合并，解锁更高阶角色'],
       ['02', '释放技能', '清块、护盾、石化改变局势'],
       ['03', '挑战好友', '快速匹配或创建 6 位好友房'],
     ] as const;
@@ -1491,8 +2303,10 @@ export class DouyinSoloScene {
     if (this.inputLocked || this.rewardedSkillClaims >= 3) return;
     this.inputLocked = true;
     this.notice = { text: '正在准备激励视频…', until: this.visualTime + 8 };
+    this.social.report('ad_offer', { placement: 'solo_clear_refill' });
     this.refreshHud();
     const result = await this.commercial.showRewarded();
+    this.social.report('ad_result', { placement: 'solo_clear_refill', result });
     if (result === 'rewarded') {
       await this.auth.start();
       const claim = this.auth.requiresServerLedger
@@ -1535,6 +2349,7 @@ export class DouyinSoloScene {
     const today = new Date().toISOString().slice(0, 10);
     this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
     this.platform.storage.setItem('doublefight-next-solo-bonus', '1');
+    this.social.report('sidebar_return_reward', { granted: true });
     this.notice = { text: '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
     this.platform.haptics.trigger('success');
     this.refreshHud();
@@ -1553,6 +2368,8 @@ export class DouyinSoloScene {
     const utilityWidth = Math.min(112, (width - 64) / 2);
     return {
       settings: { x: 12, y: this.hudTop() + 5, width: 44, height: 40 },
+      account: { x: 16, y: this.hudTop() + 62, width: Math.min(148, width * 0.4), height: 34 },
+      coin: { x: width - 104, y: this.hudTop() + 62, width: 88, height: 34 },
       theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
       solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
       online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },

@@ -1,5 +1,7 @@
 import type { DouyinApi, DouyinLaunchOptions, DouyinShowOptions } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
+import type { ThemeId } from '../../../src/config/themes';
+import { formatDuration } from '../../../src/meta/progression';
 
 export class DouyinSocial {
   private latestShow: DouyinShowOptions;
@@ -64,6 +66,20 @@ export class DouyinSocial {
     });
   }
 
+  async addShortcut(): Promise<boolean> {
+    if (!this.api.addShortcut) return false;
+    return new Promise(resolve => {
+      try {
+        this.api.addShortcut?.({
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
   async supportsSidebar(): Promise<boolean> {
     if (this.sidebarSupported !== null) return this.sidebarSupported;
     if (!this.api.checkScene) {
@@ -102,6 +118,57 @@ export class DouyinSocial {
   cameFromSidebar(): boolean {
     return this.latestShow.launch_from === 'homepage'
       && this.latestShow.location === 'sidebar_card';
+  }
+
+  report(event: string, data: Record<string, string | number | boolean> = {}): void {
+    if (!this.api.reportAnalytics) return;
+    try { this.api.reportAnalytics(event, data); } catch { /* analytics never blocks gameplay */ }
+  }
+
+  async setAscensionRank(theme: ThemeId, durationMs: number): Promise<boolean> {
+    if (!this.api.setImRankData || !Number.isFinite(durationMs) || durationMs <= 0) return false;
+    const zoneId = theme === 'kingdom'
+      ? DOUYIN_PRODUCT_CONFIG.ranking.ascensionKingdomZone
+      : DOUYIN_PRODUCT_CONFIG.ranking.ascensionPalaceZone;
+    const priority = Math.max(1, 100_000_000 - Math.min(99_999_999, Math.floor(durationMs)));
+    return new Promise(resolve => {
+      try {
+        this.api.setImRankData?.({
+          dataType: 1,
+          value: formatDuration(durationMs),
+          priority,
+          extra: theme,
+          zoneId,
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async openAscensionRank(theme: ThemeId): Promise<boolean> {
+    if (!this.api.getImRankList) return false;
+    const zoneId = theme === 'kingdom'
+      ? DOUYIN_PRODUCT_CONFIG.ranking.ascensionKingdomZone
+      : DOUYIN_PRODUCT_CONFIG.ranking.ascensionPalaceZone;
+    return new Promise(resolve => {
+      try {
+        this.api.getImRankList?.({
+          relationType: 'default',
+          dataType: 1,
+          rankType: 'all',
+          suffix: '',
+          rankTitle: theme === 'kingdom' ? '微缩王国 · 登顶竞速' : '后宫晋升 · 登顶竞速',
+          zoneId,
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
   }
 
   async setSoloRank(score: number): Promise<boolean> {

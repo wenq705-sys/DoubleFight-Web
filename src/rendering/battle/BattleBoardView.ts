@@ -479,6 +479,12 @@ export class BattleBoardView {
     });
   }
 
+  /** Runtime presentation helper for HUD effects that originate from a board cell. */
+  cellWorldPosition(row: number, col: number): THREE.Vector3 {
+    const local = this.cellPosition(row, col);
+    return this.root.localToWorld(local);
+  }
+
   private cellPosition(row: number, col: number): THREE.Vector3 {
     return new THREE.Vector3(
       (col - 1.5) * ART.board.gap,
