@@ -510,7 +510,7 @@ function drawRankingCenter(
   );
 
   ctx.fillStyle = '#73898b';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('平台原生榜单支持好友关系与快捷分享', width / 2, layout.panel.y + layout.panel.height - 22);
 }
 
@@ -556,7 +556,7 @@ function drawThemeCenter(
     ctx.font = '900 16px sans-serif';
     ctx.fillText(THEMES[theme].label, rect.x + 18, rect.y + 25);
     ctx.fillStyle = '#9fc3c0';
-    ctx.font = '700 9px sans-serif';
+    ctx.font = '700 10px sans-serif';
     ctx.fillText(active ? '当前世界' : '点击切换', rect.x + 18, rect.y + 45);
     ctx.fillStyle = '#d8e5df';
     ctx.font = '800 11px sans-serif';
@@ -574,7 +574,7 @@ function drawThemeCenter(
 
   pill(ctx, layout.collection, '📖 打开棋子图鉴', true);
   ctx.fillStyle = '#758b8e';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('更多主题世界将在后续版本加入', width / 2, layout.panel.y + layout.panel.height - 22);
 
@@ -597,7 +597,7 @@ function drawCollection(
   ctx.font = '900 23px sans-serif';
   ctx.fillText('棋子图鉴', width / 2, layout.panel.y + 36);
   ctx.fillStyle = '#9cb4b6';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('只展示名称与阶位 · 数字继续留在规则层', width / 2, layout.panel.y + 58);
 
   tab(ctx, layout.kingdom, '微缩王国', state.collectionTheme === 'kingdom');
@@ -618,7 +618,7 @@ function drawCollection(
 
     ctx.textAlign = 'left';
     ctx.fillStyle = unlocked ? '#f3cf70' : '#66777a';
-    ctx.font = '900 9px sans-serif';
+    ctx.font = '900 10px sans-serif';
     ctx.fillText(`T${String(tier).padStart(2, '0')}`, rect.x + 11, rect.y + 15);
     ctx.fillStyle = unlocked ? '#f2f0e7' : '#6c7b7e';
     ctx.font = '850 11px sans-serif';
@@ -626,7 +626,7 @@ function drawCollection(
     if (value === MAX_PIECE_VALUE) {
       ctx.textAlign = 'right';
       ctx.fillStyle = unlocked ? '#ffe083' : '#59686a';
-      ctx.font = '900 8px sans-serif';
+      ctx.font = '900 10px sans-serif';
       ctx.fillText('FINAL', rect.x + rect.width - 10, rect.y + 16);
     }
   });
@@ -660,7 +660,7 @@ function drawDailyCenter(
   ctx.font = '900 23px sans-serif';
   ctx.fillText('今日福利', width / 2, layout.panel.y + 36);
   ctx.fillStyle = '#9fb6b8';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('轻量回流 · 不打断核心对局', width / 2, layout.panel.y + 58);
 
   round(ctx, layout.balance.x, layout.balance.y, layout.balance.width, layout.balance.height, 20);
@@ -672,7 +672,7 @@ function drawDailyCenter(
   ctx.font = '900 22px sans-serif';
   ctx.fillText(`S ${balance}`, width / 2, layout.balance.y + 28);
   ctx.fillStyle = '#aebfc0';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText(`未来世界永久解锁目标 · ${S_COIN.themeUnlock} S`, width / 2, layout.balance.y + 51);
 
   const sidebarReady = Boolean(scene.sidebarRewardReady?.());
@@ -711,7 +711,7 @@ function drawDailyCenter(
   }
 
   ctx.fillStyle = '#748b8d';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText('S币用于未来主题世界与长期收藏 · 不影响 PvP 强度', width / 2, layout.panel.y + layout.panel.height - 21);
 }
 
@@ -732,7 +732,7 @@ function drawOnlinePolish(
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#b9d5d2';
-    ctx.font = '800 8px sans-serif';
+    ctx.font = '800 10px sans-serif';
     ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, scene.hudTop() + 80);
     snap.loadout.forEach((skillId: keyof typeof SKILL_DEFINITIONS, index: number) => {
       const rect = layout.skills[index] as Rect;
@@ -748,7 +748,7 @@ function drawOnlinePolish(
       ctx.font = '900 11px sans-serif';
       ctx.fillText(`${def.icon} ${def.shortLabel}`, rect.x + rect.width / 2, rect.y + 20);
       ctx.fillStyle = '#94c9c4';
-      ctx.font = '750 9px sans-serif';
+      ctx.font = '750 10px sans-serif';
       ctx.fillText(`${def.cost}⚡ · SLOT ${index + 1}`, rect.x + rect.width / 2, rect.y + 41);
     });
     return;
@@ -786,7 +786,7 @@ function drawOnlinePolish(
       ctx.font = '900 10px sans-serif';
       ctx.fillText(`${def.icon} ${def.shortLabel}`, rect.x + rect.width / 2, rect.y + 18);
       ctx.fillStyle = ready ? '#74e1d5' : '#839396';
-      ctx.font = '800 8px sans-serif';
+      ctx.font = '800 10px sans-serif';
       ctx.fillText(
         remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : ready ? 'READY' : `${def.cost}⚡`,
         rect.x + rect.width / 2,
@@ -823,7 +823,7 @@ function drawOnlinePolish(
     ctx.stroke();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f2d273';
-    ctx.font = '900 9px sans-serif';
+    ctx.font = '900 10px sans-serif';
     const delta = state.resultRatingDelta;
     const deltaText = delta === null ? '' : ` · ${delta >= 0 ? '+' : ''}${delta}`;
     ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2, y + 16);
@@ -838,7 +838,7 @@ function drawOnlinePolish(
       ctx.fill();
       ctx.textAlign = 'center';
       ctx.fillStyle = '#b9cdcc';
-      ctx.font = '750 9px sans-serif';
+      ctx.font = '750 10px sans-serif';
       const mePiece = pieceName(me.theme, me.highest);
       const rivalPiece = pieceName(rival.theme, rival.highest);
       const tie = result?.tieBreaker;
@@ -888,7 +888,7 @@ function miniHomeButton(
   ctx.font = '900 10px sans-serif';
   ctx.fillText(icon, rect.x + rect.width / 2, rect.y + rect.height * 0.36);
   ctx.fillStyle = emphasized ? '#fff0b8' : '#afc1c1';
-  ctx.font = '800 8px sans-serif';
+  ctx.font = '800 10px sans-serif';
   ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * 0.72);
 }
 
@@ -981,7 +981,7 @@ function actionCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, su
   ctx.font = '900 13px sans-serif';
   ctx.fillText(title, rect.x + 16, rect.y + 24);
   ctx.fillStyle = '#9db3b5';
-  ctx.font = '700 9px sans-serif';
+  ctx.font = '700 10px sans-serif';
   ctx.fillText(subtitle, rect.x + 16, rect.y + 46);
 }
 
