@@ -57,8 +57,8 @@ export class DouyinSoloScene {
   private readonly uiMaterial: THREE.MeshBasicMaterial;
   private readonly uiPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
-  private readonly online: DouyinOnlineFlow;
-  private readonly unsubscribeOnline: () => void;
+  private onlineInstance: DouyinOnlineFlow | null = null;
+  private unsubscribeOnline: (() => void) | null = null;
 
   private inputLocked = false;
   private skillCharges = 3;
@@ -143,10 +143,7 @@ export class DouyinSoloScene {
     const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
     this.boardView = new BattleBoardView(theme, 'full', undefined, presentation, true);
     this.controller = new SoloController(this.boardView);
-    this.online = new DouyinOnlineFlow(platform, client, theme, presentation);
-    this.scene.add(this.boardView.root, this.online.local.root, this.online.remote.root);
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    this.scene.add(this.boardView.root);
 
     this.configureLighting();
     this.resize();
@@ -173,27 +170,6 @@ export class DouyinSoloScene {
     this.uiScene.add(this.uiPlane);
     this.resize();
 
-    this.unsubscribeOnline = this.online.subscribe(() => {
-      if (this.mode !== 'online') return;
-      const onlineMode = this.online.snapshot().mode;
-      const snap = this.online.snapshot();
-      if (onlineMode === 'playing' || onlineMode === 'result') {
-        this.boardView.root.visible = false;
-        this.online.local.root.visible = true;
-        this.online.remote.root.visible = true;
-      } else {
-        if (this.boardView.theme !== snap.selectedTheme) {
-          this.boardView.setTheme(snap.selectedTheme);
-          this.boardView.reset(HOME_TILES);
-          this.applyThemeLook();
-        }
-        this.boardView.root.visible = true;
-        this.online.local.root.visible = false;
-        this.online.remote.root.visible = false;
-      }
-      this.refreshHud();
-    });
-
     this.refreshHud();
     this.commercial.hideBanner();
     void this.social.supportsSidebar().then((supported) => {
@@ -207,6 +183,43 @@ export class DouyinSoloScene {
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
   get highestName(): string { return pieceName(this.currentTheme, this.highest); }
+
+  private get online(): DouyinOnlineFlow {
+    return this.ensureOnline();
+  }
+
+  private ensureOnline(): DouyinOnlineFlow {
+    if (this.onlineInstance) return this.onlineInstance;
+    const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
+    const online = new DouyinOnlineFlow(this.platform, this.client, this.currentTheme, presentation);
+    online.local.setQuality(this.quality);
+    online.remote.setQuality(this.quality);
+    online.local.root.visible = false;
+    online.remote.root.visible = false;
+    this.scene.add(online.local.root, online.remote.root);
+    this.onlineInstance = online;
+    this.unsubscribeOnline = online.subscribe(() => {
+      if (this.mode !== 'online') return;
+      const onlineMode = online.snapshot().mode;
+      const snap = online.snapshot();
+      if (onlineMode === 'playing' || onlineMode === 'result') {
+        this.boardView.root.visible = false;
+        online.local.root.visible = true;
+        online.remote.root.visible = true;
+      } else {
+        if (this.boardView.theme !== snap.selectedTheme) {
+          this.boardView.setTheme(snap.selectedTheme);
+          this.boardView.reset(HOME_TILES);
+          this.applyThemeLook();
+        }
+        this.boardView.root.visible = true;
+        online.local.root.visible = false;
+        online.remote.root.visible = false;
+      }
+      this.refreshHud();
+    });
+    return online;
+  }
 
   refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
 
@@ -409,8 +422,10 @@ export class DouyinSoloScene {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.unsubscribeOnline();
-    this.online.dispose();
+    this.unsubscribeOnline?.();
+    this.unsubscribeOnline = null;
+    this.onlineInstance?.dispose();
+    this.onlineInstance = null;
     this.boardView.dispose();
     this.uiTexture.dispose();
     this.uiMaterial.dispose();
@@ -476,8 +491,10 @@ export class DouyinSoloScene {
     this.exitConfirm = false;
     this.lastDuelTimerSecond = null;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.controller.reset();
     this.runHighestValue = this.highest;
     const discovered = this.discoveredValues(this.currentTheme);
@@ -508,8 +525,10 @@ export class DouyinSoloScene {
     this.joinCode = '';
     this.exitConfirm = false;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.boardView.reset(HOME_TILES);
     this.online.open(this.currentTheme);
     this.configureCamera();
@@ -531,8 +550,10 @@ export class DouyinSoloScene {
     this.notice = null;
     this.joinPadOpen = false;
     this.exitConfirm = false;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.boardView.root.visible = true;
     this.boardView.reset(HOME_TILES);
     this.configureCamera();
@@ -551,8 +572,10 @@ export class DouyinSoloScene {
     if (this.boardView.theme !== snap.selectedTheme) this.boardView.setTheme(snap.selectedTheme);
     this.boardView.reset(HOME_TILES);
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.onlineInstance) {
+      this.onlineInstance.local.root.visible = false;
+      this.onlineInstance.remote.root.visible = false;
+    }
     this.configureCamera();
     this.applyThemeLook();
     this.refreshHud();
@@ -903,8 +926,8 @@ export class DouyinSoloScene {
     this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
     this.renderer.shadowMap.enabled = quality !== 'low';
     this.boardView.setQuality(quality);
-    this.online.local.setQuality(quality);
-    this.online.remote.setQuality(quality);
+    this.onlineInstance?.local.setQuality(quality);
+    this.onlineInstance?.remote.setQuality(quality);
   }
 
   private configureCamera(): void {
