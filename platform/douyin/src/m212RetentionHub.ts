@@ -15,6 +15,7 @@ import type { DouyinAuthClient } from './auth';
 import type { DouyinEngagement } from './engagement';
 import { formatDuration, loadThemeMastery } from './metaProgress';
 import type { DouyinSocial } from './social';
+import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -327,6 +328,20 @@ function handleHubTap(
         };
         scene.refreshHud();
       });
+      return;
+    }
+    if (
+      DOUYIN_PRODUCT_CONFIG.retention.subscriptionTemplates.length > 0
+      && hit(x, y, layout.subscription)
+    ) {
+      void engagement.requestSubscriptionFromTap(DOUYIN_PRODUCT_CONFIG.retention.subscriptionTemplates).then(result => {
+        scene.notice = {
+          text: result ? '已提交提醒订阅选择' : '当前环境暂不支持订阅提醒',
+          until: number(scene.visualTime) + 1.5,
+        };
+        engagement.track('subscription_result', { success: Boolean(result) });
+        scene.refreshHud();
+      });
     }
   }
 }
@@ -529,6 +544,16 @@ function drawDailyCenter(
     auth.current.status !== 'authenticated',
   );
 
+  if (DOUYIN_PRODUCT_CONFIG.retention.subscriptionTemplates.length > 0) {
+    actionCard(
+      ctx,
+      layout.subscription,
+      '🔔 订阅赛季提醒',
+      '由你主动授权 · 可随时在抖音设置中管理',
+      false,
+    );
+  }
+
   ctx.fillStyle = '#748b8d';
   ctx.font = '700 9px sans-serif';
   ctx.fillText('S币用于未来主题世界与长期收藏 · 不影响 PvP 强度', width / 2, layout.panel.y + layout.panel.height - 21);
@@ -696,7 +721,7 @@ function collectionLayout(width: number, height: number) {
 
 function dailyLayout(width: number, height: number) {
   const panelW = Math.min(330, width - 24);
-  const panelH = Math.min(520, height * 0.68);
+  const panelH = Math.min(590, height * 0.74);
   const panel = { x: (width - panelW) / 2, y: height * 0.15, width: panelW, height: panelH };
   const x = panel.x + 16;
   const w = panel.width - 32;
@@ -707,6 +732,7 @@ function dailyLayout(width: number, height: number) {
     sidebar: { x, y: panel.y + 164, width: w, height: 66 },
     shortcut: { x, y: panel.y + 240, width: w, height: 66 },
     refreshAccount: { x, y: panel.y + 316, width: w, height: 66 },
+    subscription: { x, y: panel.y + 392, width: w, height: 66 },
   };
 }
 
