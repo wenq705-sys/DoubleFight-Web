@@ -68,6 +68,7 @@ export function installM212RetentionHub(
   };
 
   engagement.track('home_view', { theme: game.theme });
+  if (scene.onboardingOpen) engagement.track('onboarding_view');
 
   const originalRewarded = commercial.showRewarded.bind(commercial);
   commercial.showRewarded = async () => {
@@ -241,7 +242,9 @@ export function installM212RetentionHub(
       if (hit(x, y, utility.cover)) return;
     }
 
+    const onboardingWasOpen = Boolean(scene.onboardingOpen);
     originalTap(x, y);
+    if (onboardingWasOpen && !scene.onboardingOpen) engagement.track('onboarding_complete');
   };
 
   const originalRefresh = scene.refreshHud.bind(scene) as () => void;
