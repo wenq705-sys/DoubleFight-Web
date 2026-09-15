@@ -345,11 +345,16 @@ export class DouyinSoloScene {
       this.online.local.update(delta);
       this.online.remote.update(delta);
       this.renderDuel();
+      if (onlineState?.mode === 'playing') this.updateDuelTimerFeedback();
       if (this.visualTime >= this.nextDynamicHudAt) {
-        this.nextDynamicHudAt = this.visualTime + 0.2;
+        this.nextDynamicHudAt = this.visualTime + 0.1;
         this.refreshHud();
       }
     } else {
+      if (this.mode === 'online' && onlineState?.mode === 'matching' && this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 0.1;
+        this.refreshHud();
+      }
       this.boardView.update(delta);
       const home = this.cameraScratch.copy(this.cameraHome);
       if (this.mode === 'home' || this.mode === 'online') {
@@ -469,6 +474,7 @@ export class DouyinSoloScene {
     this.notice = null;
     this.joinPadOpen = false;
     this.exitConfirm = false;
+    this.lastDuelTimerSecond = null;
     this.boardView.root.visible = true;
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
@@ -1174,13 +1180,43 @@ export class DouyinSoloScene {
     this.drawBack(ctx);
     if (snap.mode === 'matching') {
       const elapsed = snap.state.matchmaking.joinedAt ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000) : 0;
+      const centerY = height * 0.39;
+      const pulse = 0.5 + Math.sin(this.visualTime * 4) * 0.5;
       ctx.textAlign = 'center';
+
+      for (let ring = 0; ring < 3; ring += 1) {
+        const radius = 38 + ((this.visualTime * 34 + ring * 28) % 84);
+        ctx.beginPath();
+        ctx.arc(width / 2, centerY, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(240,204,103,${Math.max(0.04, 0.22 - radius / 620)})`;
+        ctx.lineWidth = 1.3;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#ffe18a';
+      ctx.font = '900 34px sans-serif';
+      ctx.fillText('⚔', width / 2, centerY - 4);
       ctx.fillStyle = '#fff1c9';
       ctx.font = '900 24px sans-serif';
-      ctx.fillText('正在寻找对手…', width / 2, height * 0.37);
-      ctx.fillStyle = '#bfd1d3';
-      ctx.font = '700 11px sans-serif';
-      ctx.fillText(`已等待 ${elapsed.toFixed(1)}s  ·  队列 ${Math.max(1, snap.state.matchmaking.queueSize)} 人`, width / 2, height * 0.37 + 32);
+      ctx.fillText('正在寻找对手', width / 2, centerY + 62);
+      ctx.fillStyle = pulse > 0.5 ? '#9fe3d4' : '#bfd1d3';
+      ctx.font = '800 11px sans-serif';
+      ctx.fillText('标准对决 · 3分钟实时1v1', width / 2, centerY + 88);
+      ctx.fillStyle = '#aebfc1';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(`搜索 ${elapsed.toFixed(1)}s  ·  当前队列 ${Math.max(1, snap.state.matchmaking.queueSize)} 人`, width / 2, centerY + 112);
+
+      const cardY = centerY + 134;
+      this.roundedRect(ctx, width / 2 - 112, cardY, 224, 46, 17);
+      ctx.fillStyle = 'rgba(11,31,40,.78)';
+      ctx.fill();
+      ctx.fillStyle = '#e8efea';
+      ctx.font = '800 11px sans-serif';
+      ctx.fillText('你     VS     ?', width / 2, cardY + 17);
+      ctx.fillStyle = '#87d7c7';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText('保持在线 · 匹配成功自动开战', width / 2, cardY + 33);
+
       this.drawPillButton(ctx, this.matchingCancelRect(width, height), '取消匹配', 'secondary');
       return;
     }
@@ -1226,10 +1262,10 @@ export class DouyinSoloScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff1c9';
     ctx.font = '900 24px sans-serif';
-    ctx.fillText('配置你的对决', width / 2, this.hudTop() + 30);
+    ctx.fillText('准备出战', width / 2, this.hudTop() + 30);
     ctx.fillStyle = '#b7c9cc';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(snap.state.status === 'connected' ? '服务器已连接' : '正在连接服务器…', width / 2, this.hudTop() + 54);
+    ctx.fillText(snap.state.status === 'connected' ? '标准对决 · 3分钟实时1v1' : '正在连接服务器…', width / 2, this.hudTop() + 54);
 
     this.drawPillButton(ctx, layout.theme, `‹  ${THEMES[snap.selectedTheme].label}  ›`, 'secondary');
 
@@ -1241,7 +1277,7 @@ export class DouyinSoloScene {
       this.drawSkillButton(ctx, layout.skills[index], `${def.icon} ${def.shortLabel}`, `${def.cost}⚡`, true);
     });
 
-    this.drawPillButton(ctx, layout.quick, '⚔  开始匹配', 'primary');
+    this.drawPillButton(ctx, layout.quick, '⚔  开始3分钟对决', 'primary');
     this.drawPillButton(ctx, layout.create, '创建好友房', 'secondary');
     this.drawPillButton(ctx, layout.join, '加入好友房', 'secondary');
 
@@ -1260,34 +1296,58 @@ export class DouyinSoloScene {
     const seconds = Math.ceil(timerMs / 1000);
     const timer = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
+    const timerUrgent = seconds <= 10;
+    const timerWarning = seconds <= 30;
+    const timerColor = timerUrgent ? '#ff8d78' : timerWarning ? '#ffd06f' : '#fff2cc';
+    const timerBox = { x: width / 2 - 58, y: top + 4, width: 116, height: 48 };
+    this.roundedRect(ctx, timerBox.x, timerBox.y, timerBox.width, timerBox.height, 17);
+    ctx.fillStyle = timerUrgent ? 'rgba(92,25,24,.90)' : 'rgba(10,30,39,.88)';
+    ctx.fill();
+    ctx.strokeStyle = timerUrgent ? 'rgba(255,126,105,.78)' : 'rgba(239,204,103,.42)';
+    ctx.lineWidth = timerUrgent ? 1.8 : 1;
+    ctx.stroke();
+
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff2cc';
-    ctx.font = '900 17px sans-serif';
-    ctx.fillText(timer, width / 2, top + 28);
+    ctx.fillStyle = timerWarning ? timerColor : '#9fc9c4';
+    ctx.font = '800 8px sans-serif';
+    ctx.fillText(seconds <= 30 ? '决胜时刻' : '标准对决 · 3分钟', width / 2, top + 15);
+    ctx.fillStyle = timerColor;
+    ctx.font = timerUrgent ? '900 25px sans-serif' : '900 22px sans-serif';
+    ctx.fillText(timer, width / 2, top + 36);
+
+    const timeRatio = Math.max(0, Math.min(1, timerMs / 180_000));
+    this.roundedRect(ctx, width / 2 - 54, top + 56, 108, 3, 1.5);
+    ctx.fillStyle = 'rgba(255,255,255,.15)';
+    ctx.fill();
+    if (timeRatio > 0) {
+      this.roundedRect(ctx, width / 2 - 54, top + 56, 108 * timeRatio, 3, 1.5);
+      ctx.fillStyle = timerColor;
+      ctx.fill();
+    }
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(me?.name ?? '我', 20, top + 66);
+    ctx.fillText(me?.name ?? '我', 20, top + 72);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
-    ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
+    ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 96);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 66);
+    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 72);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
-    ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 89);
+    ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 96);
 
     const remoteEnergy = opponent ? opponent.energy / Math.max(1, opponent.maxEnergy) : 0;
-    const remoteBar = { x: width / 2 - 74, y: top + 104, width: 148, height: 5 };
+    const remoteBar = { x: width / 2 - 74, y: top + 112, width: 148, height: 5 };
     this.drawEnergyBar(ctx, remoteBar, remoteEnergy, '#c870db');
     ctx.fillStyle = '#dce8e8';
     ctx.font = '650 9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 119);
+    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 127);
 
     const safeBottom = Math.max(14, this.platform.getSystemInfo().safeArea.bottom + 10);
     const energyY = height - safeBottom - 106;
@@ -1313,6 +1373,18 @@ export class DouyinSoloScene {
       ctx.font = '800 11px sans-serif';
       ctx.fillText('网络中断 · 正在重连…', width / 2, height * 0.48 + 19);
     }
+  }
+
+  private updateDuelTimerFeedback(): void {
+    const seconds = Math.max(0, Math.ceil(this.online.remainingMs() / 1000));
+    if (seconds === this.lastDuelTimerSecond) return;
+    this.lastDuelTimerSecond = seconds;
+
+    if (seconds === 60 || seconds === 30) {
+      this.platform.haptics.trigger('medium');
+      return;
+    }
+    if (seconds <= 10 && seconds > 0) this.platform.haptics.trigger('light');
   }
 
   private drawResult(ctx: CanvasRenderingContext2D, width: number, height: number): void {
