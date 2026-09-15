@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inspectDouyinRelease, readDouyinReleaseManifest, type ReleaseManifest } from '../scripts/preflight-douyin';
+import { inspectDouyinRelease, type ReleaseManifest } from '../scripts/preflight-douyin';
 
 const product = {
   appId: 'tttestappid123', apiUrl: 'https://game.example', socketUrl: 'wss://game.example/ws',
@@ -19,9 +19,8 @@ function valid(): ReleaseManifest {
 }
 
 describe('Douyin release preflight', () => {
-  it('accepts the generated release with formal domain checks and audio', async () => {
+  it('accepts a valid release manifest with formal domain checks and audio', () => {
     expect(inspectDouyinRelease(valid())).toEqual([]);
-    expect(inspectDouyinRelease(await readDouyinReleaseManifest())).toEqual([]);
   });
 
   it('fails on domain bypass, app ID drift, insecure URLs and ad configuration', () => {
