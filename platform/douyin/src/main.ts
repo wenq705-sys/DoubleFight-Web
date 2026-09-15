@@ -11,6 +11,7 @@ import { DouyinAudio } from './audio';
 import { DouyinAuthClient } from './auth';
 import { DouyinEngagement } from './engagement';
 import { installM212ProductPass } from './m212ProductPass';
+import { installM212RetentionHub } from './m212RetentionHub';
 
 declare const tt: DouyinApi;
 
@@ -35,6 +36,7 @@ const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
 installM212ProductPass(game, platform, client, auth, commercial);
+installM212RetentionHub(game, platform, auth, social, engagement);
 const sharedRoom = social.launchRoomCode();
 if (sharedRoom) game.openSharedRoom(sharedRoom);
 const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
@@ -67,7 +69,6 @@ const loop = new DouyinRenderLoop(
 );
 
 platform.lifecycle.show();
-engagement.track('home_view', { theme });
 void auth.start().then(() => {
   game.refreshAccountState();
 });
