@@ -1,5 +1,9 @@
 # Handoff
 
+## M2.10.3 Douyin server auth branch
+
+`feat/m2-10-3-douyin-server-auth` adds server-side code2Session, durable single-host accounts, signed expiring sessions, `/auth/douyin` and `/me`, and replay-safe sidebar/ad reward endpoints. Douyin restores the session or exchanges a fresh one-use login credential without delaying the product shell. Production secrets and data volume are operator-managed; this branch does not deploy. Protocol v6 and anonymous Browser PvP stay intact. Authenticated PvP record attribution is deferred until a future versioned WebSocket handshake can bind the account to an authoritative match. See `docs/M2_10_3_DOUYIN_SERVER_AUTH.md` for storage and reward-integrity limits.
+
 ## Current state
 
 **M2.10 platform foundation on `refactor/m2-10-platform-foundation` (Draft PR preparation).**

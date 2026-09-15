@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feat/m2-10-2-douyin-product-shell]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +26,8 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Auth HTTP smoke (mock provider)
+        run: npm run smoke:auth
       - name: Build
         run: npm run build
       - name: Build Douyin

@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json ./
 RUN npm install --no-audit --no-fund
+RUN mkdir /data && chown node:node /data
 
 COPY tsconfig.server.json ./
 COPY server ./server

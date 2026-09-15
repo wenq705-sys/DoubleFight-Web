@@ -1,5 +1,9 @@
 # Roadmap
 
+## M2.10.3 — Douyin server auth (branch implementation)
+
+Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. Production deployment, real legal-domain validation, provider-backed ad proof and Protocol v6 successor for authenticated PvP record attribution remain separate acceptance work.
+
 ## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
 
 M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
