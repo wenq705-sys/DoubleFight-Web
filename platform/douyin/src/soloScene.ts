@@ -1551,6 +1551,31 @@ export class DouyinSoloScene {
     ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
+  private handleThemeCenterTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(326, info.width - 24);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.17;
+    const kingdom = { x: x0 + 18, y: y0 + 88, width: panelWidth - 36, height: 112 };
+    const palace = { x: x0 + 18, y: y0 + 212, width: panelWidth - 36, height: 112 };
+    const close = { x: x0 + 64, y: y0 + 378, width: panelWidth - 128, height: 42 };
+
+    const choose = (theme: ThemeId) => {
+      this.themeCenterOpen = false;
+      if (theme !== this.currentTheme) this.setTheme(theme);
+      this.collectionTheme = theme;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+    };
+
+    if (this.hit(x, y, kingdom)) { choose('kingdom'); return; }
+    if (this.hit(x, y, palace)) { choose('palace'); return; }
+    if (this.hit(x, y, close)) {
+      this.themeCenterOpen = false;
+      this.refreshHud();
+    }
+  }
+
   private handleRankingTap(x: number, y: number): void {
     const info = this.platform.getSystemInfo();
     const panelWidth = Math.min(322, info.width - 26);
@@ -1781,6 +1806,76 @@ export class DouyinSoloScene {
       ctx.fillText(transition.label, width / 2, height * 0.44 + 22);
       ctx.globalAlpha = 1;
     }
+  }
+
+  private drawThemeCenter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(326, width - 24);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.17;
+
+    this.roundedRect(ctx, x, y, panelWidth, 438, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 438);
+    gradient.addColorStop(0, 'rgba(11,42,50,.98)');
+    gradient.addColorStop(1, 'rgba(17,25,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(244,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe7a2';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText('主题中心', width / 2, y + 35);
+    ctx.fillStyle = '#a8c0c1';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('每个世界拥有独立棋子图鉴与登顶纪录', width / 2, y + 58);
+
+    const drawThemeCard = (theme: ThemeId, rect: Rect) => {
+      const selected = theme === this.currentTheme;
+      const discovered = this.discoveredValues(theme).size;
+      const pb = Number(this.platform.storage.getItem(`doublefight-ascension-best-${theme}`) ?? 0);
+      const high = Number(this.platform.storage.getItem(`doublefight-highest-${theme}`) ?? 2);
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 20);
+      ctx.fillStyle = selected ? 'rgba(32,69,70,.96)' : 'rgba(21,44,53,.90)';
+      ctx.fill();
+      ctx.strokeStyle = selected ? '#f0cd70' : 'rgba(230,210,145,.22)';
+      ctx.lineWidth = selected ? 1.5 : 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#fff0c1';
+      ctx.font = '900 16px sans-serif';
+      ctx.fillText(THEMES[theme].label, rect.x + 16, rect.y + 24);
+      ctx.fillStyle = '#8ed9cb';
+      ctx.font = '800 9px sans-serif';
+      ctx.fillText('已拥有 · 免费主题', rect.x + 16, rect.y + 44);
+
+      ctx.fillStyle = '#c4d2d1';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(`图鉴 ${discovered}/11`, rect.x + 16, rect.y + 68);
+      ctx.fillText(`最高 · ${pieceName(theme, high)}`, rect.x + 16, rect.y + 86);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = selected ? '#ffe17d' : '#bbc9ca';
+      ctx.font = '850 10px sans-serif';
+      ctx.fillText(selected ? '当前使用 ✓' : '切换世界 ›', rect.x + rect.width - 16, rect.y + 28);
+      ctx.fillStyle = '#a9b9ba';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(pb ? `最速 ${formatDuration(pb)}` : '尚未登顶', rect.x + rect.width - 16, rect.y + 84);
+    };
+
+    drawThemeCard('kingdom', { x: x + 18, y: y + 88, width: panelWidth - 36, height: 112 });
+    drawThemeCard('palace', { x: x + 18, y: y + 212, width: panelWidth - 36, height: 112 });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#99abad';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('后续主题：广告试玩1局 · 500 S币永久解锁', width / 2, y + 348);
+
+    this.drawPillButton(ctx, { x: x + 64, y: y + 378, width: panelWidth - 128, height: 42 }, '返回主页', 'primary');
   }
 
   private drawRankingCenter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
