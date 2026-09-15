@@ -105,6 +105,28 @@ describe('Douyin account session bootstrap', () => {
     expect(setup.values.get('doublefight-highest-palace')).toBe('32');
   });
 
+  it('clears an expired bearer after a protected endpoint returns 401 so the next action can re-authenticate', async () => {
+    let authCount = 0;
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) {
+        authCount += 1;
+        options.success({ statusCode: 200, data: { token: authCount === 1 ? 'first.session' : 'second.session', player } });
+      } else if (options.url.endsWith('/progress/solo') && authCount === 1) {
+        options.success({ statusCode: 401, data: { error: 'unauthorized' } });
+      } else if (options.url.endsWith('/progress/solo')) {
+        options.success({ statusCode: 200, data: { player } });
+      }
+    });
+    await setup.client.start();
+    expect(await setup.client.syncSoloProgress('kingdom', 100, 16)).toBe(false);
+    expect(setup.values.has('doublefight-session-token')).toBe(false);
+    expect(setup.client.current.status).toBe('local');
+    expect(setup.reset).toHaveBeenCalledOnce();
+
+    expect(await setup.client.start()).toEqual({ status: 'authenticated', player });
+    expect(setup.values.get('doublefight-session-token')).toBe('second.session');
+  });
+
   it('syncs meaningful Solo progress with bearer without blocking when the network fails', async () => {
     const setup = fixture(undefined, options => {
       if (options.url.endsWith('/auth/douyin')) options.success({ statusCode: 200, data: { token: 'signed.session', player } });
