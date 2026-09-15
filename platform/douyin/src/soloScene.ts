@@ -172,6 +172,7 @@ export class DouyinSoloScene {
 
     this.refreshHud();
     this.commercial.hideBanner();
+    this.social.report('home_view', { theme: this.currentTheme });
     void this.social.supportsSidebar().then((supported) => {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
@@ -332,6 +333,7 @@ export class DouyinSoloScene {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
     this.platform.storage.setItem('doublefight-theme', theme);
+    this.social.report('theme_switch', { theme });
     this.boardView.setTheme(theme);
     this.boardView.prewarmTheme(theme);
     if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
@@ -452,7 +454,17 @@ export class DouyinSoloScene {
         `doublefight-discovered-${this.currentTheme}`,
         JSON.stringify([...discovered].sort((a, b) => a - b)),
       );
+      this.social.report('piece_discovered', {
+        theme: this.currentTheme,
+        piece: pieceName(this.currentTheme, event.value),
+        tier: Math.log2(event.value),
+      });
     }
+    this.social.report('new_highest', {
+      theme: this.currentTheme,
+      piece: pieceName(this.currentTheme, event.value),
+      tier: Math.log2(event.value),
+    });
 
     const info = this.platform.getSystemInfo();
     const world = this.boardView.cellWorldPosition(event.at.row, event.at.col).clone().project(this.camera);
@@ -506,6 +518,7 @@ export class DouyinSoloScene {
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
+    this.social.report('solo_start', { theme: this.currentTheme });
     this.refreshHud();
   }
 
@@ -531,6 +544,7 @@ export class DouyinSoloScene {
     }
     this.boardView.reset(HOME_TILES);
     this.online.open(this.currentTheme);
+    this.social.report('online_lobby_open', { theme: this.currentTheme });
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
@@ -540,6 +554,14 @@ export class DouyinSoloScene {
   private showHome(): void {
     const previousMode = this.mode;
     const previousOnlineMode = previousMode === 'online' ? this.online.snapshot().mode : null;
+    if (previousMode === 'solo') {
+      this.social.report('solo_end', {
+        theme: this.currentTheme,
+        score: this.score,
+        highest_tier: Math.log2(this.highest),
+        ascended: this.soloAscendedAt !== null,
+      });
+    }
     this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
@@ -730,6 +752,7 @@ export class DouyinSoloScene {
         return;
       }
       if (this.hit(x, y, layout.quick)) {
+        this.social.report('pvp_queue', { mode: 'standard_3m', theme: snap.selectedTheme });
         this.online.quickMatch();
         this.platform.haptics.trigger('medium');
         return;
@@ -1498,8 +1521,20 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const panelWidth = Math.min(316, info.width - 30);
     const panelX = (info.width - panelWidth) / 2;
-    const panelY = info.height * 0.18;
-    const close = { x: panelX + 52, y: panelY + 382, width: panelWidth - 104, height: 42 };
+    const panelY = info.height * 0.15;
+    const shortcut = { x: panelX + 42, y: panelY + 382, width: panelWidth - 84, height: 38 };
+    const close = { x: panelX + 52, y: panelY + 430, width: panelWidth - 104, height: 42 };
+    if (this.hit(x, y, shortcut)) {
+      void this.social.addShortcut().then(ok => {
+        this.profileOpen = false;
+        this.notice = {
+          text: ok ? '已添加到桌面' : '当前环境暂不支持添加桌面',
+          until: this.visualTime + 1.5,
+        };
+        this.refreshHud();
+      });
+      return;
+    }
     if (this.hit(x, y, close)) {
       this.profileOpen = false;
       this.platform.haptics.trigger('light');
@@ -1533,9 +1568,19 @@ export class DouyinSoloScene {
     const first = Number(this.platform.storage.getItem(firstKey) ?? 0);
     const best = Number(this.platform.storage.getItem(bestKey) ?? 0);
     const count = Number(this.platform.storage.getItem(countKey) ?? 0);
+    const newBest = !best || duration < best;
     if (!first) this.platform.storage.setItem(firstKey, String(duration));
-    if (!best || duration < best) this.platform.storage.setItem(bestKey, String(duration));
+    if (newBest) {
+      this.platform.storage.setItem(bestKey, String(duration));
+      void this.social.setAscensionRank(this.currentTheme, duration);
+    }
     this.platform.storage.setItem(countKey, String(Math.max(0, count) + 1));
+    this.social.report('ascension', {
+      theme: this.currentTheme,
+      duration_ms: duration,
+      new_best: newBest,
+      count: Math.max(0, count) + 1,
+    });
     this.platform.haptics.trigger('success');
   }
 
@@ -1610,7 +1655,7 @@ export class DouyinSoloScene {
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(316, width - 30);
     const x = (width - panelWidth) / 2;
-    const y = height * 0.18;
+    const y = height * 0.15;
     const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
     const rank = ratingRank(account?.pvp.rating ?? 1000);
     const kingdomHigh = account?.solo.highestKingdom
@@ -1618,8 +1663,8 @@ export class DouyinSoloScene {
     const palaceHigh = account?.solo.highestPalace
       ?? Number(this.platform.storage.getItem('doublefight-highest-palace') ?? 2);
 
-    this.roundedRect(ctx, x, y, panelWidth, 440, 28);
-    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 440);
+    this.roundedRect(ctx, x, y, panelWidth, 490, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 490);
     gradient.addColorStop(0, 'rgba(12,40,48,.98)');
     gradient.addColorStop(1, 'rgba(16,25,38,.98)');
     ctx.fillStyle = gradient;
@@ -1665,7 +1710,8 @@ export class DouyinSoloScene {
       ctx.fillText(row[1], x + panelWidth - 24, rowY);
     });
 
-    this.drawPillButton(ctx, { x: x + 52, y: y + 382, width: panelWidth - 104, height: 42 }, '返回主页', 'primary');
+    this.drawPillButton(ctx, { x: x + 42, y: y + 382, width: panelWidth - 84, height: 38 }, '⌂  添加到桌面', 'secondary');
+    this.drawPillButton(ctx, { x: x + 52, y: y + 430, width: panelWidth - 104, height: 42 }, '返回主页', 'primary');
   }
 
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1870,8 +1916,10 @@ export class DouyinSoloScene {
     if (this.inputLocked || this.rewardedSkillClaims >= 3) return;
     this.inputLocked = true;
     this.notice = { text: '正在准备激励视频…', until: this.visualTime + 8 };
+    this.social.report('ad_offer', { placement: 'solo_clear_refill' });
     this.refreshHud();
     const result = await this.commercial.showRewarded();
+    this.social.report('ad_result', { placement: 'solo_clear_refill', result });
     if (result === 'rewarded') {
       await this.auth.start();
       const claim = this.auth.requiresServerLedger
@@ -1914,6 +1962,7 @@ export class DouyinSoloScene {
     const today = new Date().toISOString().slice(0, 10);
     this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
     this.platform.storage.setItem('doublefight-next-solo-bonus', '1');
+    this.social.report('sidebar_return_reward', { granted: true });
     this.notice = { text: '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
     this.platform.haptics.trigger('success');
     this.refreshHud();
