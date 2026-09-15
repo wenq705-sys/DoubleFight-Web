@@ -7,20 +7,26 @@ import {
   parseClientMessage,
   type ServerMessage,
 } from '../shared/index';
-import { RoomManager } from './RoomManager';
+import { RoomManager, type ConnectionTransport } from './RoomManager';
 import { JsonAccountRepository } from './auth/AccountRepository';
 import { createAuthHandler } from './auth/AuthHttp';
 import { OfficialDouyinProvider } from './auth/DouyinProvider';
 import { SessionToken } from './auth/SessionToken';
+import { resolveSocketIdentity } from './auth/SocketIdentity';
 
 const port = readPort(process.env.PORT, 8787);
 const host = process.env.HOST?.trim() || '0.0.0.0';
-const manager = new RoomManager();
 const accountRepository = await JsonAccountRepository.open(join(process.env.DOUBLEFIGHT_DATA_DIR || '.doublefight-data', 'accounts.json'));
+const manager = new RoomManager(result => {
+  void accountRepository.recordMatch(result).catch(() => {
+    console.error(JSON.stringify({ area: 'account', event: 'match_record_failure' }));
+  });
+});
+const sessions = new SessionToken(process.env.DOUBLEFIGHT_SESSION_SECRET, process.env.DOUBLEFIGHT_SESSION_SECRET_PREVIOUS);
 const authHandler = createAuthHandler({
   repository: accountRepository,
   provider: new OfficialDouyinProvider(process.env.DOUYIN_APP_ID, process.env.DOUYIN_APP_SECRET),
-  sessions: new SessionToken(process.env.DOUBLEFIGHT_SESSION_SECRET, process.env.DOUBLEFIGHT_SESSION_SECRET_PREVIOUS),
+  sessions,
 });
 
 const httpServer = createServer(async (request, response) => {
@@ -54,16 +60,20 @@ const websocketServer = new WebSocketServer({
 
 const alive = new WeakMap<WebSocket, boolean>();
 
-websocketServer.on('connection', (socket) => {
+websocketServer.on('connection', (socket, request) => {
   alive.set(socket, true);
-
-  const connection = manager.register((message) => {
-    send(socket, message);
-  });
+  let connection: ConnectionTransport | null = null;
+  let closed = false;
+  const buffered: Array<{ raw: string; isBinary: boolean }> = [];
 
   socket.on('pong', () => alive.set(socket, true));
 
-  socket.on('message', (data, isBinary) => {
+  const handleMessage = (raw: string, isBinary: boolean) => {
+    if (!connection) {
+      if (buffered.length >= 32) { socket.close(1008, 'message limit'); return; }
+      buffered.push({ raw, isBinary });
+      return;
+    }
     if (isBinary) {
       send(socket, {
         type: 'error',
@@ -73,7 +83,6 @@ websocketServer.on('connection', (socket) => {
       return;
     }
 
-    const raw = data.toString('utf8');
     const message = parseClientMessage(raw);
     if (!message) {
       send(socket, {
@@ -84,11 +93,18 @@ websocketServer.on('connection', (socket) => {
       return;
     }
     manager.handle(connection.id, message);
-  });
+  };
+  socket.on('message', (data, isBinary) => handleMessage(data.toString('utf8'), isBinary));
 
-  socket.on('close', () => manager.unregister(connection.id));
-  socket.on('error', (error) => {
-    console.warn('[ws] connection error', connection.id, error.message);
+  socket.on('close', () => { closed = true; if (connection) manager.unregister(connection.id); });
+  socket.on('error', () => {
+    console.warn(JSON.stringify({ area: 'ws', event: 'connection_error', connection: connection?.id ?? 'pending' }));
+  });
+  void resolveSocketIdentity(request.headers, sessions, accountRepository).then(identity => {
+    if (closed || socket.readyState !== WebSocket.OPEN) return;
+    connection = manager.register(message => send(socket, message), identity);
+    for (const entry of buffered) handleMessage(entry.raw, entry.isBinary);
+    buffered.length = 0;
   });
 });
 

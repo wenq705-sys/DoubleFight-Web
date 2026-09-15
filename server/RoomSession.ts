@@ -26,9 +26,11 @@ import {
   type SkillLoadout,
   type TimeLimitTieBreaker,
 } from '../shared/index';
+import type { AccountMatchResult } from './auth/AccountRepository';
 
 export interface RoomPlayerRecord {
   id: string;
+  accountId?: string;
   name: string;
   theme: NetworkThemeId;
   loadout: SkillLoadout;
@@ -68,6 +70,7 @@ export class RoomSession {
   constructor(
     readonly code: string,
     private readonly send: Send,
+    private readonly onFinished?: (result: AccountMatchResult) => void,
   ) {}
 
   addPlayer(
@@ -75,12 +78,14 @@ export class RoomSession {
     name: string,
     theme: NetworkThemeId,
     loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT],
+    accountId?: string,
   ): RoomPlayerRecord {
     if (this.phase !== 'lobby') throw new Error('ROOM_ALREADY_PLAYING');
     if (this.players.size >= 2) throw new Error('ROOM_FULL');
 
     const player: RoomPlayerRecord = {
       id: randomUUID(),
+      ...(accountId ? { accountId } : {}),
       name: sanitizeName(name),
       theme,
       loadout: [...loadout],
@@ -102,9 +107,9 @@ export class RoomSession {
     return player;
   }
 
-  reconnect(connectionId: string, reconnectToken: string): RoomPlayerRecord | null {
+  reconnect(connectionId: string, reconnectToken: string, accountId?: string): RoomPlayerRecord | null {
     const player = [...this.players.values()].find((entry) => entry.reconnectToken === reconnectToken);
-    if (!player) return null;
+    if (!player || (player.accountId && player.accountId !== accountId)) return null;
     player.connectionId = connectionId;
     player.connected = true;
     return player;
@@ -436,6 +441,17 @@ export class RoomSession {
 
     for (const player of this.players.values()) {
       player.rematchReady = false;
+    }
+    if (this.matchId) {
+      this.onFinished?.({
+        matchId: this.matchId,
+        reason,
+        winnerId,
+        players: [...this.players.values()].map(player => ({
+          playerId: player.id,
+          ...(player.accountId ? { accountId: player.accountId } : {}),
+        })),
+      });
     }
   }
 

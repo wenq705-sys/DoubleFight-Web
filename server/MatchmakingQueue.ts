@@ -2,6 +2,7 @@ import type { NetworkThemeId, SkillLoadout } from '../shared/index';
 
 export interface MatchmakingEntry {
   connectionId: string;
+  accountId?: string;
   playerName: string;
   theme: NetworkThemeId;
   loadout: SkillLoadout;

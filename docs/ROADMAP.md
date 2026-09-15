@@ -2,7 +2,7 @@
 
 ## M2.10.3 — Douyin server auth (branch implementation)
 
-Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. Production deployment, real legal-domain validation, provider-backed ad proof and Protocol v6 successor for authenticated PvP record attribution remain separate acceptance work.
+Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. M2.10.4 adds account-bound WebSocket attribution and Solo/PvP progress without changing Protocol v6. Production deployment, real legal-domain validation and provider-backed ad proof remain separate acceptance work.
 
 ## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
 

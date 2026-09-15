@@ -8,6 +8,8 @@ import {
 } from '../shared/index';
 import { MatchmakingQueue } from './MatchmakingQueue';
 import { RoomSession, type RoomPlayerRecord } from './RoomSession';
+import type { AccountMatchResult } from './auth/AccountRepository';
+import type { BoundAccount } from './auth/SocketIdentity';
 
 export const MATCHMAKING_TIMEOUT_MS = 60_000;
 
@@ -15,6 +17,8 @@ type ErrorCode = Extract<ServerMessage, { type: 'error' }>['code'];
 
 export interface ConnectionTransport {
   id: string;
+  accountId?: string;
+  displayName?: string;
   send(message: ServerMessage): void;
 }
 
@@ -24,6 +28,7 @@ interface Membership {
 }
 
 export class RoomManager {
+  constructor(private readonly onMatchFinished?: (result: AccountMatchResult) => void) {}
   private readonly rooms = new Map<string, RoomSession>();
   private readonly connections = new Map<string, ConnectionTransport>();
   private readonly memberships = new Map<string, Membership>();
@@ -32,8 +37,9 @@ export class RoomManager {
   private readonly matchmaking = new MatchmakingQueue();
   private readonly matchmakingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  register(send: (message: ServerMessage) => void): ConnectionTransport {
-    const connection: ConnectionTransport = { id: randomUUID(), send };
+  register(send: (message: ServerMessage) => void, identity?: BoundAccount | null): ConnectionTransport {
+    const connection: ConnectionTransport = { id: randomUUID(), send,
+      ...(identity ? { accountId: identity.accountId, displayName: identity.displayName } : {}) };
     this.connections.set(connection.id, connection);
     connection.send({
       type: 'welcome',
@@ -222,8 +228,9 @@ export class RoomManager {
     this.removeFromMatchmaking(connectionId, true);
     this.leaveRoom(connectionId);
     const code = this.generateRoomCode();
-    const room = new RoomSession(code, (target, message) => this.send(target, message));
-    const host = room.addPlayer(connectionId, playerName, theme, loadout);
+    const room = new RoomSession(code, (target, message) => this.send(target, message), this.onMatchFinished);
+    const identity = this.connections.get(connectionId);
+    const host = room.addPlayer(connectionId, identity?.displayName ?? playerName, theme, loadout, identity?.accountId);
 
     this.rooms.set(code, room);
     this.memberships.set(connectionId, { roomCode: code, playerId: host.id });
@@ -242,7 +249,8 @@ export class RoomManager {
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
     if (!room) throw new Error('ROOM_NOT_FOUND');
-    const player = room.addPlayer(connectionId, playerName, theme, loadout);
+    const identity = this.connections.get(connectionId);
+    const player = room.addPlayer(connectionId, identity?.displayName ?? playerName, theme, loadout, identity?.accountId);
     this.memberships.set(connectionId, { roomCode: code, playerId: player.id });
     this.sendJoined(connectionId, room, player);
     room.broadcast({ type: 'room_state', room: room.state() });
@@ -254,8 +262,11 @@ export class RoomManager {
     const code = normalizeRoomCode(roomCode);
     const room = this.rooms.get(code);
     if (!room) throw new Error('ROOM_NOT_FOUND');
-    const player = room.reconnect(connectionId, reconnectToken);
+    const oldConnectionId = [...room.players.values()].find(entry => entry.reconnectToken === reconnectToken)?.connectionId;
+    const player = room.reconnect(connectionId, reconnectToken, this.connections.get(connectionId)?.accountId);
     if (!player) throw new Error('INVALID_RECONNECT');
+
+    if (oldConnectionId && oldConnectionId !== connectionId) this.memberships.delete(oldConnectionId);
 
     this.memberships.set(connectionId, { roomCode: code, playerId: player.id });
     const timerKey = this.timerKey(code, player.id);
@@ -312,7 +323,8 @@ export class RoomManager {
 
     const entry = {
       connectionId,
-      playerName: sanitizeQueueName(playerName),
+      playerName: this.connections.get(connectionId)?.displayName ?? sanitizeQueueName(playerName),
+      ...(this.connections.get(connectionId)?.accountId ? { accountId: this.connections.get(connectionId)!.accountId } : {}),
       theme,
       loadout: [...loadout] as SkillLoadout,
       joinedAt: Date.now(),
@@ -362,9 +374,9 @@ export class RoomManager {
       }
 
       const code = this.generateRoomCode();
-      const room = new RoomSession(code, (target, message) => this.send(target, message));
-      const firstPlayer = room.addPlayer(first.connectionId, first.playerName, first.theme, first.loadout);
-      const secondPlayer = room.addPlayer(second.connectionId, second.playerName, second.theme, second.loadout);
+      const room = new RoomSession(code, (target, message) => this.send(target, message), this.onMatchFinished);
+      const firstPlayer = room.addPlayer(first.connectionId, first.playerName, first.theme, first.loadout, first.accountId);
+      const secondPlayer = room.addPlayer(second.connectionId, second.playerName, second.theme, second.loadout, second.accountId);
 
       this.rooms.set(code, room);
       this.memberships.set(first.connectionId, { roomCode: code, playerId: firstPlayer.id });

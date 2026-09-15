@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import type { MatchEndReason } from '../../shared/index';
 
 export interface PlayerAccount {
   id: string;
@@ -32,10 +33,23 @@ export interface AccountRepository {
   findOrCreate(openId: string, unionId?: string, anonymousOpenId?: string): Promise<{ account: PlayerAccount; created: boolean }>;
   claimSidebar(id: string, day: string): Promise<{ account: PlayerAccount; granted: boolean }>;
   claimAd(id: string, kind: 'solo_skill_refill', claimId: string): Promise<{ account: PlayerAccount; granted: boolean }>;
+  mergeSoloProgress(id: string, theme: 'kingdom' | 'palace', best: number, highest: number): Promise<PlayerAccount>;
+  recordMatch(result: AccountMatchResult): Promise<boolean>;
 }
 
-interface State { version: 1; accounts: PlayerAccount[] }
-const fresh = (): State => ({ version: 1, accounts: [] });
+export interface AccountMatchResult {
+  matchId: string;
+  reason: MatchEndReason;
+  winnerId: string | null;
+  players: readonly { playerId: string; accountId?: string }[];
+}
+
+export const MAX_RECENT_AD_CLAIMS = 256;
+export const MAX_RECENT_MATCHES = 512;
+export const PVP_ELO_K = 24;
+
+interface State { version: 1; accounts: PlayerAccount[]; processedMatches: string[] }
+const fresh = (): State => ({ version: 1, accounts: [], processedMatches: [] });
 
 /** Serialized mutations and atomic rename keep a single-server ledger durable across restarts. */
 export class JsonAccountRepository implements AccountRepository {
@@ -50,7 +64,20 @@ export class JsonAccountRepository implements AccountRepository {
       if (!parsed || typeof parsed !== 'object' || (parsed as State).version !== 1 || !Array.isArray((parsed as State).accounts)) {
         throw new Error('unsupported account data format');
       }
-      repo.state = parsed as State;
+      const state = parsed as State;
+      const priorMatchCount = Array.isArray(state.processedMatches) ? state.processedMatches.length : 0;
+      state.processedMatches = Array.isArray(state.processedMatches)
+        ? state.processedMatches.slice(-MAX_RECENT_MATCHES) : [];
+      let trimmed = priorMatchCount > MAX_RECENT_MATCHES;
+      for (const account of state.accounts) {
+        if (!Array.isArray(account.adClaims)) account.adClaims = [];
+        if (account.adClaims.length > MAX_RECENT_AD_CLAIMS) {
+          account.adClaims = account.adClaims.slice(-MAX_RECENT_AD_CLAIMS);
+          trimmed = true;
+        }
+      }
+      repo.state = state;
+      if (trimmed) await repo.persist();
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
@@ -123,8 +150,60 @@ export class JsonAccountRepository implements AccountRepository {
       const account = this.requireAccount(id);
       if (account.adClaims.includes(claimId)) return { result: { account, granted: false }, changed: false };
       account.adClaims.push(claimId);
+      if (account.adClaims.length > MAX_RECENT_AD_CLAIMS) account.adClaims.shift();
       account.updatedAt = Date.now();
       return { result: { account, granted: true }, changed: true };
+    });
+  }
+
+  mergeSoloProgress(id: string, theme: 'kingdom' | 'palace', best: number, highest: number): Promise<PlayerAccount> {
+    return this.mutate(() => {
+      const account = this.requireAccount(id);
+      const bestKey = theme === 'kingdom' ? 'bestKingdom' : 'bestPalace';
+      const highestKey = theme === 'kingdom' ? 'highestKingdom' : 'highestPalace';
+      const nextBest = Math.max(account.solo[bestKey], best);
+      const nextHighest = Math.max(account.solo[highestKey], highest);
+      const changed = nextBest !== account.solo[bestKey] || nextHighest !== account.solo[highestKey];
+      if (changed) {
+        account.solo[bestKey] = nextBest;
+        account.solo[highestKey] = nextHighest;
+        account.updatedAt = Date.now();
+      }
+      return { result: account, changed };
+    });
+  }
+
+  recordMatch(result: AccountMatchResult): Promise<boolean> {
+    return this.mutate(() => {
+      if (this.state.processedMatches.includes(result.matchId)) return { result: false, changed: false };
+      if (result.players.length !== 2) throw new Error('invalid match result');
+      const accountIds = result.players.map(player => player.accountId).filter((id): id is string => Boolean(id));
+      if (accountIds.length === 0 || new Set(accountIds).size !== accountIds.length) {
+        return { result: false, changed: false };
+      }
+      const accounts = result.players.map(player => player.accountId
+        ? this.state.accounts.find(account => account.id === player.accountId) ?? null : null);
+      const ratings = accounts.map(account => account?.pvp.rating ?? 1000);
+      const competitiveRating = accounts.every((account): account is PlayerAccount => Boolean(account));
+      const now = Date.now();
+      for (let index = 0; index < 2; index += 1) {
+        const account = accounts[index];
+        if (!account) continue;
+        const player = result.players[index];
+        const score = result.winnerId === null ? 0.5 : result.winnerId === player.playerId ? 1 : 0;
+        if (score === 1) account.pvp.wins += 1;
+        else if (score === 0) account.pvp.losses += 1;
+        else account.pvp.draws += 1;
+        // Guest/browser matches still count in W/L/D, but cannot farm competitive Elo.
+        if (competitiveRating) {
+          const expected = 1 / (1 + 10 ** ((ratings[1 - index] - ratings[index]) / 400));
+          account.pvp.rating = Math.max(0, ratings[index] + Math.round(PVP_ELO_K * (score - expected)));
+        }
+        account.updatedAt = now;
+      }
+      this.state.processedMatches.push(result.matchId);
+      if (this.state.processedMatches.length > MAX_RECENT_MATCHES) this.state.processedMatches.shift();
+      return { result: true, changed: true };
     });
   }
 

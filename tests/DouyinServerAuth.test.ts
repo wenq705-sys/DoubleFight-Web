@@ -1,10 +1,10 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { JsonAccountRepository } from '../server/auth/AccountRepository';
+import { JsonAccountRepository, MAX_RECENT_AD_CLAIMS, MAX_RECENT_MATCHES } from '../server/auth/AccountRepository';
 import { createAuthHandler } from '../server/auth/AuthHttp';
 import { OfficialDouyinProvider, ProviderError, type DouyinProvider } from '../server/auth/DouyinProvider';
 import { SessionToken } from '../server/auth/SessionToken';
@@ -76,6 +76,62 @@ describe('durable accounts and reward ledger', () => {
     expect((await reopened.claimAd(account.id, 'solo_skill_refill', 'claim-12345678')).granted).toBe(false);
     expect((await reopened.findById(account.id))?.rewards.currency).toBe(0);
   });
+
+  it('keeps recent ad replay protection while bounding the ledger after reopen', async () => {
+    const { folder, repository } = await repo();
+    const { account } = await repository.findOrCreate('ad-player');
+    for (let index = 0; index < MAX_RECENT_AD_CLAIMS + 30; index += 1) {
+      expect((await repository.claimAd(account.id, 'solo_skill_refill', `ad-claim-${index + 100000}`)).granted).toBe(true);
+    }
+    expect((await repository.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS);
+    const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
+    expect((await reopened.claimAd(account.id, 'solo_skill_refill', `ad-claim-${MAX_RECENT_AD_CLAIMS + 29 + 100000}`)).granted).toBe(false);
+    expect((await reopened.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS);
+  });
+
+  it('max-merges Solo progress per theme across repository reopen', async () => {
+    const { folder, repository } = await repo();
+    const { account } = await repository.findOrCreate('solo-player');
+    await repository.mergeSoloProgress(account.id, 'kingdom', 640, 64);
+    await repository.mergeSoloProgress(account.id, 'kingdom', 100, 16);
+    await repository.mergeSoloProgress(account.id, 'palace', 250, 32);
+    const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
+    expect((await reopened.findById(account.id))?.solo).toEqual({
+      bestKingdom: 640, highestKingdom: 64, bestPalace: 250, highestPalace: 32,
+    });
+  });
+
+  it('records authoritative win/loss/draw once per match and rematch independently', async () => {
+    const { folder, repository } = await repo();
+    const a = (await repository.findOrCreate('pvp-a')).account;
+    const b = (await repository.findOrCreate('pvp-b')).account;
+    const players = [{ playerId: 'room-a', accountId: a.id }, { playerId: 'room-b', accountId: b.id }];
+    expect(await repository.recordMatch({ matchId: 'first-match', reason: 'board_locked', winnerId: 'room-a', players })).toBe(true);
+    expect(await repository.recordMatch({ matchId: 'first-match', reason: 'board_locked', winnerId: 'room-a', players })).toBe(false);
+    expect(await repository.recordMatch({ matchId: 'second-rematch', reason: 'petrified_lock', winnerId: 'room-b', players })).toBe(true);
+    expect(await repository.recordMatch({ matchId: 'third-draw', reason: 'time_limit', winnerId: null, players })).toBe(true);
+    const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
+    expect(await reopened.recordMatch({ matchId: 'second-rematch', reason: 'petrified_lock', winnerId: 'room-b', players })).toBe(false);
+    expect((await reopened.findById(a.id))?.pvp).toMatchObject({ wins: 1, losses: 1, draws: 1 });
+    expect((await reopened.findById(b.id))?.pvp).toMatchObject({ wins: 1, losses: 1, draws: 1 });
+    expect((await reopened.findById(a.id))!.pvp.rating + (await reopened.findById(b.id))!.pvp.rating).toBe(2000);
+  });
+
+  it('covers all authoritative end reasons, mixed guest outcomes and bounded match replay', async () => {
+    const { folder, repository } = await repo();
+    const account = (await repository.findOrCreate('mixed-player')).account;
+    const players = [{ playerId: 'auth-player', accountId: account.id }, { playerId: 'guest-player' }];
+    for (const reason of ['opponent_left', 'board_locked', 'petrified_lock', 'time_limit']) {
+      expect(await repository.recordMatch({ matchId: `${reason}-match`, reason: reason as 'opponent_left' | 'board_locked' | 'petrified_lock' | 'time_limit', winnerId: 'auth-player', players })).toBe(true);
+    }
+    expect((await repository.findById(account.id))?.pvp).toMatchObject({ wins: 4, rating: 1000 });
+    for (let index = 0; index < MAX_RECENT_MATCHES + 10; index += 1) {
+      await repository.recordMatch({ matchId: `bounded-${index}`, reason: 'time_limit', winnerId: null, players });
+    }
+    const stored = JSON.parse(await readFile(join(folder, 'accounts.json'), 'utf8')) as { processedMatches: string[] };
+    expect(stored.processedMatches).toHaveLength(MAX_RECENT_MATCHES);
+    expect(await repository.recordMatch({ matchId: `bounded-${MAX_RECENT_MATCHES + 9}`, reason: 'time_limit', winnerId: null, players })).toBe(false);
+  });
 });
 
 describe('Double Fight session', () => {
@@ -86,6 +142,7 @@ describe('Double Fight session', () => {
     expect(current.verify(token, expiresAt)).toBeNull();
     expect(current.verify(`${token.slice(0, -1)}x`, 1000)).toBeNull();
     expect(new SessionToken('new-rotation-key-with-at-least-thirty-two-bytes', secret).verify(token, 1000)).toBe('account-1');
+    expect(new SessionToken('new-rotation-key-with-at-least-thirty-two-bytes', 'short').verify(token, 1000)).toBeNull();
     expect(new SessionToken(undefined).verify(token, 1000)).toBeNull();
   });
 });
@@ -140,6 +197,27 @@ describe('account HTTP endpoints', () => {
       expect((await post(site.base, '/rewards/ad', { kind: 'currency', claimId: 'unique-123456' }, auth.token)).status).toBe(400);
       expect((await (await post(site.base, '/rewards/ad', { kind: 'solo_skill_refill', claimId: 'unique-123456' }, auth.token)).json()).granted).toBe(true);
       expect((await (await post(site.base, '/rewards/ad', { kind: 'solo_skill_refill', claimId: 'unique-123456' }, auth.token)).json()).granted).toBe(false);
+    } finally { await site.close(); }
+  });
+
+  it('requires bearer for Solo progress and rejects malformed or extreme values', async () => {
+    const site = await fixture();
+    try {
+      const auth = await (await post(site.base, '/auth/douyin', { code: 'temporary-code' })).json() as { token: string };
+      expect((await post(site.base, '/progress/solo', { theme: 'kingdom', best: 1, highest: 2 })).status).toBe(401);
+      const invalid = [
+        { theme: 'third', best: 100, highest: 32 },
+        { theme: 'kingdom', best: -1, highest: 32 },
+        { theme: 'kingdom', best: 1.5, highest: 32 },
+        { theme: 'kingdom', best: 100, highest: 3 },
+        { theme: 'kingdom', best: 100, highest: 2_097_152 },
+        { theme: 'kingdom', best: 100_000_001, highest: 32 },
+      ];
+      for (const body of invalid) expect((await post(site.base, '/progress/solo', body, auth.token)).status).toBe(400);
+      const first = await (await post(site.base, '/progress/solo', { theme: 'kingdom', best: 640, highest: 64 }, auth.token)).json();
+      expect(first.player.solo.bestKingdom).toBe(640);
+      const lower = await (await post(site.base, '/progress/solo', { theme: 'kingdom', best: 100, highest: 16 }, auth.token)).json();
+      expect(lower.player.solo).toMatchObject({ bestKingdom: 640, highestKingdom: 64, bestPalace: 0 });
     } finally { await site.close(); }
   });
 
