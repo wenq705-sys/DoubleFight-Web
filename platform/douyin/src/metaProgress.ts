@@ -100,26 +100,23 @@ export function recordWeeklySolo(
   now: number = Date.now(),
 ): { progress: WeeklySoloProgress; improved: boolean } {
   const weekKey = currentWeekKey(now);
-  let previous: WeeklySoloProgress = { weekKey, best: 0 };
+  let best = 0;
+  let currentWeekCached = false;
   try {
     const raw = storage.getItem(WEEKLY_SOLO_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<WeeklySoloProgress>;
       if (parsed.weekKey === weekKey && Number.isFinite(parsed.best) && Number(parsed.best) >= 0) {
-        previous = { weekKey, best: Math.floor(Number(parsed.best)) };
+        best = Math.floor(Number(parsed.best));
+        currentWeekCached = true;
       }
     }
   } catch { /* reset malformed weekly cache */ }
 
   const safeScore = Math.max(0, Math.floor(Number.isFinite(score) ? score : 0));
-  const improved = safeScore > previous.best;
-  const progress = improved ? { weekKey, best: safeScore } : previous;
-  if (improved || storage.getItem(WEEKLY_SOLO_KEY) === null) {
-    storage.setItem(WEEKLY_SOLO_KEY, JSON.stringify(progress));
-  } else if (previous.weekKey !== weekKey) {
-    storage.setItem(WEEKLY_SOLO_KEY, JSON.stringify({ weekKey, best: safeScore }));
-    return { progress: { weekKey, best: safeScore }, improved: safeScore > 0 };
-  }
+  const improved = safeScore > best;
+  const progress = { weekKey, best: Math.max(best, safeScore) };
+  if (!currentWeekCached || improved) storage.setItem(WEEKLY_SOLO_KEY, JSON.stringify(progress));
   return { progress, improved };
 }
 
