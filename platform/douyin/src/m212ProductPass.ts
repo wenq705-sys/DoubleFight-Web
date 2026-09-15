@@ -6,7 +6,7 @@ import {
 } from '../../../shared/index';
 import { MAX_PIECE_VALUE, THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
-import { competitiveRankLabel } from '../../../src/meta/productMeta';
+import { competitiveRankLabel, competitiveRankProgress } from '../../../src/meta/productMeta';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { OnlineClient } from '../../../src/network/OnlineClient';
 import type { DouyinAuthClient } from './auth';
@@ -471,9 +471,22 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
   ctx.fillStyle = '#9fd5d1';
   ctx.font = '850 12px sans-serif';
   ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, y + 70);
+
+  const rankProgress = competitiveRankProgress(rating);
+  const rankBarX = x + 52;
+  const rankBarW = panelW - 104;
+  round(ctx, rankBarX, y + 82, rankBarW, 5, 2.5);
+  ctx.fillStyle = 'rgba(255,255,255,.13)';
+  ctx.fill();
+  if (rankProgress > 0) {
+    round(ctx, rankBarX, y + 82, Math.max(3, rankBarW * rankProgress), 5, 2.5);
+    ctx.fillStyle = '#6fd3c8';
+    ctx.fill();
+  }
+
   ctx.fillStyle = '#f2cf70';
   ctx.font = '900 16px sans-serif';
-  ctx.fillText(`S ${player?.rewards.currency ?? 0}`, width / 2, y + 102);
+  ctx.fillText(`S ${player?.rewards.currency ?? 0}`, width / 2, y + 106);
   ctx.fillStyle = '#d8e5e3';
   ctx.font = '800 11px sans-serif';
   ctx.fillText(`PvP  ${player?.pvp.wins ?? 0}胜  ${player?.pvp.losses ?? 0}负  ${player?.pvp.draws ?? 0}平`, width / 2, y + 132);
