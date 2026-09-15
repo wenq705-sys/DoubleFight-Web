@@ -123,6 +123,8 @@ export interface DouyinApi {
   onShow(listener: (options?: DouyinShowOptions) => void): void;
   onHide(listener: () => void): void;
 
+  reportAnalytics?(event: string, data: Record<string, string | number | boolean>): void;
+
   connectSocket(options: { url: string; header?: Record<string, string>; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
 
   createRewardedVideoAd?(options: {
