@@ -39,7 +39,7 @@ export function createAuthHandler(deps: AuthDependencies) {
         if (!code && !anonymousCode) { json(response, 400, { error: 'invalid_credentials' }); return true; }
         deps.sessions.assertConfigured();
         const identity = await deps.provider.exchange({ ...(code ? { code } : {}), ...(anonymousCode ? { anonymousCode } : {}) });
-        const { account, created } = await deps.repository.findOrCreate(identity.openid, identity.unionid);
+        const { account, created } = await deps.repository.findOrCreate(identity.openid, identity.unionid, identity.anonymousOpenid);
         const session = deps.sessions.issue(account.id, now());
         log({ event: 'auth_success', account: created ? 'created' : 'reused' });
         json(response, 200, { ...session, player: publicPlayer(account) });
