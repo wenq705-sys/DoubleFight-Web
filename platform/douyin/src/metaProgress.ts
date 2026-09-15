@@ -94,24 +94,38 @@ export function currentWeekKey(now: number = Date.now()): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function recordWeeklySolo(
+export function loadWeeklySolo(
   storage: StorageAdapter,
-  score: number,
   now: number = Date.now(),
-): { progress: WeeklySoloProgress; improved: boolean } {
+): WeeklySoloProgress {
   const weekKey = currentWeekKey(now);
-  let best = 0;
-  let currentWeekCached = false;
   try {
     const raw = storage.getItem(WEEKLY_SOLO_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<WeeklySoloProgress>;
       if (parsed.weekKey === weekKey && Number.isFinite(parsed.best) && Number(parsed.best) >= 0) {
-        best = Math.floor(Number(parsed.best));
-        currentWeekCached = true;
+        return { weekKey, best: Math.floor(Number(parsed.best)) };
       }
     }
-  } catch { /* reset malformed weekly cache */ }
+  } catch { /* ignore malformed weekly cache */ }
+  return { weekKey, best: 0 };
+}
+
+export function recordWeeklySolo(
+  storage: StorageAdapter,
+  score: number,
+  now: number = Date.now(),
+): { progress: WeeklySoloProgress; improved: boolean } {
+  const current = loadWeeklySolo(storage, now);
+  const weekKey = current.weekKey;
+  const best = current.best;
+  const raw = storage.getItem(WEEKLY_SOLO_KEY);
+  let currentWeekCached = false;
+  if (raw) {
+    try {
+      currentWeekCached = (JSON.parse(raw) as Partial<WeeklySoloProgress>).weekKey === weekKey;
+    } catch { currentWeekCached = false; }
+  }
 
   const safeScore = Math.max(0, Math.floor(Number.isFinite(score) ? score : 0));
   const improved = safeScore > best;
