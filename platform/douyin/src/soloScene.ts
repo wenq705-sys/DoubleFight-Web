@@ -1600,6 +1600,7 @@ export class DouyinSoloScene {
     }
     if (this.hit(x, y, close)) {
       this.collectionOpen = false;
+      this.profileOpen = true;
       this.refreshHud();
     }
   }
@@ -1772,6 +1773,163 @@ export class DouyinSoloScene {
       ctx.fillText(transition.label, width / 2, height * 0.44 + 22);
       ctx.globalAlpha = 1;
     }
+  }
+
+  private drawRankingCenter(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(322, width - 26);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.16;
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const bestAscension = Number(this.platform.storage.getItem(`doublefight-ascension-best-${this.currentTheme}`) ?? 0);
+    const soloBest = Number(this.platform.storage.getItem(`doublefight-best-${this.currentTheme}`) ?? 0);
+
+    this.roundedRect(ctx, x, y, panelWidth, 462, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 462);
+    gradient.addColorStop(0, 'rgba(10,39,48,.98)');
+    gradient.addColorStop(1, 'rgba(15,24,37,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe6a0';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText('排行榜', width / 2, y + 35);
+    ctx.fillStyle = '#a9c1c2';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('探索 · Solo · 竞技', width / 2, y + 57);
+
+    const card = (rect: Rect, title: string, metric: string, detail: string, accent: string, enabled = true) => {
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 19);
+      ctx.fillStyle = enabled ? 'rgba(22,48,57,.94)' : 'rgba(24,37,43,.76)';
+      ctx.fill();
+      ctx.strokeStyle = enabled ? accent : 'rgba(160,175,178,.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = enabled ? '#f4f0dc' : '#a8b3b4';
+      ctx.font = '900 13px sans-serif';
+      ctx.fillText(title, rect.x + 16, rect.y + 20);
+      ctx.fillStyle = enabled ? accent : '#8c999b';
+      ctx.font = '900 18px sans-serif';
+      ctx.fillText(metric, rect.x + 16, rect.y + 48);
+      ctx.fillStyle = '#9fb2b4';
+      ctx.font = '700 9px sans-serif';
+      ctx.fillText(detail, rect.x + 16, rect.y + 69);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = enabled ? '#e7d28b' : '#788588';
+      ctx.font = '850 10px sans-serif';
+      ctx.fillText(enabled ? '好友榜  ›' : '即将开放', rect.x + rect.width - 16, rect.y + 45);
+    };
+
+    const asc = { x: x + 18, y: y + 88, width: panelWidth - 36, height: 88 };
+    const solo = { x: x + 18, y: y + 188, width: panelWidth - 36, height: 88 };
+    const pvp = { x: x + 18, y: y + 288, width: panelWidth - 36, height: 88 };
+    card(
+      asc,
+      '⚡ 主题登顶竞速',
+      bestAscension ? formatDuration(bestAscension) : '尚未登顶',
+      `${THEMES[this.currentTheme].label} · 最快抵达最终棋子`,
+      '#ffe078',
+    );
+    card(
+      solo,
+      '◆ Solo 成绩榜',
+      soloBest.toLocaleString('zh-CN'),
+      `${THEMES[this.currentTheme].label} · 现有好友成绩`,
+      '#8fe3d4',
+    );
+    card(
+      pvp,
+      '⚔ 竞技赛季',
+      account ? `${rank.label} · ${account.pvp.rating}` : '登录后参赛',
+      '14日赛季 · 全服 Rating 榜',
+      '#caa0f4',
+      false,
+    );
+
+    this.drawPillButton(ctx, { x: x + 60, y: y + 400, width: panelWidth - 120, height: 42 }, '返回主页', 'primary');
+  }
+
+  private drawCollection(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.74)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(330, width - 22);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.105;
+    const discovered = this.discoveredValues(this.collectionTheme);
+
+    this.roundedRect(ctx, x, y, panelWidth, 554, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 554);
+    gradient.addColorStop(0, 'rgba(10,41,49,.98)');
+    gradient.addColorStop(1, 'rgba(17,24,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(243,207,105,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe6a0';
+    ctx.font = '900 22px sans-serif';
+    ctx.fillText('棋子图鉴', width / 2, y + 32);
+    ctx.fillStyle = '#9fc0be';
+    ctx.font = '750 9px sans-serif';
+    ctx.fillText(`已发现 ${discovered.size} / ${PIECE_VALUES.length}`, width / 2, y + 51);
+
+    this.drawPillButton(
+      ctx,
+      { x: x + 48, y: y + 64, width: panelWidth - 96, height: 36 },
+      `‹  ${THEMES[this.collectionTheme].label}  ›`,
+      'secondary',
+    );
+
+    const gap = 8;
+    const edge = 18;
+    const cardWidth = (panelWidth - edge * 2 - gap) / 2;
+    const cardHeight = 56;
+    const startY = y + 114;
+    PIECE_VALUES.forEach((value, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const rect = {
+        x: x + edge + col * (cardWidth + gap),
+        y: startY + row * (cardHeight + 7),
+        width: cardWidth,
+        height: cardHeight,
+      };
+      const found = discovered.has(value);
+      this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 15);
+      ctx.fillStyle = found ? 'rgba(25,57,63,.90)' : 'rgba(22,31,38,.72)';
+      ctx.fill();
+      ctx.strokeStyle = found ? 'rgba(238,205,107,.28)' : 'rgba(150,165,168,.10)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = found ? '#f1ce70' : '#697779';
+      ctx.font = '900 9px sans-serif';
+      ctx.fillText(found ? `阶位 ${index + 1}` : '未发现', rect.x + 12, rect.y + 16);
+      ctx.fillStyle = found ? '#f5f0dd' : '#879395';
+      ctx.font = found ? '850 11px sans-serif' : '800 12px sans-serif';
+      ctx.fillText(found ? pieceName(this.collectionTheme, value) : '???', rect.x + 12, rect.y + 37);
+
+      if (value === FINAL_PIECE_VALUE) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = found ? '#ffe078' : '#596669';
+        ctx.font = '900 12px sans-serif';
+        ctx.fillText('♛', rect.x + rect.width - 12, rect.y + 28);
+      }
+    });
+
+    this.drawPillButton(ctx, { x: x + 64, y: y + 500, width: panelWidth - 128, height: 42 }, '返回档案', 'primary');
   }
 
   private drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number): void {
