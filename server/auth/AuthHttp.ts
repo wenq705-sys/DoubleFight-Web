@@ -13,7 +13,7 @@ export interface AuthDependencies {
   log?: (event: Record<string, string | boolean>) => void;
 }
 
-const routes = new Set(['/auth/douyin', '/me', '/rewards/sidebar', '/rewards/ad']);
+const routes = new Set(['/auth/douyin', '/me', '/progress/solo', '/rewards/sidebar', '/rewards/ad']);
 const audit = (event: Record<string, string | boolean>) => console.info(JSON.stringify({ area: 'account', ...event }));
 
 export function createAuthHandler(deps: AuthDependencies) {
@@ -54,6 +54,21 @@ export function createAuthHandler(deps: AuthDependencies) {
         json(response, 401, { error: 'unauthorized' }); return true;
       }
       if (path === '/me') { json(response, 200, { player: publicPlayer(account) }); return true; }
+
+      if (path === '/progress/solo') {
+        const body = await readBody(request);
+        if (body.theme !== 'kingdom' && body.theme !== 'palace') throw new RequestError(400, 'invalid_progress');
+        if (typeof body.best !== 'number' || !Number.isSafeInteger(body.best) || body.best < 0 || body.best > 100_000_000) {
+          throw new RequestError(400, 'invalid_progress');
+        }
+        if (typeof body.highest !== 'number' || !Number.isSafeInteger(body.highest) || body.highest < 2
+          || body.highest > 1_048_576 || !Number.isInteger(Math.log2(body.highest))) {
+          throw new RequestError(400, 'invalid_progress');
+        }
+        const updated = await deps.repository.mergeSoloProgress(account.id, body.theme, body.best, body.highest);
+        json(response, 200, { player: publicPlayer(updated) });
+        return true;
+      }
 
       if (path === '/rewards/sidebar') {
         const body = await readBody(request);

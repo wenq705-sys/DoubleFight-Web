@@ -123,7 +123,7 @@ export interface DouyinApi {
   onShow(listener: (options?: DouyinShowOptions) => void): void;
   onHide(listener: () => void): void;
 
-  connectSocket(options: { url: string; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
+  connectSocket(options: { url: string; header?: Record<string, string>; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
 
   createRewardedVideoAd?(options: {
     adUnitId: string;

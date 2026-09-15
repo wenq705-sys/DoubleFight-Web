@@ -149,3 +149,11 @@ A real authenticated Douyin player can:
 4. finish a match and see durable W/L/D/rating on the next /me restore;
 5. retain Solo best/highest across reinstall/login restoration where platform storage is unavailable;
 6. still use Browser/guest PvP with no regression.
+
+## Implementation notes
+
+- The server verifies `Authorization` during the WebSocket connection and records only `accountId` plus the server profile name in the room. Missing or invalid headers keep the existing guest path; Protocol v6 messages stay unchanged.
+- `RoomSession.finishMatch` is the single outcome hook. The JSON repository serializes atomic writes and retains the latest 512 match IDs to suppress duplicate finish callbacks. A rematch creates a new match ID. Rating uses deterministic Elo with K=24 and an initial rating of 1000; guest-only matches do not update accounts.
+- `/progress/solo` only max-merges per-theme best/highest. The Douyin client saves locally first, sends best-effort updates, and restores larger server values at login. This is progress persistence, not a verified Solo score.
+- The ad replay ledger retains the latest 256 claim IDs. Recent replay still fails; older IDs can expire from the bounded ledger. Server-verifiable ad proof remains a release-hardening item.
+- Production still needs operator-managed provider/signing secrets, durable data-volume backup, registered Douyin request/socket legal domains, and real-device account/reconnect acceptance. No production deployment is performed here.

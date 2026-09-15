@@ -22,6 +22,7 @@ export class DouyinAuthClient {
     private readonly api: Pick<DouyinApi, 'request'>,
     private readonly platform: Pick<Platform, 'account' | 'storage'>,
     private readonly baseUrl: string = DOUYIN_PRODUCT_CONFIG.apiUrl,
+    private readonly onSessionToken: (token: string | null) => void = () => {},
   ) {}
 
   get current(): AuthState { return this.state; }
@@ -41,17 +42,18 @@ export class DouyinAuthClient {
   private async initialize(): Promise<AuthState> {
     const stored = this.platform.storage.getItem(TOKEN_KEY);
     if (stored) {
-      this.token = stored;
+      this.setToken(stored);
       try {
         const restored = await this.call('GET', '/me');
         if (this.isPlayer(restored.player)) {
           this.state = { status: 'authenticated', player: restored.player };
+          this.restoreSoloCache(restored.player);
           return this.state;
         }
       } catch (error) {
         if (!(error instanceof HttpError) || error.status !== 401) return this.state;
       }
-      this.token = null;
+      this.setToken(null);
       this.platform.storage.removeItem(TOKEN_KEY);
     }
 
@@ -72,9 +74,10 @@ export class DouyinAuthClient {
         this.platform.account.reset?.();
         return this.state;
       }
-      this.token = payload.token;
+      this.setToken(payload.token);
       this.platform.storage.setItem(TOKEN_KEY, payload.token);
       this.state = { status: 'authenticated', player: payload.player };
+      this.restoreSoloCache(payload.player);
     } catch (error) {
       // A provider 401 means the one-use code was consumed/rejected. Allow the
       // next foreground/reward attempt to obtain a fresh tt.login credential.
@@ -102,14 +105,51 @@ export class DouyinAuthClient {
     } catch { return 'unavailable'; }
   }
 
+  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+    await this.start();
+    if (!this.token) return false;
+    try {
+      const data = await this.call('POST', '/progress/solo', { theme, best, highest });
+      this.updatePlayer(data.player);
+      return this.isPlayer(data.player);
+    } catch { return false; }
+  }
+
+  private setToken(token: string | null): void {
+    this.token = token;
+    this.onSessionToken(token);
+  }
+
+  private restoreSoloCache(player: PublicPlayer): void {
+    for (const theme of ['kingdom', 'palace'] as const) {
+      const best = theme === 'kingdom' ? player.solo.bestKingdom : player.solo.bestPalace;
+      const highest = theme === 'kingdom' ? player.solo.highestKingdom : player.solo.highestPalace;
+      const bestKey = `doublefight-best-${theme}`;
+      const highestKey = `doublefight-highest-${theme}`;
+      if (Number.isSafeInteger(best) && best > Number(this.platform.storage.getItem(bestKey) ?? 0)) {
+        this.platform.storage.setItem(bestKey, String(best));
+      }
+      if (Number.isSafeInteger(highest) && highest > Number(this.platform.storage.getItem(highestKey) ?? 2)) {
+        this.platform.storage.setItem(highestKey, String(highest));
+      }
+    }
+  }
+
   private updatePlayer(value: unknown): void {
-    if (this.isPlayer(value)) this.state = { status: 'authenticated', player: value };
+    if (this.isPlayer(value)) {
+      this.state = { status: 'authenticated', player: value };
+      this.restoreSoloCache(value);
+    }
   }
 
   private isPlayer(value: unknown): value is PublicPlayer {
     return Boolean(value && typeof value === 'object'
       && typeof (value as PublicPlayer).id === 'string'
       && typeof (value as PublicPlayer).displayName === 'string'
+      && typeof (value as PublicPlayer).solo?.bestKingdom === 'number'
+      && typeof (value as PublicPlayer).solo?.highestKingdom === 'number'
+      && typeof (value as PublicPlayer).solo?.bestPalace === 'number'
+      && typeof (value as PublicPlayer).solo?.highestPalace === 'number'
       && typeof (value as PublicPlayer).rewards?.currency === 'number');
   }
 

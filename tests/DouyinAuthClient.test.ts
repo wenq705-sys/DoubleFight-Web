@@ -10,7 +10,7 @@ const player = {
   rewards: { currency: 0 },
 };
 
-function fixture(storedToken?: string, requestBehavior?: (options: Parameters<NonNullable<DouyinApi['request']>>[0]) => void) {
+function fixture(storedToken?: string, requestBehavior?: (options: Parameters<NonNullable<DouyinApi['request']>>[0]) => void, onSessionToken = vi.fn()) {
   const values = new Map<string, string>(storedToken ? [['doublefight-session-token', storedToken]] : []);
   const bootstrap = vi.fn(async () => ({ status: 'logged_in' as const, isLoggedIn: true as const, code: 'one-use-code' }));
   const reset = vi.fn();
@@ -28,8 +28,8 @@ function fixture(storedToken?: string, requestBehavior?: (options: Parameters<No
     else if (options.url.endsWith('/me')) options.success({ statusCode: 200, data: { player } });
     else options.success({ statusCode: 200, data: { granted: true, player } });
   });
-  const client = new DouyinAuthClient({ request }, platform, 'https://game.example');
-  return { client, values, bootstrap, reset, request };
+  const client = new DouyinAuthClient({ request }, platform, 'https://game.example', onSessionToken);
+  return { client, values, bootstrap, reset, request, onSessionToken };
 }
 
 describe('Douyin account session bootstrap', () => {
@@ -90,5 +90,29 @@ describe('Douyin account session bootstrap', () => {
     expect(await setup.client.claimSidebar()).toBe('duplicate');
     expect(setup.request.mock.calls[1]?.[0].data).toEqual({ kind: 'solo_skill_refill', claimId: 'claim-12345678' });
     expect(setup.request.mock.calls[1]?.[0].header?.authorization).toBe('Bearer signed.session');
+  });
+
+  it('passes the restored session to socket setup and max-restores Solo cache from /me', async () => {
+    const restored = { ...player, solo: { bestKingdom: 800, highestKingdom: 128, bestPalace: 70, highestPalace: 32 } };
+    const setup = fixture('persisted.session', options => options.success({ statusCode: 200, data: { player: restored } }));
+    setup.values.set('doublefight-best-kingdom', '900');
+    setup.values.set('doublefight-highest-kingdom', '64');
+    await setup.client.start();
+    expect(setup.onSessionToken).toHaveBeenCalledWith('persisted.session');
+    expect(setup.values.get('doublefight-best-kingdom')).toBe('900');
+    expect(setup.values.get('doublefight-highest-kingdom')).toBe('128');
+    expect(setup.values.get('doublefight-best-palace')).toBe('70');
+    expect(setup.values.get('doublefight-highest-palace')).toBe('32');
+  });
+
+  it('syncs meaningful Solo progress with bearer without blocking when the network fails', async () => {
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) options.success({ statusCode: 200, data: { token: 'signed.session', player } });
+      else if (options.url.endsWith('/progress/solo')) options.fail({ errMsg: 'offline' });
+    });
+    await setup.client.start();
+    expect(await setup.client.syncSoloProgress('palace', 500, 64)).toBe(false);
+    expect(setup.request.mock.calls[1]?.[0]).toMatchObject({ method: 'POST', data: { theme: 'palace', best: 500, highest: 64 }, header: { authorization: 'Bearer signed.session' } });
+    expect(setup.client.current.status).toBe('authenticated');
   });
 });

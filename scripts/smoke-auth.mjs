@@ -36,7 +36,12 @@ try {
   assert.equal((await (await post('/rewards/sidebar', { source: 'sidebar_return' }, token)).json()).granted, false);
   assert.equal((await (await post('/rewards/ad', { kind: 'solo_skill_refill', claimId: 'smoke-claim-123' }, token)).json()).granted, true);
   assert.equal((await (await post('/rewards/ad', { kind: 'solo_skill_refill', claimId: 'smoke-claim-123' }, token)).json()).granted, false);
-  console.log('PASS auth: mock code exchange, session, /me, sidebar/ad idempotency');
+  const progress = await post('/progress/solo', { theme: 'kingdom', best: 640, highest: 64 }, token);
+  assert.equal(progress.status, 200);
+  assert.equal((await progress.json()).player.solo.bestKingdom, 640);
+  assert.equal((await (await post('/progress/solo', { theme: 'kingdom', best: 4, highest: 4 }, token)).json()).player.solo.highestKingdom, 64);
+  assert.equal((await post('/progress/solo', { theme: 'palace', best: -1, highest: 3 }, token)).status, 400);
+  console.log('PASS auth: mock code exchange, session, /me, rewards and Solo max merge');
 } finally {
   await new Promise(resolve => server.close(resolve));
   await rm(folder, { recursive: true, force: true });

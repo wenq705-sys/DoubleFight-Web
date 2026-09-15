@@ -197,11 +197,14 @@ export class DouyinSoloScene {
   openSharedRoom(code: string): void {
     const normalized = code.replace(/\D/g, '').slice(0, 6);
     if (normalized.length !== 6) return;
-    this.openOnline();
-    this.joinCode = normalized;
-    this.online.joinRoom(normalized);
-    this.notice = { text: `正在加入房间 ${normalized}`, until: this.visualTime + 1.4 };
-    this.refreshHud();
+    void this.auth.start().then(() => {
+      if (this.disposed) return;
+      this.enterOnline();
+      this.joinCode = normalized;
+      this.online.joinRoom(normalized);
+      this.notice = { text: `正在加入房间 ${normalized}`, until: this.visualTime + 1.4 };
+      this.refreshHud();
+    });
   }
 
   handleDirection(direction: Direction): void {
@@ -408,6 +411,14 @@ export class DouyinSoloScene {
   }
 
   private openOnline(): void {
+    void this.auth.start().then(() => {
+      if (!this.disposed) this.enterOnline();
+    });
+  }
+
+  private enterOnline(): void {
+    if (this.mode === 'online') return;
+    if (this.auth.current.status === 'authenticated' && !this.client.snapshot().room) this.client.close();
     this.mode = 'online';
     this.commercial.hideBanner();
     this.notice = null;
@@ -428,7 +439,7 @@ export class DouyinSoloScene {
   private showHome(): void {
     const previousMode = this.mode;
     const previousOnlineMode = previousMode === 'online' ? this.online.snapshot().mode : null;
-    this.persistRecord();
+    this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
@@ -722,17 +733,25 @@ export class DouyinSoloScene {
     }
   }
 
-  private persistRecord(): void {
+  private persistRecord(forceSync = false): void {
     if (this.mode !== 'solo') return;
     const bestKey = `doublefight-best-${this.currentTheme}`;
     const highestKey = `doublefight-highest-${this.currentTheme}`;
     const previousBest = Number(this.platform.storage.getItem(bestKey) ?? 0);
     const previousHighest = Number(this.platform.storage.getItem(highestKey) ?? 2);
+    const improved = this.score > previousBest || this.highest > previousHighest;
     if (this.score > previousBest) {
       this.platform.storage.setItem(bestKey, String(this.score));
       void this.social.setSoloRank(this.score);
     }
     if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
+    if (improved || forceSync) {
+      void this.auth.syncSoloProgress(
+        this.currentTheme,
+        Math.max(previousBest, this.score),
+        Math.max(previousHighest, this.highest),
+      );
+    }
   }
 
   private resize(): void {

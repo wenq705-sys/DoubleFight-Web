@@ -17,7 +17,8 @@ const client = new OnlineClient(DOUYIN_PRODUCT_CONFIG.socketUrl, platform.socket
 const commercial = new DouyinCommercial(tt);
 const social = new DouyinSocial(tt);
 const audio = new DouyinAudio(tt);
-const auth = new DouyinAuthClient(tt, platform);
+const auth = new DouyinAuthClient(tt, platform, DOUYIN_PRODUCT_CONFIG.apiUrl,
+  token => platform.socket.setAuthorization(token));
 const canvas = platform.createCanvas(); // First call is the single on-screen canvas.
 const context = canvas.getContext('webgl2', { antialias: true, alpha: false })
   ?? canvas.getContext('webgl', { antialias: true, alpha: false })
@@ -55,7 +56,7 @@ const loop = new DouyinRenderLoop(
   () => game.render(),
   () => {
     touch.setActive(true);
-    client.connect();
+    void auth.start().then(() => client.connect());
   },
   () => {
     touch.setActive(false);
