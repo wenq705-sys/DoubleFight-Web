@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PIECE_VALUE, maxPieceName, pieceCatalogue, pieceName, pieceTier } from '../src/config/themes';
-import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } from '../platform/douyin/src/metaProgress';
+import { currentWeekKey, formatDuration, loadThemeMastery, recordAscension, recordDiscovery, recordWeeklySolo } from '../platform/douyin/src/metaProgress';
 import type { StorageAdapter } from '../src/platform/types';
 
 function storageFixture(): StorageAdapter {
@@ -40,6 +40,21 @@ describe('local-first theme mastery', () => {
     expect(loadThemeMastery(storage, 'kingdom').highestDiscoveredTier).toBe(9);
     storage.setItem('doublefight-highest-kingdom', '128');
     expect(loadThemeMastery(storage, 'kingdom').highestDiscoveredTier).toBe(9);
+  });
+
+  it('tracks one best score per UTC week for platform weekly rank writes', () => {
+    const storage = storageFixture();
+    const monday = Date.UTC(2026, 8, 14, 12);
+    expect(currentWeekKey(monday)).toBe('2026-09-14');
+    expect(recordWeeklySolo(storage, 120, monday).improved).toBe(true);
+    expect(recordWeeklySolo(storage, 90, monday + 86_400_000).progress.best).toBe(120);
+    expect(recordWeeklySolo(storage, 180, monday + 2 * 86_400_000).progress.best).toBe(180);
+
+    const nextMonday = monday + 7 * 86_400_000;
+    const reset = recordWeeklySolo(storage, 75, nextMonday);
+    expect(reset.improved).toBe(true);
+    expect(reset.progress.best).toBe(75);
+    expect(reset.progress.weekKey).toBe('2026-09-21');
   });
 
   it('keeps first ascension and improves personal best without ending progression', () => {
