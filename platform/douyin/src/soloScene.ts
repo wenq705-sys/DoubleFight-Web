@@ -98,6 +98,7 @@ export class DouyinSoloScene {
   private profileOpen = false;
   private rankingOpen = false;
   private collectionOpen = false;
+  private themeCenterOpen = false;
   private collectionTheme: ThemeId;
   private lastDuelTimerSecond: number | null = null;
   private themeTransition: { startedAt: number; duration: number; label: string } | null = null;
@@ -319,6 +320,10 @@ export class DouyinSoloScene {
         this.platform.haptics.trigger('light');
         this.refreshHud();
       }
+      return;
+    }
+    if (this.themeCenterOpen) {
+      this.handleThemeCenterTap(x, y);
       return;
     }
     if (this.collectionOpen) {
@@ -646,8 +651,10 @@ export class DouyinSoloScene {
     }
 
     if (this.hit(x, y, layout.theme)) {
-      this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
+      this.themeCenterOpen = true;
+      this.social.report('theme_center_open', { theme: this.currentTheme });
       this.platform.haptics.trigger('light');
+      this.refreshHud();
       return;
     }
     if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
@@ -1089,6 +1096,7 @@ export class DouyinSoloScene {
     if (this.profileOpen) this.drawProfile(ctx, width, height);
     if (this.rankingOpen) this.drawRankingCenter(ctx, width, height);
     if (this.collectionOpen) this.drawCollection(ctx, width, height);
+    if (this.themeCenterOpen) this.drawThemeCenter(ctx, width, height);
     if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
     this.uiTexture.needsUpdate = true;
   }
