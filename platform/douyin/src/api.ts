@@ -184,6 +184,7 @@ export interface DouyinApi {
     dataType: 0 | 1;
     value: string;
     priority: number;
+    extra?: string;
     zoneId: string;
     success?: (result?: unknown) => void;
     fail?: (error: { errMsg?: string }) => void;
