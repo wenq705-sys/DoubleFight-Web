@@ -30,6 +30,8 @@ interface RetentionState {
   lastOnlineMode: DouyinOnlineMode | null;
   matchIntroUntil: number;
   ascensionTracked: boolean;
+  matchStartRating: number | null;
+  resultRatingDelta: number | null;
 }
 
 /**
@@ -54,6 +56,8 @@ export function installM212RetentionHub(
     lastOnlineMode: null,
     matchIntroUntil: 0,
     ascensionTracked: false,
+    matchStartRating: null,
+    resultRatingDelta: null,
   };
 
   engagement.track('home_view', { theme: game.theme });
@@ -124,6 +128,8 @@ export function installM212RetentionHub(
     if (mode === 'matching') engagement.track('matchmaking_start', { theme: snap.selectedTheme });
     if (mode === 'playing') {
       state.matchIntroUntil = number(scene.visualTime) + 1.25;
+      state.matchStartRating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : null;
+      state.resultRatingDelta = null;
       engagement.track('match_start', { theme: snap.me?.theme ?? snap.selectedTheme });
     }
     if (mode === 'result' && previous !== 'result') {
@@ -136,7 +142,14 @@ export function installM212RetentionHub(
       // The server records Elo/W-L-D after match_end. Pull the authoritative
       // profile so the next Home/Profile render is not one match behind.
       setTimeout(() => {
-        void auth.refresh().then(() => {
+        void auth.refresh().then(refreshed => {
+          if (refreshed.status === 'authenticated' && state.matchStartRating !== null) {
+            state.resultRatingDelta = refreshed.player.pvp.rating - state.matchStartRating;
+            engagement.track('rating_settled', {
+              rating: refreshed.player.pvp.rating,
+              delta: state.resultRatingDelta,
+            });
+          }
           if (!scene.disposed) scene.refreshHud();
         });
       }, 450);
@@ -630,7 +643,9 @@ function drawOnlinePolish(
     ctx.textAlign = 'center';
     ctx.fillStyle = '#f2d273';
     ctx.font = '900 9px sans-serif';
-    ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating} · 3分钟标准局`, width / 2, y + 16);
+    const delta = state.resultRatingDelta;
+    const deltaText = delta === null ? '' : ` · ${delta >= 0 ? '+' : ''}${delta}`;
+    ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2, y + 16);
   }
 }
 
