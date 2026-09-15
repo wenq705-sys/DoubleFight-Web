@@ -1543,13 +1543,85 @@ export class DouyinSoloScene {
     ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
+  private handleRankingTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(322, info.width - 26);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.16;
+    const ascension = { x: x0 + 18, y: y0 + 88, width: panelWidth - 36, height: 88 };
+    const solo = { x: x0 + 18, y: y0 + 188, width: panelWidth - 36, height: 88 };
+    const pvp = { x: x0 + 18, y: y0 + 288, width: panelWidth - 36, height: 88 };
+    const close = { x: x0 + 60, y: y0 + 400, width: panelWidth - 120, height: 42 };
+
+    if (this.hit(x, y, ascension)) {
+      void this.social.openAscensionRank(this.currentTheme).then(ok => {
+        if (!ok) {
+          this.rankingOpen = false;
+          this.notice = { text: '登顶好友榜暂不可用', until: this.visualTime + 1.4 };
+          this.refreshHud();
+        }
+      });
+      return;
+    }
+    if (this.hit(x, y, solo)) {
+      void this.social.openSoloRank().then(ok => {
+        if (!ok) {
+          this.rankingOpen = false;
+          this.notice = { text: 'Solo好友榜暂不可用', until: this.visualTime + 1.4 };
+          this.refreshHud();
+        }
+      });
+      return;
+    }
+    if (this.hit(x, y, pvp)) {
+      this.rankingOpen = false;
+      this.notice = { text: '竞技赛季榜将在服务端赛季系统启用后开放', until: this.visualTime + 1.8 };
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.rankingOpen = false;
+      this.refreshHud();
+    }
+  }
+
+  private handleCollectionTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(330, info.width - 22);
+    const x0 = (info.width - panelWidth) / 2;
+    const y0 = info.height * 0.105;
+    const themeToggle = { x: x0 + 48, y: y0 + 64, width: panelWidth - 96, height: 36 };
+    const close = { x: x0 + 64, y: y0 + 500, width: panelWidth - 128, height: 42 };
+    if (this.hit(x, y, themeToggle)) {
+      this.collectionTheme = this.collectionTheme === 'kingdom' ? 'palace' : 'kingdom';
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
+    if (this.hit(x, y, close)) {
+      this.collectionOpen = false;
+      this.refreshHud();
+    }
+  }
+
   private handleProfileTap(x: number, y: number): void {
     const info = this.platform.getSystemInfo();
     const panelWidth = Math.min(316, info.width - 30);
     const panelX = (info.width - panelWidth) / 2;
     const panelY = info.height * 0.15;
-    const shortcut = { x: panelX + 42, y: panelY + 382, width: panelWidth - 84, height: 38 };
+    const half = (panelWidth - 58) / 2;
+    const collection = { x: panelX + 24, y: panelY + 382, width: half, height: 38 };
+    const shortcut = { x: panelX + 34 + half, y: panelY + 382, width: half, height: 38 };
     const close = { x: panelX + 52, y: panelY + 430, width: panelWidth - 104, height: 42 };
+    if (this.hit(x, y, collection)) {
+      this.profileOpen = false;
+      this.collectionOpen = true;
+      this.collectionTheme = this.currentTheme;
+      this.social.report('collection_open', { theme: this.collectionTheme });
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
     if (this.hit(x, y, shortcut)) {
       void this.social.addShortcut().then(ok => {
         this.profileOpen = false;
@@ -1762,7 +1834,9 @@ export class DouyinSoloScene {
       ctx.fillText(row[1], x + panelWidth - 24, rowY);
     });
 
-    this.drawPillButton(ctx, { x: x + 42, y: y + 382, width: panelWidth - 84, height: 38 }, '⌂  添加到桌面', 'secondary');
+    const half = (panelWidth - 58) / 2;
+    this.drawPillButton(ctx, { x: x + 24, y: y + 382, width: half, height: 38 }, '◆  棋子图鉴', 'secondary');
+    this.drawPillButton(ctx, { x: x + 34 + half, y: y + 382, width: half, height: 38 }, '⌂  添加桌面', 'secondary');
     this.drawPillButton(ctx, { x: x + 52, y: y + 430, width: panelWidth - 104, height: 42 }, '返回主页', 'primary');
   }
 
