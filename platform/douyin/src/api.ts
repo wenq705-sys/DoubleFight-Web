@@ -163,10 +163,28 @@ export interface DouyinApi {
     fail?: (error: { errMsg?: string }) => void;
   }): void;
 
+  addShortcut?(options: {
+    success?: (result: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: () => void;
+  }): void;
+  checkShortcut?(options: {
+    success?: (result: { status?: { exist?: boolean }; errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+  }): void;
+  requestSubscribeMessage?(options: {
+    tmplIds: string[];
+    success?: (result: Record<string, unknown> & { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
+  reportAnalytics?(event: string, data?: Record<string, string | number | boolean>): void;
+
   setImRankData?(options: {
     dataType: 0 | 1;
     value: string;
     priority: number;
+    extra?: string;
     zoneId: string;
     success?: (result?: unknown) => void;
     fail?: (error: { errMsg?: string }) => void;

@@ -18,7 +18,7 @@ export class PerformanceManager {
   private sampleFrames = 0;
   private goodWindows = 0;
   private currentDpr: number;
-  private quality: QualityLevel = 'high';
+  private quality: QualityLevel;
   private snapshot: PerformanceSnapshot;
 
   constructor(
@@ -28,7 +28,9 @@ export class PerformanceManager {
     private readonly debugElement?: HTMLElement,
   ) {
     const device = Math.max(1, window.devicePixelRatio || 1);
-    this.currentDpr = Math.min(device, this.isMobileLike() ? 1.65 : 1.85);
+    const mobile = this.isMobileLike();
+    this.quality = mobile ? 'medium' : 'high';
+    this.currentDpr = Math.min(device, mobile ? 1.2 : 1.7);
     this.snapshot = {
       fps: 60,
       frameMs: 16.7,
@@ -40,13 +42,14 @@ export class PerformanceManager {
       textures: 0,
     };
     this.applyDpr(this.currentDpr);
+    this.onQualityChange?.(this.quality);
   }
 
   frame(delta: number): void {
     if (!Number.isFinite(delta) || delta <= 0) return;
     this.sampleTime += delta;
     this.sampleFrames += 1;
-    if (this.sampleTime < 1.8) return;
+    if (this.sampleTime < 2) return;
 
     const fps = this.sampleFrames / this.sampleTime;
     const frameMs = (this.sampleTime / this.sampleFrames) * 1000;
@@ -75,30 +78,40 @@ export class PerformanceManager {
 
   private adapt(fps: number): void {
     const device = Math.max(1, window.devicePixelRatio || 1);
-    const maxDpr = Math.min(device, this.isMobileLike() ? 1.65 : 1.85);
-    const minDpr = this.isMobileLike() ? 1.18 : 1.35;
+    const mobile = this.isMobileLike();
+    const maxDpr = Math.min(device, mobile ? 1.45 : 1.7);
+    const mediumDpr = Math.min(device, mobile ? 1.2 : 1.45);
+    const lowDpr = Math.min(device, mobile ? 1 : 1.2);
 
-    if (fps < 47) {
+    if (fps < 44) {
       this.goodWindows = 0;
-      this.setDpr(Math.max(minDpr, this.currentDpr - 0.16));
-      this.setQuality(this.currentDpr <= 1.26 ? 'low' : 'medium');
+      this.setDpr(lowDpr);
+      this.setQuality('low');
       return;
     }
 
     if (fps < 54) {
       this.goodWindows = 0;
-      this.setDpr(Math.max(minDpr, this.currentDpr - 0.08));
-      if (this.quality === 'high') this.setQuality('medium');
+      this.setDpr(Math.min(this.currentDpr, mediumDpr));
+      this.setQuality('medium');
       return;
     }
 
     if (fps >= 58) {
       this.goodWindows += 1;
-      if (this.goodWindows >= 3 && this.currentDpr < maxDpr - 0.02) {
-        this.setDpr(Math.min(maxDpr, this.currentDpr + 0.06));
+      // Promotion is deliberately slow so resizing the render target cannot
+      // become its own source of stutter on mobile devices.
+      if (this.goodWindows >= 3 && this.quality === 'low') {
+        this.setDpr(mediumDpr);
+        this.setQuality('medium');
+        this.goodWindows = 0;
+        return;
+      }
+      if (this.goodWindows >= 4 && this.quality === 'medium') {
+        this.setDpr(maxDpr);
+        this.setQuality('high');
         this.goodWindows = 0;
       }
-      if (this.goodWindows >= 2 && this.currentDpr >= maxDpr - 0.08) this.setQuality('high');
     } else {
       this.goodWindows = Math.max(0, this.goodWindows - 1);
     }

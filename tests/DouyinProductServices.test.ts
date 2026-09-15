@@ -178,7 +178,7 @@ describe('Douyin social retention services', () => {
     }));
     expect(getImRankList).toHaveBeenCalledWith(expect.objectContaining({
       relationType: 'default',
-      rankType: 'all',
+      rankType: 'week',
       zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
     }));
   });

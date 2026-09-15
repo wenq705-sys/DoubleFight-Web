@@ -66,10 +66,14 @@ export type {
 
 export {
   MATCH_DURATION_MS,
+  MATCH_FORMAT_LABEL,
+  formatMatchClock,
+  matchTimerPhase,
   resolveTimeLimitStandings,
 } from './battle/match';
 export type {
   MatchStanding,
+  MatchTimerPhase,
   TimeLimitResolution,
   TimeLimitTieBreaker,
 } from './battle/match';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
-import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -180,7 +180,8 @@ export class DouyinSoloScene {
     });
 
     this.refreshHud();
-    this.commercial.showBanner();
+    // Core Home/Solo/PvP surfaces are intentionally banner-free in M2.12.
+    // Rewarded and interstitial placements remain explicit user/product flows.
     void this.social.supportsSidebar().then((supported) => {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
@@ -193,6 +194,12 @@ export class DouyinSoloScene {
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
 
   refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
+
+  refreshSystemLayout(): void {
+    if (this.disposed) return;
+    this.resize();
+    this.refreshHud();
+  }
 
   openSharedRoom(code: string): void {
     const normalized = code.replace(/\D/g, '').slice(0, 6);
@@ -443,11 +450,7 @@ export class DouyinSoloScene {
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
-    if (showInterstitial) {
-      void this.commercial.maybeShowInterstitial().finally(() => this.commercial.showBanner());
-    } else {
-      this.commercial.showBanner();
-    }
+    if (showInterstitial) void this.commercial.maybeShowInterstitial();
     this.inputLocked = false;
     this.notice = null;
     this.joinPadOpen = false;
@@ -564,10 +567,8 @@ export class DouyinSoloScene {
       return;
     }
 
-    const skillWidth = 156;
-    const skillHeight = 44;
-    const skillY = info.height - safeBottom - 52;
-    if (x >= info.width / 2 - skillWidth / 2 && x <= info.width / 2 + skillWidth / 2 && y >= skillY && y <= skillY + skillHeight) {
+    const skill = this.soloSkillRect(info.width, info.height, safeBottom);
+    if (this.hit(x, y, skill)) {
       if (this.skillCharges > 0) void this.useRandomClear();
       else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
     }
@@ -682,12 +683,7 @@ export class DouyinSoloScene {
     }
 
     if (snap.mode === 'result') {
-      const width = Math.min(282, info.width - 42);
-      const x0 = (info.width - width) / 2;
-      const y0 = info.height * 0.6;
-      const primary = { x: x0, y: y0, width, height: 48 };
-      const lobby = { x: x0, y: y0 + 58, width, height: 42 };
-      const share = { x: x0 + 36, y: y0 + 108, width: width - 72, height: 34 };
+      const { primary, lobby, share } = this.resultActionRects(info.width, info.height);
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
         if (opponentRoom) this.online.setRematchReady();
@@ -1035,21 +1031,28 @@ export class DouyinSoloScene {
     ctx.font = '700 10px sans-serif';
     ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
 
-    const skillWidth = 176;
-    const skillY = height - safeBottom - 52;
+    const skill = this.soloSkillRect(width, height, safeBottom);
     const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
+
+    this.roundedRect(ctx, skill.x - 8, skill.y - 7, skill.width + 16, skill.height + 14, 22);
+    ctx.fillStyle = 'rgba(6,24,31,.78)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,151,.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     this.drawSkillButton(
       ctx,
-      { x: width / 2 - skillWidth / 2, y: skillY, width: skillWidth, height: 44 },
-      canReward ? '▶ 看广告 +1 清块' : '✦ 清块',
-      canReward ? '可选激励' : `×${this.skillCharges}`,
+      skill,
+      canReward ? '▶ 补充清块' : '✦ 清块',
+      canReward ? '完整观看广告 · +1 次' : `剩余 ${this.skillCharges} 次 · 随机清除 2 格`,
       this.skillCharges > 0 || canReward,
     );
 
-    ctx.fillStyle = 'rgba(255,255,255,.68)';
-    ctx.font = '650 10px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,.72)';
+    ctx.font = '700 11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 向 2048 进阶', width / 2, skillY - 13);
+    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 18);
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1235,16 +1238,27 @@ export class DouyinSoloScene {
     const resultOpponent = match.result?.players.find(player => player.playerId !== snap.state.playerId);
     const meScore = resultMe?.score ?? snap.me?.board.score ?? 0;
     const opponentScore = resultOpponent?.score ?? snap.opponent?.board.score ?? 0;
+    ctx.fillStyle = '#9fb6b8';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`${resultMe?.name ?? snap.me?.name ?? '我'}  VS  ${resultOpponent?.name ?? snap.opponent?.name ?? '对手'}`, width / 2, y + 69);
     ctx.fillStyle = '#f2f0e6';
     ctx.font = '900 24px sans-serif';
     ctx.fillText(`${meScore}   VS   ${opponentScore}`, width / 2, y + 92);
     ctx.fillStyle = '#b9cacc';
     ctx.font = '700 10px sans-serif';
     ctx.fillText(this.online.resultReason(), width / 2, y + 120);
+    if (resultMe && resultOpponent) {
+      const meHighest = pieceName(resultMe.theme, resultMe.highest);
+      const opponentHighest = pieceName(resultOpponent.theme, resultOpponent.highest);
+      const spaces = match.result?.tieBreaker === 'usable_space'
+        ? ` · 空位 ${resultMe.usableEmptyCells} : ${resultOpponent.usableEmptyCells}`
+        : '';
+      ctx.fillStyle = '#c9d8d6';
+      ctx.font = '750 10px sans-serif';
+      ctx.fillText(`最高 ${meHighest}  VS  ${opponentHighest}${spaces}`, width / 2, y + 142);
+    }
 
-    const primary = { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 };
-    const lobby = { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 };
-    const share = { x: x + 56, y: y + 270, width: panelWidth - 112, height: 32 };
+    const { primary, lobby, share } = this.resultActionRects(width, height);
     const roomMe = snap.state.room?.players.find(player => player.id === snap.state.playerId);
     const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
     this.drawPillButton(
@@ -1577,6 +1591,27 @@ export class DouyinSoloScene {
 
   private roomShareRect(width: number, height: number): Rect {
     return { x: width / 2 - 78, y: height * 0.39, width: 156, height: 34 };
+  }
+
+  private soloSkillRect(width: number, height: number, safeBottom: number): Rect {
+    const skillWidth = Math.min(226, width - 56);
+    return {
+      x: width / 2 - skillWidth / 2,
+      y: height - safeBottom - 66,
+      width: skillWidth,
+      height: 54,
+    };
+  }
+
+  private resultActionRects(width: number, height: number): { primary: Rect; lobby: Rect; share: Rect } {
+    const panelWidth = Math.min(310, width - 34);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.26;
+    return {
+      primary: { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 },
+      lobby: { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 },
+      share: { x: x + 56, y: y + 270, width: panelWidth - 112, height: 32 },
+    };
   }
 
   private matchingCancelRect(width: number, height: number): Rect {
