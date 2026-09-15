@@ -247,12 +247,14 @@ export class DouyinSoloScene {
 
   async move(direction: Direction): Promise<boolean> {
     if (this.mode !== 'solo' || this.disposed || this.inputLocked) return false;
+    const provisionalStart = this.soloRunStartedAt === null;
+    if (provisionalStart) this.soloRunStartedAt = Date.now();
     const result = this.controller.move(direction);
     if (!result.changed) {
+      if (provisionalStart) this.soloRunStartedAt = null;
       this.platform.haptics.trigger('light');
       return false;
     }
-    if (this.soloRunStartedAt === null) this.soloRunStartedAt = Date.now();
     this.inputLocked = true;
     this.platform.haptics.trigger(result.merges.length > 0 ? 'medium' : 'light');
     await result.finished;
@@ -376,6 +378,17 @@ export class DouyinSoloScene {
       this.renderer.render(this.scene, this.camera);
     }
 
+    if (this.highestFlight && this.mode === 'solo') {
+      const progress = (this.visualTime - this.highestFlight.startedAt) / this.highestFlight.duration;
+      if (progress >= 1) {
+        this.highestFlight = null;
+        this.refreshHud();
+      } else if (this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 1 / 30;
+        this.refreshHud();
+      }
+    }
+
     if (this.notice && this.visualTime >= this.notice.until) {
       this.notice = null;
       this.refreshHud();
@@ -460,6 +473,7 @@ export class DouyinSoloScene {
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
     this.controller.reset();
+    this.runHighestValue = this.highest;
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
@@ -1382,6 +1396,180 @@ export class DouyinSoloScene {
     ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
+  private handleProfileTap(x: number, y: number): void {
+    const info = this.platform.getSystemInfo();
+    const panelWidth = Math.min(316, info.width - 30);
+    const panelX = (info.width - panelWidth) / 2;
+    const panelY = info.height * 0.18;
+    const close = { x: panelX + 52, y: panelY + 382, width: panelWidth - 104, height: 42 };
+    if (this.hit(x, y, close)) {
+      this.profileOpen = false;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+    }
+  }
+
+  private discoveredValues(theme: ThemeId): Set<number> {
+    try {
+      const parsed = JSON.parse(this.platform.storage.getItem(`doublefight-discovered-${theme}`) ?? '[]') as unknown;
+      if (!Array.isArray(parsed)) return new Set([2]);
+      return new Set(parsed.filter(value =>
+        typeof value === 'number'
+        && Number.isInteger(Math.log2(value))
+        && value >= 2
+        && value <= FINAL_PIECE_VALUE
+      ));
+    } catch {
+      return new Set([2]);
+    }
+  }
+
+  private recordAscension(): void {
+    if (this.soloRunStartedAt === null || this.soloAscendedAt !== null) return;
+    const now = Date.now();
+    this.soloAscendedAt = now;
+    const duration = Math.max(1, now - this.soloRunStartedAt);
+    const firstKey = `doublefight-ascension-first-${this.currentTheme}`;
+    const bestKey = `doublefight-ascension-best-${this.currentTheme}`;
+    const countKey = `doublefight-ascension-count-${this.currentTheme}`;
+    const first = Number(this.platform.storage.getItem(firstKey) ?? 0);
+    const best = Number(this.platform.storage.getItem(bestKey) ?? 0);
+    const count = Number(this.platform.storage.getItem(countKey) ?? 0);
+    if (!first) this.platform.storage.setItem(firstKey, String(duration));
+    if (!best || duration < best) this.platform.storage.setItem(bestKey, String(duration));
+    this.platform.storage.setItem(countKey, String(Math.max(0, count) + 1));
+    this.platform.haptics.trigger('success');
+  }
+
+  private drawHighestFlight(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const flight = this.highestFlight;
+    if (!flight) return;
+    const p = Math.max(0, Math.min(1, (this.visualTime - flight.startedAt) / flight.duration));
+    const eased = 1 - Math.pow(1 - p, 3);
+    const targetX = width - 76;
+    const targetY = this.hudTop() + 43;
+    const controlX = (flight.fromX + targetX) / 2 - 42;
+    const controlY = Math.min(flight.fromY, targetY) - 86;
+    const inv = 1 - eased;
+    const x = inv * inv * flight.fromX + 2 * inv * eased * controlX + eased * eased * targetX;
+    const y = inv * inv * flight.fromY + 2 * inv * eased * controlY + eased * eased * targetY;
+
+    for (let index = 3; index >= 1; index -= 1) {
+      const trailP = Math.max(0, eased - index * 0.045);
+      const trailInv = 1 - trailP;
+      const tx = trailInv * trailInv * flight.fromX + 2 * trailInv * trailP * controlX + trailP * trailP * targetX;
+      const ty = trailInv * trailInv * flight.fromY + 2 * trailInv * trailP * controlY + trailP * trailP * targetY;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 3 + index, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,224,115,${0.08 + (4 - index) * 0.08})`;
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,213,82,.9)';
+    ctx.shadowBlur = 18;
+    ctx.beginPath();
+    ctx.arc(x, y, flight.ascended ? 15 : 11, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffe27d';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#6b4616';
+    ctx.font = flight.ascended ? '900 13px sans-serif' : '900 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('◆', x, y + 0.5);
+    ctx.restore();
+
+    if (p > 0.62) {
+      const alpha = Math.min(1, (p - 0.62) / 0.18);
+      ctx.globalAlpha = alpha;
+      const label = flight.ascended ? '登顶成功' : flight.newDiscovery ? 'NEW · 新棋子' : '最高棋子更新';
+      const name = pieceName(this.currentTheme, flight.value);
+      const boxWidth = Math.min(238, width - 44);
+      const boxY = flight.ascended ? height * 0.27 : this.hudTop() + 72;
+      this.roundedRect(ctx, width / 2 - boxWidth / 2, boxY, boxWidth, flight.ascended ? 74 : 50, 20);
+      ctx.fillStyle = 'rgba(9,24,31,.92)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,223,126,.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#ffe27d';
+      ctx.font = '900 11px sans-serif';
+      ctx.fillText(label, width / 2, boxY + 17);
+      ctx.fillStyle = '#fff3cf';
+      ctx.font = flight.ascended ? '900 18px sans-serif' : '850 14px sans-serif';
+      ctx.fillText(name, width / 2, boxY + (flight.ascended ? 39 : 34));
+      if (flight.ascended && this.soloRunStartedAt !== null && this.soloAscendedAt !== null) {
+        ctx.fillStyle = '#aee1d5';
+        ctx.font = '800 11px sans-serif';
+        ctx.fillText(`本次登顶 ${formatDuration(this.soloAscendedAt - this.soloRunStartedAt)}`, width / 2, boxY + 58);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.fillStyle = 'rgba(3,9,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+    const panelWidth = Math.min(316, width - 30);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.18;
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const kingdomHigh = account?.solo.highestKingdom
+      ?? Number(this.platform.storage.getItem('doublefight-highest-kingdom') ?? 2);
+    const palaceHigh = account?.solo.highestPalace
+      ?? Number(this.platform.storage.getItem('doublefight-highest-palace') ?? 2);
+
+    this.roundedRect(ctx, x, y, panelWidth, 440, 28);
+    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + 440);
+    gradient.addColorStop(0, 'rgba(12,40,48,.98)');
+    gradient.addColorStop(1, 'rgba(16,25,38,.98)');
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(247,210,112,.42)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe8a0';
+    ctx.font = '900 23px sans-serif';
+    ctx.fillText(account?.displayName ?? '本地玩家', width / 2, y + 38);
+    ctx.fillStyle = '#9edccd';
+    ctx.font = '800 11px sans-serif';
+    ctx.fillText(account ? `${rank.label} · Rating ${account.pvp.rating}` : '游客模式 · 登录后同步进度', width / 2, y + 63);
+
+    const coinY = y + 92;
+    this.roundedRect(ctx, x + 72, coinY, panelWidth - 144, 34, 16);
+    ctx.fillStyle = 'rgba(236,189,72,.12)';
+    ctx.fill();
+    ctx.fillStyle = '#ffe078';
+    ctx.font = '900 14px sans-serif';
+    ctx.fillText(`S币  ${account?.rewards.currency ?? 0}`, width / 2, coinY + 17);
+
+    const rows = [
+      ['竞技战绩', account ? `${account.pvp.wins}胜 · ${account.pvp.losses}负 · ${account.pvp.draws}平` : '--'],
+      ['微缩王国', pieceName('kingdom', kingdomHigh)],
+      ['王国最速登顶', formatDuration(Number(this.platform.storage.getItem('doublefight-ascension-best-kingdom') ?? 0))],
+      ['后宫晋升', pieceName('palace', palaceHigh)],
+      ['宫廷最速登顶', formatDuration(Number(this.platform.storage.getItem('doublefight-ascension-best-palace') ?? 0))],
+      ['图鉴发现', `${this.discoveredValues('kingdom').size + this.discoveredValues('palace').size} / 22`],
+    ] as const;
+
+    rows.forEach((row, index) => {
+      const rowY = y + 148 + index * 38;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#9fb5b7';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(row[0], x + 24, rowY);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f3f0df';
+      ctx.font = '850 11px sans-serif';
+      ctx.fillText(row[1], x + panelWidth - 24, rowY);
+    });
+
+    this.drawPillButton(ctx, { x: x + 52, y: y + 382, width: panelWidth - 104, height: 42 }, '返回主页', 'primary');
+  }
+
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     ctx.fillStyle = 'rgba(4,10,15,.68)';
     ctx.fillRect(0, 0, width, height);
@@ -1451,10 +1639,10 @@ export class DouyinSoloScene {
     ctx.fillText('欢迎来到双数对决', width / 2, y + 48);
     ctx.fillStyle = '#d5e1df';
     ctx.font = '700 11px sans-serif';
-    ctx.fillText('2048 × 技能 × 实时对决', width / 2, y + 76);
+    ctx.fillText('角色进阶 × 技能 × 实时对决', width / 2, y + 76);
 
     const steps = [
-      ['01', '滑动棋盘', '相同数字合成，冲击 2048'],
+      ['01', '滑动棋盘', '相同棋子合并，解锁更高阶角色'],
       ['02', '释放技能', '清块、护盾、石化改变局势'],
       ['03', '挑战好友', '快速匹配或创建 6 位好友房'],
     ] as const;
