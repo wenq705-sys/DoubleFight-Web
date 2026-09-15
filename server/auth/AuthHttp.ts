@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountRepository } from './AccountRepository';
-import { publicPlayer } from './AccountRepository';
+import { publicPlayer, THEME_REGISTRY } from './AccountRepository';
 import type { DouyinProvider } from './DouyinProvider';
 import { ProviderError } from './DouyinProvider';
 import { SessionToken } from './SessionToken';
@@ -13,7 +13,7 @@ export interface AuthDependencies {
   log?: (event: Record<string, string | boolean>) => void;
 }
 
-const routes = new Set(['/auth/douyin', '/me', '/progress/solo', '/rewards/sidebar', '/rewards/ad']);
+const routes = new Set(['/auth/douyin', '/me', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/season/current', '/leaderboards/pvp']);
 const audit = (event: Record<string, string | boolean>) => console.info(JSON.stringify({ area: 'account', ...event }));
 
 export function createAuthHandler(deps: AuthDependencies) {
@@ -27,7 +27,7 @@ export function createAuthHandler(deps: AuthDependencies) {
     response.setHeader('access-control-allow-headers', 'authorization, content-type');
     response.setHeader('cache-control', 'no-store');
     if (request.method === 'OPTIONS') { response.writeHead(204).end(); return true; }
-    if (request.method !== (path === '/me' ? 'GET' : 'POST')) {
+    if (request.method !== (path === '/me' || path === '/themes' || path === '/season/current' || path === '/leaderboards/pvp' ? 'GET' : 'POST')) {
       json(response, 405, { error: 'method_not_allowed' }); return true;
     }
 
@@ -39,11 +39,19 @@ export function createAuthHandler(deps: AuthDependencies) {
         if (!code && !anonymousCode) { json(response, 400, { error: 'invalid_credentials' }); return true; }
         deps.sessions.assertConfigured();
         const identity = await deps.provider.exchange({ ...(code ? { code } : {}), ...(anonymousCode ? { anonymousCode } : {}) });
-        const { account, created } = await deps.repository.findOrCreate(identity.openid, identity.unionid, identity.anonymousOpenid);
+        const { account, created } = await deps.repository.findOrCreate(identity.openid, identity.unionid, identity.anonymousOpenid, now());
+        const login = await deps.repository.claimDailyLogin(account.id, now());
         const session = deps.sessions.issue(account.id, now());
         log({ event: 'auth_success', account: created ? 'created' : 'reused' });
-        json(response, 200, { ...session, player: publicPlayer(account) });
+        json(response, 200, { ...session, player: publicPlayer(login.account, now()), dailyLogin: { granted: login.granted, amount: login.amount, streakAmount: login.streakAmount } });
         return true;
+      }
+      if (path === '/season/current') { json(response, 200, await deps.repository.leaderboard(now(), 1)); return true; }
+      if (path === '/leaderboards/pvp') {
+        const rawLimit = new URL(request.url ?? '/', 'http://localhost').searchParams.get('limit');
+        const limit = rawLimit ? Number(rawLimit) : 50;
+        if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new RequestError(400, 'invalid_limit');
+        json(response, 200, await deps.repository.leaderboard(now(), limit)); return true;
       }
 
       const bearer = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(request.headers.authorization ?? '');
@@ -53,7 +61,11 @@ export function createAuthHandler(deps: AuthDependencies) {
         log({ event: 'session_rejected', category: bearer ? 'invalid_or_expired' : 'missing' });
         json(response, 401, { error: 'unauthorized' }); return true;
       }
-      if (path === '/me') { json(response, 200, { player: publicPlayer(account) }); return true; }
+      if (path === '/me') {
+        const login = await deps.repository.claimDailyLogin(account.id, now());
+        json(response, 200, { player: publicPlayer(login.account, now()), dailyLogin: { granted: login.granted, amount: login.amount, streakAmount: login.streakAmount } }); return true;
+      }
+      if (path === '/themes') { json(response, 200, { themes: Object.entries(THEME_REGISTRY).map(([id, value]) => ({ id, ...value })), player: publicPlayer(account, now()) }); return true; }
 
       if (path === '/progress/solo') {
         const body = await readBody(request);
@@ -65,8 +77,8 @@ export function createAuthHandler(deps: AuthDependencies) {
           || body.highest > 1_048_576 || !Number.isInteger(Math.log2(body.highest))) {
           throw new RequestError(400, 'invalid_progress');
         }
-        const updated = await deps.repository.mergeSoloProgress(account.id, body.theme, body.best, body.highest);
-        json(response, 200, { player: publicPlayer(updated) });
+        const updated = await deps.repository.mergeSoloProgress(account.id, body.theme, body.best, body.highest, now());
+        json(response, 200, { player: publicPlayer(updated.account, now()), discoveryAmount: updated.discoveryAmount, taskAmount: updated.taskAmount });
         return true;
       }
 
@@ -74,23 +86,29 @@ export function createAuthHandler(deps: AuthDependencies) {
         const body = await readBody(request);
         if (body.source !== 'sidebar_return') { json(response, 400, { error: 'invalid_source' }); return true; }
         const day = new Date(now()).toISOString().slice(0, 10);
-        const result = await deps.repository.claimSidebar(account.id, day);
+        const result = await deps.repository.claimSidebar(account.id, day, now());
         log({ event: 'reward', kind: 'sidebar', outcome: result.granted ? 'granted' : 'duplicate' });
-        json(response, 200, { granted: result.granted, reward: 'next_solo_bonus', player: publicPlayer(result.account) });
+        json(response, 200, { granted: result.granted, reward: 'next_solo_bonus', amount: result.amount, player: publicPlayer(result.account, now()) });
         return true;
       }
 
       const body = await readBody(request);
-      if (body.kind !== 'solo_skill_refill') {
+      if (path === '/themes/unlock') {
+        if (typeof body.themeId !== 'string' || typeof body.requestId !== 'string') throw new RequestError(400, 'invalid_theme_request');
+        const result = await deps.repository.unlockTheme(account.id, body.themeId, body.requestId, now());
+        json(response, result.unlocked ? 200 : 409, { unlocked: result.unlocked, amount: result.amount, player: publicPlayer(result.account, now()) });
+        return true;
+      }
+      if (body.kind !== 'solo_skill_refill' && body.kind !== 'daily_s_coin') {
         log({ event: 'reward', kind: 'ad', outcome: 'rejected' });
         json(response, 400, { error: 'unknown_reward_kind' }); return true;
       }
       if (typeof body.claimId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.claimId)) {
         json(response, 400, { error: 'invalid_claim_id' }); return true;
       }
-      const result = await deps.repository.claimAd(account.id, body.kind, body.claimId);
+      const result = await deps.repository.claimAd(account.id, body.kind, body.claimId, now());
       log({ event: 'reward', kind: 'ad', outcome: result.granted ? 'granted' : 'duplicate' });
-      json(response, 200, { granted: result.granted, reward: body.kind, player: publicPlayer(result.account) });
+      json(response, 200, { granted: result.granted, reward: body.kind, amount: result.amount, taskAmount: result.taskAmount, player: publicPlayer(result.account, now()) });
       return true;
     } catch (error) {
       if (error instanceof RequestError) { json(response, error.status, { error: error.category }); return true; }

@@ -3,248 +3,54 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { MatchEndReason } from '../../shared/index';
 
-export interface PlayerAccount {
-  id: string;
-  douyinOpenId: string;
-  unionId?: string;
-  anonymousOpenId?: string;
-  createdAt: number;
-  updatedAt: number;
-  profile: { displayName: string };
-  solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
-  pvp: { wins: number; losses: number; draws: number; rating: number };
-  rewards: { currency: number; lastSidebarRewardDay?: string };
-  adClaims: string[];
-}
-
-export type PublicPlayer = Pick<PlayerAccount, 'id' | 'solo' | 'pvp' | 'rewards'> & { displayName: string };
-export function publicPlayer(account: PlayerAccount): PublicPlayer {
-  return {
-    id: account.id,
-    displayName: account.profile.displayName,
-    solo: { ...account.solo },
-    pvp: { ...account.pvp },
-    rewards: { ...account.rewards },
-  };
-}
-
+export const THEME_UNLOCK_COST = 500, DAILY_LOGIN_S = 15, DAILY_SIDEBAR_S = 10, DAILY_AD_S = 30, DAILY_TASK_S = 5, STREAK_CHEST_S = 30, DISCOVERY_S = 5, MAX_RECENT_AD_CLAIMS = 256, MAX_RECENT_MATCHES = 512, MAX_RECENT_GRANTS = 512, PVP_ELO_K = 24;
+export const THEME_REGISTRY = { kingdom: { free: true, cost: 0 }, palace: { free: true, cost: 0 }, future_theme: { free: false, cost: THEME_UNLOCK_COST } } as const;
+const EPOCH = Date.parse('2026-01-01T00:00:00Z'), SEASON_MS = 14 * 86400000;
+type Tasks = { solo: boolean; pvp: boolean; ad: boolean };
+export interface Economy { balance:number; lifetimeEarned:number; lastDailyLoginDay?:string; lastDailyAdDay?:string; loginStreak:number; lastLoginDay?:string; sevenDayChestCycle:number; dailyTaskDay?:string; dailyTasks:Tasks; grants:string[]; discoveredTierByTheme:Record<string,number> }
+export interface Season { seasonId:string; rating:number; wins:number; losses:number; draws:number; matches:number }
+export interface PlayerAccount { id:string; douyinOpenId:string; unionId?:string; anonymousOpenId?:string; createdAt:number; updatedAt:number; profile:{displayName:string}; solo:{bestKingdom:number;highestKingdom:number;bestPalace:number;highestPalace:number}; pvp:{wins:number;losses:number;draws:number;rating:number}; rewards:{currency:number;lastSidebarRewardDay?:string}; adClaims:string[]; economy:Economy; themes:{owned:string[];trialDayByTheme:Record<string,string|undefined>}; pvpSeason:Season }
+export interface AccountMatchResult { matchId:string; reason:MatchEndReason; winnerId:string|null; players:readonly {playerId:string;accountId?:string}[] }
+export interface SeasonInfo { id:string; startsAt:number; endsAt:number }
+export interface LeaderboardEntry { rank:number; displayName:string; rating:number; wins:number; losses:number; draws:number; matches:number }
+export type PublicPlayer = { id:string; displayName:string; solo:PlayerAccount['solo']; pvp:PlayerAccount['pvp']; rewards:PlayerAccount['rewards'] & {daily:{day:string;loginClaimed:boolean;adClaimed:boolean;tasks:Tasks;streak:number}}; season:Season & {endsAt:number}; themes:{owned:string[]} };
+export const utcDay=(now:number)=>new Date(now).toISOString().slice(0,10);
+export function currentSeason(now:number):SeasonInfo { const n=Math.floor((now-EPOCH)/SEASON_MS), startsAt=EPOCH+n*SEASON_MS; return {id:`s${n}-${utcDay(startsAt)}`,startsAt,endsAt:startsAt+SEASON_MS}; }
+const tier=(value:number)=>Math.max(1,Math.floor(Math.log2(value)));
+const owned=(a:PlayerAccount)=>[...new Set([...Object.entries(THEME_REGISTRY).filter(([, value])=>value.free).map(([id])=>id),...a.themes.owned])];
+export function publicPlayer(a:PlayerAccount,now=Date.now()):PublicPlayer { const day=utcDay(now), s=currentSeason(now); return {id:a.id,displayName:a.profile.displayName,solo:{...a.solo},pvp:{...a.pvp},rewards:{...a.rewards,currency:a.economy.balance,daily:{day,loginClaimed:a.economy.lastDailyLoginDay===day,adClaimed:a.economy.lastDailyAdDay===day,tasks:{...a.economy.dailyTasks},streak:a.economy.loginStreak}},season:{...a.pvpSeason,endsAt:s.endsAt},themes:{owned:owned(a)}}; }
 export interface AccountRepository {
-  findById(id: string): Promise<PlayerAccount | null>;
-  findOrCreate(openId: string, unionId?: string, anonymousOpenId?: string): Promise<{ account: PlayerAccount; created: boolean }>;
-  claimSidebar(id: string, day: string): Promise<{ account: PlayerAccount; granted: boolean }>;
-  claimAd(id: string, kind: 'solo_skill_refill', claimId: string): Promise<{ account: PlayerAccount; granted: boolean }>;
-  mergeSoloProgress(id: string, theme: 'kingdom' | 'palace', best: number, highest: number): Promise<PlayerAccount>;
-  recordMatch(result: AccountMatchResult): Promise<boolean>;
+ findById(id:string):Promise<PlayerAccount|null>; findOrCreate(openId:string,unionId?:string,anonymousOpenId?:string,now?:number):Promise<{account:PlayerAccount;created:boolean}>;
+ claimDailyLogin(id:string,now?:number):Promise<{account:PlayerAccount;granted:boolean;amount:number;streakAmount:number}>;
+ claimSidebar(id:string,day:string,now?:number):Promise<{account:PlayerAccount;granted:boolean;amount:number}>;
+ claimAd(id:string,kind:'solo_skill_refill'|'daily_s_coin',claimId:string,now?:number):Promise<{account:PlayerAccount;granted:boolean;amount:number;taskAmount:number}>;
+ mergeSoloProgress(id:string,theme:'kingdom'|'palace',best:number,highest:number,now?:number):Promise<{account:PlayerAccount;discoveryAmount:number;taskAmount:number}>;
+ unlockTheme(id:string,themeId:string,requestId:string,now?:number):Promise<{account:PlayerAccount;unlocked:boolean;amount:number}>;
+ recordMatch(result:AccountMatchResult,now?:number):Promise<boolean>; leaderboard(now?:number,limit?:number):Promise<{season:SeasonInfo;entries:LeaderboardEntry[]}>;
 }
+interface State { version:2; accounts:PlayerAccount[]; processedMatches:string[] }
+const season=(now:number):Season=>({seasonId:currentSeason(now).id,rating:1000,wins:0,losses:0,draws:0,matches:0});
+const economy=(solo:PlayerAccount['solo']):Economy=>({balance:0,lifetimeEarned:0,loginStreak:0,sevenDayChestCycle:0,dailyTasks:{solo:false,pvp:false,ad:false},grants:[],discoveredTierByTheme:{kingdom:tier(solo.highestKingdom),palace:tier(solo.highestPalace)}});
 
-export interface AccountMatchResult {
-  matchId: string;
-  reason: MatchEndReason;
-  winnerId: string | null;
-  players: readonly { playerId: string; accountId?: string }[];
-}
-
-export const MAX_RECENT_AD_CLAIMS = 256;
-export const MAX_RECENT_MATCHES = 512;
-export const PVP_ELO_K = 24;
-
-interface State { version: 1; accounts: PlayerAccount[]; processedMatches: string[] }
-const fresh = (): State => ({ version: 1, accounts: [], processedMatches: [] });
-
-/** Serialized mutations and atomic rename keep a single-server ledger durable across restarts. */
 export class JsonAccountRepository implements AccountRepository {
-  private state: State = fresh();
-  private pending: Promise<unknown> = Promise.resolve();
-  private constructor(private readonly file: string) {}
-
-  static async open(file: string): Promise<JsonAccountRepository> {
-    const repo = new JsonAccountRepository(file);
-    try {
-      const parsed: unknown = JSON.parse(await readFile(file, 'utf8'));
-      if (!parsed || typeof parsed !== 'object' || (parsed as State).version !== 1 || !Array.isArray((parsed as State).accounts)) {
-        throw new Error('unsupported account data format');
-      }
-      const state = parsed as State;
-      const priorMatchCount = Array.isArray(state.processedMatches) ? state.processedMatches.length : 0;
-      state.processedMatches = Array.isArray(state.processedMatches)
-        ? state.processedMatches.slice(-MAX_RECENT_MATCHES) : [];
-      let trimmed = priorMatchCount > MAX_RECENT_MATCHES;
-      for (const account of state.accounts) {
-        if (!Array.isArray(account.adClaims)) account.adClaims = [];
-        if (account.adClaims.length > MAX_RECENT_AD_CLAIMS) {
-          account.adClaims = account.adClaims.slice(-MAX_RECENT_AD_CLAIMS);
-          trimmed = true;
-        }
-      }
-      repo.state = state;
-      if (trimmed) await repo.persist();
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-    return repo;
-  }
-
-  async findById(id: string): Promise<PlayerAccount | null> {
-    await this.pending;
-    return this.state.accounts.find(account => account.id === id) ?? null;
-  }
-
-  findOrCreate(openId: string, unionId?: string, anonymousOpenId?: string): Promise<{ account: PlayerAccount; created: boolean }> {
-    return this.mutate<{ account: PlayerAccount; created: boolean }>(() => {
-      const anonymousKey = anonymousOpenId ? `anonymous:${anonymousOpenId}` : undefined;
-      const existing = this.state.accounts.find(account =>
-        account.douyinOpenId === openId
-        || Boolean(unionId && account.unionId === unionId)
-        || Boolean(anonymousOpenId && account.anonymousOpenId === anonymousOpenId)
-        || Boolean(anonymousKey && account.douyinOpenId === anonymousKey)
-      );
-      const now = Date.now();
-      if (existing) {
-        let changed = false;
-        // Promote an anonymous-only account when Douyin later returns a real logged-in openid.
-        if (!openId.startsWith('anonymous:') && existing.douyinOpenId !== openId) {
-          existing.douyinOpenId = openId;
-          changed = true;
-        }
-        if (unionId && existing.unionId !== unionId) {
-          existing.unionId = unionId;
-          changed = true;
-        }
-        if (anonymousOpenId && existing.anonymousOpenId !== anonymousOpenId) {
-          existing.anonymousOpenId = anonymousOpenId;
-          changed = true;
-        }
-        if (changed) existing.updatedAt = now;
-        return { result: { account: existing, created: false }, changed };
-      }
-      const id = randomUUID();
-      const account: PlayerAccount = {
-        id,
-        douyinOpenId: openId,
-        ...(unionId ? { unionId } : {}),
-        ...(anonymousOpenId ? { anonymousOpenId } : {}),
-        createdAt: now,
-        updatedAt: now,
-        profile: { displayName: `玩家${id.replace(/-/g, '').slice(0, 4).toUpperCase()}` },
-        solo: { bestKingdom: 0, highestKingdom: 2, bestPalace: 0, highestPalace: 2 },
-        pvp: { wins: 0, losses: 0, draws: 0, rating: 1000 },
-        rewards: { currency: 0 }, adClaims: [],
-      };
-      this.state.accounts.push(account);
-      return { result: { account, created: true }, changed: true };
-    });
-  }
-
-  claimSidebar(id: string, day: string): Promise<{ account: PlayerAccount; granted: boolean }> {
-    return this.mutate<{ account: PlayerAccount; granted: boolean }>(() => {
-      const account = this.requireAccount(id);
-      if (account.rewards.lastSidebarRewardDay === day) return { result: { account, granted: false }, changed: false };
-      account.rewards.lastSidebarRewardDay = day;
-      account.updatedAt = Date.now();
-      return { result: { account, granted: true }, changed: true };
-    });
-  }
-
-  claimAd(id: string, _kind: 'solo_skill_refill', claimId: string): Promise<{ account: PlayerAccount; granted: boolean }> {
-    return this.mutate<{ account: PlayerAccount; granted: boolean }>(() => {
-      const account = this.requireAccount(id);
-      if (account.adClaims.includes(claimId)) return { result: { account, granted: false }, changed: false };
-      account.adClaims.push(claimId);
-      if (account.adClaims.length > MAX_RECENT_AD_CLAIMS) account.adClaims.shift();
-      account.updatedAt = Date.now();
-      return { result: { account, granted: true }, changed: true };
-    });
-  }
-
-  mergeSoloProgress(id: string, theme: 'kingdom' | 'palace', best: number, highest: number): Promise<PlayerAccount> {
-    return this.mutate(() => {
-      const account = this.requireAccount(id);
-      const bestKey = theme === 'kingdom' ? 'bestKingdom' : 'bestPalace';
-      const highestKey = theme === 'kingdom' ? 'highestKingdom' : 'highestPalace';
-      const nextBest = Math.max(account.solo[bestKey], best);
-      const nextHighest = Math.max(account.solo[highestKey], highest);
-      const changed = nextBest !== account.solo[bestKey] || nextHighest !== account.solo[highestKey];
-      if (changed) {
-        account.solo[bestKey] = nextBest;
-        account.solo[highestKey] = nextHighest;
-        account.updatedAt = Date.now();
-      }
-      return { result: account, changed };
-    });
-  }
-
-  recordMatch(result: AccountMatchResult): Promise<boolean> {
-    return this.mutate(() => {
-      if (this.state.processedMatches.includes(result.matchId)) return { result: false, changed: false };
-      if (result.players.length !== 2) throw new Error('invalid match result');
-      const accountIds = result.players.map(player => player.accountId).filter((id): id is string => Boolean(id));
-      if (accountIds.length === 0 || new Set(accountIds).size !== accountIds.length) {
-        return { result: false, changed: false };
-      }
-      const accounts = result.players.map(player => player.accountId
-        ? this.state.accounts.find(account => account.id === player.accountId) ?? null : null);
-      const ratings = accounts.map(account => account?.pvp.rating ?? 1000);
-      const competitiveRating = accounts.every((account): account is PlayerAccount => Boolean(account));
-      const now = Date.now();
-      for (let index = 0; index < 2; index += 1) {
-        const account = accounts[index];
-        if (!account) continue;
-        const player = result.players[index];
-        const score = result.winnerId === null ? 0.5 : result.winnerId === player.playerId ? 1 : 0;
-        if (score === 1) account.pvp.wins += 1;
-        else if (score === 0) account.pvp.losses += 1;
-        else account.pvp.draws += 1;
-        // Guest/browser matches still count in W/L/D, but cannot farm competitive Elo.
-        if (competitiveRating) {
-          const expected = 1 / (1 + 10 ** ((ratings[1 - index] - ratings[index]) / 400));
-          account.pvp.rating = Math.max(0, ratings[index] + Math.round(PVP_ELO_K * (score - expected)));
-        }
-        account.updatedAt = now;
-      }
-      this.state.processedMatches.push(result.matchId);
-      if (this.state.processedMatches.length > MAX_RECENT_MATCHES) this.state.processedMatches.shift();
-      return { result: true, changed: true };
-    });
-  }
-
-  private requireAccount(id: string): PlayerAccount {
-    const account = this.state.accounts.find(value => value.id === id);
-    if (!account) throw new Error('account missing');
-    return account;
-  }
-
-  private mutate<T>(change: () => { result: T; changed: boolean }): Promise<T> {
-    const operation = this.pending.then(async () => {
-      const before = structuredClone(this.state);
-      try {
-        const { result, changed } = change();
-        if (changed) await this.persist();
-        return result;
-      } catch (error) {
-        this.state = before;
-        throw error;
-      }
-    });
-    this.pending = operation.catch(() => undefined);
-    return operation;
-  }
-
-  private async persist(): Promise<void> {
-    const directory = dirname(this.file);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    const temporary = join(directory, `.accounts-${randomUUID()}.tmp`);
-    try {
-      const handle = await open(temporary, 'wx', 0o600);
-      try {
-        await handle.writeFile(JSON.stringify(this.state));
-        await handle.sync();
-      } finally { await handle.close(); }
-      await rename(temporary, this.file);
-      // Directory fsync is available on Linux; Windows does not always permit opening a directory.
-      if (process.platform !== 'win32') {
-        const folder = await open(directory, 'r');
-        try { await folder.sync(); } finally { await folder.close(); }
-      }
-    } finally { await rm(temporary, { force: true }); }
-  }
+ private state:State={version:2,accounts:[],processedMatches:[]}; private pending:Promise<unknown>=Promise.resolve(); private constructor(private file:string){}
+ static async open(file:string){const repo=new JsonAccountRepository(file);try{const raw=JSON.parse(await readFile(file,'utf8')) as Partial<State>;if(!Array.isArray(raw.accounts))throw Error('unsupported account data format');repo.state=migrate(raw);if(raw.version!==2)await repo.persist();}catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')throw e;}return repo;}
+ async findById(id:string){await this.pending;return this.state.accounts.find(a=>a.id===id)??null;}
+ findOrCreate(openId:string,unionId?:string,anonymousOpenId?:string,now=Date.now()){return this.mutate(()=>{const a=this.state.accounts.find(x=>x.douyinOpenId===openId||!!(unionId&&x.unionId===unionId)||!!(anonymousOpenId&&(x.anonymousOpenId===anonymousOpenId||x.douyinOpenId===`anonymous:${anonymousOpenId}`)));if(a){let changed=roll(a,now);if(!openId.startsWith('anonymous:')&&a.douyinOpenId!==openId){a.douyinOpenId=openId;changed=true;}if(unionId&&a.unionId!==unionId){a.unionId=unionId;changed=true;}if(anonymousOpenId&&a.anonymousOpenId!==anonymousOpenId){a.anonymousOpenId=anonymousOpenId;changed=true;}if(changed)a.updatedAt=now;return {result:{account:a,created:false},changed};}const id=randomUUID(),solo={bestKingdom:0,highestKingdom:2,bestPalace:0,highestPalace:2};const account:PlayerAccount={id,douyinOpenId:openId,...(unionId?{unionId}:{}),...(anonymousOpenId?{anonymousOpenId}:{}),createdAt:now,updatedAt:now,profile:{displayName:`玩家${id.replaceAll('-','').slice(0,4).toUpperCase()}`},solo,pvp:{wins:0,losses:0,draws:0,rating:1000},rewards:{currency:0},adClaims:[],economy:economy(solo),themes:{owned:[],trialDayByTheme:{}},pvpSeason:season(now)};this.state.accounts.push(account);return {result:{account,created:true},changed:true};});}
+ claimDailyLogin(id:string,now=Date.now()){return this.mutate(()=>{const a=this.require(id),day=utcDay(now);roll(a,now);if(a.economy.lastDailyLoginDay===day)return {result:{account:a,granted:false,amount:0,streakAmount:0},changed:false};a.economy.loginStreak=a.economy.lastLoginDay===utcDay(now-86400000)?a.economy.loginStreak+1:1;a.economy.lastLoginDay=day;a.economy.lastDailyLoginDay=day;const amount=grant(a,`daily-login:${day}`,DAILY_LOGIN_S);let streakAmount=0;if(a.economy.loginStreak%7===0){a.economy.sevenDayChestCycle++;streakAmount=grant(a,`streak:cycle-${a.economy.sevenDayChestCycle}`,STREAK_CHEST_S);}a.updatedAt=now;return {result:{account:a,granted:true,amount,streakAmount},changed:true};});}
+ claimSidebar(id:string,day:string,now=Date.now()){return this.mutate(()=>{const a=this.require(id);roll(a,now);if(a.rewards.lastSidebarRewardDay===day)return {result:{account:a,granted:false,amount:0},changed:false};a.rewards.lastSidebarRewardDay=day;const amount=grant(a,`sidebar:${day}`,DAILY_SIDEBAR_S);a.updatedAt=now;return {result:{account:a,granted:true,amount},changed:true};});}
+ claimAd(id:string,kind:'solo_skill_refill'|'daily_s_coin',claimId:string,now=Date.now()){return this.mutate(()=>{const a=this.require(id),day=utcDay(now);roll(a,now);if(a.adClaims.includes(claimId)||(kind==='daily_s_coin'&&a.economy.lastDailyAdDay===day))return {result:{account:a,granted:false,amount:0,taskAmount:0},changed:false};a.adClaims.push(claimId);trim(a.adClaims,MAX_RECENT_AD_CLAIMS);let amount=0,taskAmount=0;if(kind==='daily_s_coin'){a.economy.lastDailyAdDay=day;amount=grant(a,`daily-ad:${day}`,DAILY_AD_S);taskAmount=task(a,'ad',day);}a.updatedAt=now;return {result:{account:a,granted:true,amount,taskAmount},changed:true};});}
+ mergeSoloProgress(id:string,themeId:'kingdom'|'palace',best:number,highest:number,now=Date.now()){return this.mutate(()=>{const a=this.require(id),day=utcDay(now);roll(a,now);const b=themeId==='kingdom'?'bestKingdom':'bestPalace',h=themeId==='kingdom'?'highestKingdom':'highestPalace',before=tier(a.solo[h]);a.solo[b]=Math.max(a.solo[b],best);a.solo[h]=Math.max(a.solo[h],highest);const after=tier(a.solo[h]),known=a.economy.discoveredTierByTheme[themeId]??before;let discoveryAmount=0;for(let t=Math.max(before+1,known+1);t<=after;t++)discoveryAmount+=grant(a,`discovery:${themeId}:tier-${t}`,DISCOVERY_S);a.economy.discoveredTierByTheme[themeId]=Math.max(known,after);const taskAmount=task(a,'solo',day);a.updatedAt=now;return {result:{account:a,discoveryAmount,taskAmount},changed:true};});}
+ unlockTheme(id:string,themeId:string,requestId:string,now=Date.now()){return this.mutate(()=>{const a=this.require(id);roll(a,now);const definition=THEME_REGISTRY[themeId as keyof typeof THEME_REGISTRY];if(!definition||!/^[A-Za-z0-9_-]{8,100}$/.test(requestId))throw Error('invalid_theme_request');if(owned(a).includes(themeId)||a.economy.grants.includes(`theme:${requestId}`))return {result:{account:a,unlocked:true,amount:0},changed:false};if(a.economy.balance<definition.cost)return {result:{account:a,unlocked:false,amount:0},changed:false};a.economy.balance-=definition.cost;a.rewards.currency=a.economy.balance;a.themes.owned.push(themeId);remember(a.economy.grants,`theme:${requestId}`);a.updatedAt=now;return {result:{account:a,unlocked:true,amount:-definition.cost},changed:true};});}
+ recordMatch(result:AccountMatchResult,now=Date.now()){return this.mutate(()=>{if(this.state.processedMatches.includes(result.matchId))return {result:false,changed:false};if(result.players.length!==2)throw Error('invalid match result');const accounts=result.players.map(p=>p.accountId?this.state.accounts.find(a=>a.id===p.accountId)??null:null);for(const a of accounts)if(a)roll(a,now);const ratings=accounts.map(a=>a?.pvp.rating??1000),seasonRatings=accounts.map(a=>a?.pvpSeason.rating??1000),pair=accounts.every((a):a is PlayerAccount=>!!a);for(let i=0;i<2;i++){const a=accounts[i];if(!a)continue;const score=result.winnerId===null?.5:result.winnerId===result.players[i].playerId?1:0;outcome(a.pvp,score);if(pair){const e=1/(1+10**((ratings[1-i]-ratings[i])/400));a.pvp.rating=Math.max(0,ratings[i]+Math.round(PVP_ELO_K*(score-e)));outcome(a.pvpSeason,score);const se=1/(1+10**((seasonRatings[1-i]-seasonRatings[i])/400));a.pvpSeason.rating=Math.max(0,seasonRatings[i]+Math.round(PVP_ELO_K*(score-se)));}task(a,'pvp',utcDay(now));a.updatedAt=now;}this.state.processedMatches.push(result.matchId);trim(this.state.processedMatches,MAX_RECENT_MATCHES);return {result:true,changed:true};});}
+ leaderboard(now=Date.now(),limit=50){return this.mutate(()=>{let changed=false;for(const a of this.state.accounts)changed=roll(a,now)||changed;const entries=[...this.state.accounts].sort((a,b)=>b.pvpSeason.rating-a.pvpSeason.rating||b.pvpSeason.matches-a.pvpSeason.matches||a.createdAt-b.createdAt||a.id.localeCompare(b.id)).slice(0,Math.min(50,Math.max(1,limit))).map((a,i)=>({rank:i+1,displayName:a.profile.displayName,rating:a.pvpSeason.rating,wins:a.pvpSeason.wins,losses:a.pvpSeason.losses,draws:a.pvpSeason.draws,matches:a.pvpSeason.matches}));return {result:{season:currentSeason(now),entries},changed};});}
+ private require(id:string){const a=this.state.accounts.find(x=>x.id===id);if(!a)throw Error('account missing');return a;}
+ private mutate<T>(fn:()=>{result:T;changed:boolean}):Promise<T>{const op=this.pending.then(async()=>{const before=structuredClone(this.state);try{const x=fn();if(x.changed)await this.persist();return x.result;}catch(e){this.state=before;throw e;}});this.pending=op.catch(()=>undefined);return op;}
+ private async persist(){const dir=dirname(this.file),tmp=join(dir,`.accounts-${randomUUID()}.tmp`);await mkdir(dir,{recursive:true,mode:0o700});try{const h=await open(tmp,'wx',0o600);try{await h.writeFile(JSON.stringify(this.state));await h.sync();}finally{await h.close();}await rename(tmp,this.file);if(process.platform!=='win32'){const h=await open(dir,'r');try{await h.sync();}finally{await h.close();}}}finally{await rm(tmp,{force:true});}}
 }
+function roll(a:PlayerAccount,now:number){const id=currentSeason(now).id;if(a.pvpSeason.seasonId===id)return false;a.pvpSeason={...season(now),rating:Math.round(1000+(a.pvpSeason.rating-1000)*.25)};return true;}
+function grant(a:PlayerAccount,key:string,amount:number){if(a.economy.grants.includes(key))return 0;remember(a.economy.grants,key);a.economy.balance+=amount;a.economy.lifetimeEarned+=amount;a.rewards.currency=a.economy.balance;return amount;}
+function task(a:PlayerAccount,key:keyof Tasks,day:string){if(a.economy.dailyTaskDay!==day){a.economy.dailyTaskDay=day;a.economy.dailyTasks={solo:false,pvp:false,ad:false};}if(a.economy.dailyTasks[key])return 0;a.economy.dailyTasks[key]=true;return grant(a,`task:${key}:${day}`,DAILY_TASK_S);}
+function outcome(a:{wins:number;losses:number;draws:number;matches?:number},score:number){if(score===1)a.wins++;else if(score===0)a.losses++;else a.draws++;if('matches'in a)a.matches = (a.matches ?? 0) + 1;}
+function remember(a:string[],x:string){a.push(x);trim(a,MAX_RECENT_GRANTS);} function trim(a:string[],n:number){if(a.length>n)a.splice(0,a.length-n);}
+function migrate(raw:Partial<State>):State{const accounts=(raw.accounts??[]) as PlayerAccount[];for(const a of accounts){a.adClaims=Array.isArray(a.adClaims)?a.adClaims.slice(-MAX_RECENT_AD_CLAIMS):[];const legacyEconomy=!a.economy;a.economy??=economy(a.solo);if(legacyEconomy)a.economy.balance=a.rewards.currency??0;a.economy.grants??=[];a.economy.dailyTasks??={solo:false,pvp:false,ad:false};a.economy.discoveredTierByTheme??={kingdom:tier(a.solo.highestKingdom),palace:tier(a.solo.highestPalace)};a.economy.balance??=a.rewards.currency??0;a.economy.lifetimeEarned??=a.economy.balance;a.economy.loginStreak??=0;a.economy.sevenDayChestCycle??=0;a.rewards.currency=a.economy.balance;a.themes??={owned:[],trialDayByTheme:{}};a.themes.owned??=[];a.themes.trialDayByTheme??={};a.pvpSeason??=season(a.updatedAt||Date.now());}return {version:2,accounts,processedMatches:Array.isArray(raw.processedMatches)?raw.processedMatches.slice(-MAX_RECENT_MATCHES):[]};}
