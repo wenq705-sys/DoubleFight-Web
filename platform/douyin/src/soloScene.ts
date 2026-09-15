@@ -545,6 +545,12 @@ export class DouyinSoloScene {
       this.refreshHud();
       return;
     }
+    if (this.hit(x, y, layout.account)) {
+      this.profileOpen = true;
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
+      return;
+    }
 
     if (this.hit(x, y, layout.theme)) {
       this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
@@ -982,10 +988,12 @@ export class DouyinSoloScene {
     else if (this.mode === 'solo') this.drawSoloHud(ctx, width, height);
     else this.drawOnlineHud(ctx, width, height);
 
+    if (this.highestFlight && this.mode === 'solo') this.drawHighestFlight(ctx, width, height);
     if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
     if (this.settingsOpen) this.drawSettings(ctx, width, height);
+    if (this.profileOpen) this.drawProfile(ctx, width, height);
     if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
     this.uiTexture.needsUpdate = true;
   }
@@ -1001,11 +1009,6 @@ export class DouyinSoloScene {
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
-    if (this.auth.current.status === 'authenticated') {
-      ctx.fillStyle = 'rgba(233,244,216,.78)';
-      ctx.font = '700 10px sans-serif';
-      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
-    }
 
     const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
     brandGradient.addColorStop(0, '#fff6d7');
@@ -1026,20 +1029,54 @@ export class DouyinSoloScene {
     ctx.fillText('⚙', 24, titleTop + 24);
     ctx.textAlign = 'center';
 
-    const metaY = Math.max(titleTop + 72, height * 0.56);
-    ctx.fillStyle = 'rgba(12, 28, 36, .72)';
-    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 74, 22);
+    const account = this.auth.current.status === 'authenticated' ? this.auth.current.player : null;
+    const rank = ratingRank(account?.pvp.rating ?? 1000);
+    const accountRect = layout.account;
+    ctx.fillStyle = 'rgba(10,29,38,.80)';
+    this.roundedRect(ctx, accountRect.x, accountRect.y, accountRect.width, accountRect.height, 16);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,229,155,.28)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff0c3';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(account?.displayName ?? '本地玩家', accountRect.x + 12, accountRect.y + 12);
+    ctx.fillStyle = '#9fd9cd';
+    ctx.font = '700 8px sans-serif';
+    ctx.fillText(account ? rank.short : '游客模式', accountRect.x + 12, accountRect.y + 25);
+
+    const coinRect = layout.coin;
+    ctx.fillStyle = 'rgba(10,29,38,.80)';
+    this.roundedRect(ctx, coinRect.x, coinRect.y, coinRect.width, coinRect.height, 16);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe079';
+    ctx.font = '900 11px sans-serif';
+    ctx.fillText(`S  ${account?.rewards.currency ?? 0}`, coinRect.x + coinRect.width / 2, coinRect.y + coinRect.height / 2);
+
+    const ascensionBest = Number(this.platform.storage.getItem(`doublefight-ascension-best-${this.currentTheme}`) ?? 0);
+    const metaY = Math.max(titleTop + 108, height * 0.54);
+    ctx.fillStyle = 'rgba(12, 28, 36, .74)';
+    this.roundedRect(ctx, width / 2 - 118, metaY, 236, 88, 22);
     ctx.fill();
 
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#ffe6a1';
     ctx.font = '900 18px sans-serif';
-    ctx.fillText(themeMeta.label, width / 2, metaY + 22);
+    ctx.fillText(themeMeta.label, width / 2, metaY + 19);
+    ctx.fillStyle = '#f6e9c5';
+    ctx.font = '850 12px sans-serif';
+    ctx.fillText(`最高 · ${pieceName(this.currentTheme, highest)}`, width / 2, metaY + 43);
     ctx.fillStyle = '#c9d9d8';
     ctx.font = '700 9px sans-serif';
-    ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
-    ctx.fillStyle = '#f6e9c5';
-    ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
+    ctx.fillText(
+      ascensionBest > 0
+        ? `BEST ${best.toLocaleString('zh-CN')}   ·   最速 ${formatDuration(ascensionBest)}`
+        : `BEST ${best.toLocaleString('zh-CN')}   ·   尚未登顶`,
+      width / 2,
+      metaY + 66,
+    );
 
     this.drawPillButton(ctx, layout.theme, '‹   切换主题   ›', 'secondary');
     this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
@@ -1089,7 +1126,7 @@ export class DouyinSoloScene {
     ctx.fillText(this.score.toLocaleString('zh-CN'), width - edge - 16, hudTop + 22);
     ctx.fillStyle = '#d7e7e8';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
+    ctx.fillText(`最高 · ${this.highestName}`, width - edge - 16, hudTop + 43);
 
     const skillWidth = 176;
     const skillY = height - safeBottom - 52;
@@ -1105,7 +1142,7 @@ export class DouyinSoloScene {
     ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = '650 10px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 向 2048 进阶', width / 2, skillY - 13);
+    ctx.fillText('相同棋子合并 · 不断进阶', width / 2, skillY - 13);
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1609,6 +1646,8 @@ export class DouyinSoloScene {
     const utilityWidth = Math.min(112, (width - 64) / 2);
     return {
       settings: { x: 12, y: this.hudTop() + 5, width: 44, height: 40 },
+      account: { x: 16, y: this.hudTop() + 62, width: Math.min(148, width * 0.4), height: 34 },
+      coin: { x: width - 104, y: this.hudTop() + 62, width: 88, height: 34 },
       theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
       solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
       online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },
