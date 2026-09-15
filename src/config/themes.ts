@@ -22,7 +22,11 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
   },
 };
 
-export const PALACE_RANKS: Record<number, string> = {
+export const PIECE_VALUES = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048] as const;
+export type PieceValue = typeof PIECE_VALUES[number];
+export const MAX_PIECE_VALUE: PieceValue = 2048;
+
+export const PALACE_RANKS: Record<PieceValue, string> = {
   2: '宫女',
   4: '答应',
   8: '常在',
@@ -36,8 +40,7 @@ export const PALACE_RANKS: Record<number, string> = {
   2048: '母仪天下',
 };
 
-
-export const KINGDOM_RANKS: Record<number, string> = {
+export const KINGDOM_RANKS: Record<PieceValue, string> = {
   2: '边境营地',
   4: '强化营地',
   8: '瞭望塔',
@@ -50,3 +53,50 @@ export const KINGDOM_RANKS: Record<number, string> = {
   1024: '王家圣殿',
   2048: '王国奇观',
 };
+
+export interface PieceMeta {
+  theme: ThemeId;
+  value: PieceValue;
+  tier: number;
+  name: string;
+  isFinal: boolean;
+}
+
+const rankTable = (theme: ThemeId) => theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
+
+export function normalizePieceValue(value: number): PieceValue {
+  if (!Number.isFinite(value) || value <= 2) return 2;
+  let nearest: PieceValue = 2;
+  for (const candidate of PIECE_VALUES) {
+    if (candidate > value) break;
+    nearest = candidate;
+  }
+  return nearest;
+}
+
+export function pieceTier(value: number): number {
+  return PIECE_VALUES.indexOf(normalizePieceValue(value)) + 1;
+}
+
+export function pieceName(theme: ThemeId, value: number): string {
+  return rankTable(theme)[normalizePieceValue(value)];
+}
+
+export function maxPieceName(theme: ThemeId): string {
+  return pieceName(theme, MAX_PIECE_VALUE);
+}
+
+export function pieceMeta(theme: ThemeId, value: number): PieceMeta {
+  const normalized = normalizePieceValue(value);
+  return {
+    theme,
+    value: normalized,
+    tier: pieceTier(normalized),
+    name: pieceName(theme, normalized),
+    isFinal: normalized === MAX_PIECE_VALUE,
+  };
+}
+
+export function pieceCatalogue(theme: ThemeId): PieceMeta[] {
+  return PIECE_VALUES.map(value => pieceMeta(theme, value));
+}
