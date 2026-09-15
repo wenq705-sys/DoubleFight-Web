@@ -682,12 +682,7 @@ export class DouyinSoloScene {
     }
 
     if (snap.mode === 'result') {
-      const width = Math.min(282, info.width - 42);
-      const x0 = (info.width - width) / 2;
-      const y0 = info.height * 0.6;
-      const primary = { x: x0, y: y0, width, height: 48 };
-      const lobby = { x: x0, y: y0 + 58, width, height: 42 };
-      const share = { x: x0 + 36, y: y0 + 108, width: width - 72, height: 34 };
+      const { primary, lobby, share } = this.resultActionRects(info.width, info.height);
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
         if (opponentRoom) this.online.setRematchReady();
@@ -1242,9 +1237,7 @@ export class DouyinSoloScene {
     ctx.font = '700 10px sans-serif';
     ctx.fillText(this.online.resultReason(), width / 2, y + 120);
 
-    const primary = { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 };
-    const lobby = { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 };
-    const share = { x: x + 56, y: y + 270, width: panelWidth - 112, height: 32 };
+    const { primary, lobby, share } = this.resultActionRects(width, height);
     const roomMe = snap.state.room?.players.find(player => player.id === snap.state.playerId);
     const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
     this.drawPillButton(
@@ -1577,6 +1570,17 @@ export class DouyinSoloScene {
 
   private roomShareRect(width: number, height: number): Rect {
     return { x: width / 2 - 78, y: height * 0.39, width: 156, height: 34 };
+  }
+
+  private resultActionRects(width: number, height: number): { primary: Rect; lobby: Rect; share: Rect } {
+    const panelWidth = Math.min(310, width - 34);
+    const x = (width - panelWidth) / 2;
+    const y = height * 0.26;
+    return {
+      primary: { x: x + 20, y: y + 160, width: panelWidth - 40, height: 48 },
+      lobby: { x: x + 20, y: y + 218, width: panelWidth - 40, height: 42 },
+      share: { x: x + 56, y: y + 270, width: panelWidth - 112, height: 32 },
+    };
   }
 
   private matchingCancelRect(width: number, height: number): Rect {
