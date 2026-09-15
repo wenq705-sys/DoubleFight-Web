@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FINAL_PIECE_VALUE, formatDuration, isFinalPiece, pieceName, pieceTier, ratingRank } from '../src/meta/progression';
+import { FINAL_PIECE_VALUE, PIECE_VALUES, formatDuration, isFinalPiece, pieceName, pieceTier, ratingRank } from '../src/meta/progression';
+import { MONETIZATION_MODEL, PVP_SEASON_DURATION_MS, S_COIN } from '../shared/index';
 
 describe('named meta progression', () => {
   it('maps hidden board values to theme-specific player-facing names', () => {
@@ -16,6 +17,15 @@ describe('named meta progression', () => {
     expect(pieceTier(12)).toBe(0);
     expect(isFinalPiece(1024)).toBe(false);
     expect(isFinalPiece(2048)).toBe(true);
+  });
+
+  it('keeps the ad-only economy balanced around one soft currency', () => {
+    expect(MONETIZATION_MODEL).toBe('ads_only');
+    expect(S_COIN.dailyLogin).toBe(15);
+    expect(S_COIN.dailyRewardedBonus).toBe(30);
+    expect(S_COIN.themePermanentUnlock).toBe(500);
+    expect(PIECE_VALUES).toHaveLength(11);
+    expect(PVP_SEASON_DURATION_MS).toBe(14 * 24 * 60 * 60 * 1000);
   });
 
   it('formats ascension duration and PvP rank labels', () => {
