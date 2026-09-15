@@ -36,7 +36,7 @@ const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
 installM212ProductPass(game, platform, client, auth, commercial);
-installM212RetentionHub(game, platform, auth, social, engagement);
+installM212RetentionHub(game, platform, auth, social, commercial, engagement);
 const sharedRoom = social.launchRoomCode();
 if (sharedRoom) game.openSharedRoom(sharedRoom);
 const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
