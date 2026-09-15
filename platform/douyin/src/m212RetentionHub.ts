@@ -232,6 +232,9 @@ export function installM212RetentionHub(
         scene.refreshHud();
         return;
       }
+      // The M2.12 three-destination row visually covers the legacy two-button
+      // row. Consume its gutters so taps cannot leak through to old handlers.
+      if (hit(x, y, utility.cover)) return;
     }
 
     originalTap(x, y);
