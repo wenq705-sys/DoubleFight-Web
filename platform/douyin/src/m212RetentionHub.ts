@@ -83,6 +83,19 @@ export function installM212RetentionHub(
     if (shown) engagement.track('interstitial_shown', { from_mode: game.currentMode });
     return shown;
   };
+
+  const originalShareRoom = social.shareRoom.bind(social);
+  social.shareRoom = async (roomCode: string) => {
+    const ok = await originalShareRoom(roomCode);
+    engagement.track('share_room', { success: ok });
+    return ok;
+  };
+  const originalShareResult = social.shareResult.bind(social);
+  social.shareResult = async (score: number, won: boolean) => {
+    const ok = await originalShareResult(score, won);
+    engagement.track('share_result', { success: ok, result: won ? 'win' : 'loss', score: Math.max(0, Math.floor(score)) });
+    return ok;
+  };
   void engagement.checkShortcut().then(value => {
     state.shortcutAdded = value;
     if (!scene.disposed && state.screen === 'daily') scene.refreshHud();
