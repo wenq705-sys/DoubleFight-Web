@@ -1227,6 +1227,9 @@ export class DouyinSoloScene {
     const resultOpponent = match.result?.players.find(player => player.playerId !== snap.state.playerId);
     const meScore = resultMe?.score ?? snap.me?.board.score ?? 0;
     const opponentScore = resultOpponent?.score ?? snap.opponent?.board.score ?? 0;
+    ctx.fillStyle = '#9fb6b8';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`${resultMe?.name ?? snap.me?.name ?? '我'}  VS  ${resultOpponent?.name ?? snap.opponent?.name ?? '对手'}`, width / 2, y + 69);
     ctx.fillStyle = '#f2f0e6';
     ctx.font = '900 24px sans-serif';
     ctx.fillText(`${meScore}   VS   ${opponentScore}`, width / 2, y + 92);
