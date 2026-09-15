@@ -6,6 +6,7 @@ export interface PlayerAccount {
   id: string;
   douyinOpenId: string;
   unionId?: string;
+  anonymousOpenId?: string;
   createdAt: number;
   updatedAt: number;
   profile: { displayName: string };
@@ -28,7 +29,7 @@ export function publicPlayer(account: PlayerAccount): PublicPlayer {
 
 export interface AccountRepository {
   findById(id: string): Promise<PlayerAccount | null>;
-  findOrCreate(openId: string, unionId?: string): Promise<{ account: PlayerAccount; created: boolean }>;
+  findOrCreate(openId: string, unionId?: string, anonymousOpenId?: string): Promise<{ account: PlayerAccount; created: boolean }>;
   claimSidebar(id: string, day: string): Promise<{ account: PlayerAccount; granted: boolean }>;
   claimAd(id: string, kind: 'solo_skill_refill', claimId: string): Promise<{ account: PlayerAccount; granted: boolean }>;
 }
@@ -61,14 +62,42 @@ export class JsonAccountRepository implements AccountRepository {
     return this.state.accounts.find(account => account.id === id) ?? null;
   }
 
-  findOrCreate(openId: string, unionId?: string): Promise<{ account: PlayerAccount; created: boolean }> {
+  findOrCreate(openId: string, unionId?: string, anonymousOpenId?: string): Promise<{ account: PlayerAccount; created: boolean }> {
     return this.mutate<{ account: PlayerAccount; created: boolean }>(() => {
-      const existing = this.state.accounts.find(account => account.douyinOpenId === openId);
-      if (existing) return { result: { account: existing, created: false }, changed: false };
+      const anonymousKey = anonymousOpenId ? `anonymous:${anonymousOpenId}` : undefined;
+      const existing = this.state.accounts.find(account =>
+        account.douyinOpenId === openId
+        || Boolean(unionId && account.unionId === unionId)
+        || Boolean(anonymousOpenId && account.anonymousOpenId === anonymousOpenId)
+        || Boolean(anonymousKey && account.douyinOpenId === anonymousKey)
+      );
       const now = Date.now();
+      if (existing) {
+        let changed = false;
+        // Promote an anonymous-only account when Douyin later returns a real logged-in openid.
+        if (!openId.startsWith('anonymous:') && existing.douyinOpenId !== openId) {
+          existing.douyinOpenId = openId;
+          changed = true;
+        }
+        if (unionId && existing.unionId !== unionId) {
+          existing.unionId = unionId;
+          changed = true;
+        }
+        if (anonymousOpenId && existing.anonymousOpenId !== anonymousOpenId) {
+          existing.anonymousOpenId = anonymousOpenId;
+          changed = true;
+        }
+        if (changed) existing.updatedAt = now;
+        return { result: { account: existing, created: false }, changed };
+      }
       const id = randomUUID();
       const account: PlayerAccount = {
-        id, douyinOpenId: openId, ...(unionId ? { unionId } : {}), createdAt: now, updatedAt: now,
+        id,
+        douyinOpenId: openId,
+        ...(unionId ? { unionId } : {}),
+        ...(anonymousOpenId ? { anonymousOpenId } : {}),
+        createdAt: now,
+        updatedAt: now,
         profile: { displayName: `玩家${id.replace(/-/g, '').slice(0, 4).toUpperCase()}` },
         solo: { bestKingdom: 0, highestKingdom: 2, bestPalace: 0, highestPalace: 2 },
         pvp: { wins: 0, losses: 0, draws: 0, rating: 1000 },
