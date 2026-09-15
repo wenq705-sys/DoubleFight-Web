@@ -129,6 +129,12 @@ export interface DouyinApi {
     fail?: (error: { errMsg?: string; errNo?: number }) => void;
     complete?: () => void;
   }): void;
+  requestSubscribeMessage?(options: {
+    tmplIds: string[];
+    success?: (result: Record<string, unknown>) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: () => void;
+  }): void;
 
   connectSocket(options: { url: string; header?: Record<string, string>; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
 
