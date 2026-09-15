@@ -9,6 +9,7 @@ import { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import { DouyinAudio } from './audio';
 import { DouyinAuthClient } from './auth';
+import { installM212ProductPass } from './m212ProductPass';
 
 declare const tt: DouyinApi;
 
@@ -31,6 +32,7 @@ if (!context) throw new Error('Double Fight requires a WebGL context in the Douy
 const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
+installM212ProductPass(game, platform, client, auth, commercial);
 const sharedRoom = social.launchRoomCode();
 if (sharedRoom) game.openSharedRoom(sharedRoom);
 const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
@@ -53,6 +55,7 @@ const loop = new DouyinRenderLoop(
   () => game.render(),
   () => {
     touch.setActive(true);
+    platform.refreshSystemInfo();
     void auth.start().then(() => client.connect());
   },
   () => {
