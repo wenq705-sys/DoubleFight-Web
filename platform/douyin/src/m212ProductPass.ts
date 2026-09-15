@@ -28,6 +28,7 @@ type PassState = {
   perfFrames: number;
   goodWindows: number;
   nextFlightHudAt: number;
+  nextOnlineHudAt: number;
 };
 
 /** Adds M2.12 product presentation without changing Board2048 or Protocol v6. */
@@ -50,6 +51,7 @@ export function installM212ProductPass(
     perfFrames: 0,
     goodWindows: 0,
     nextFlightHudAt: 0,
+    nextOnlineHudAt: 0,
   };
 
   // Premium gameplay surfaces remain Banner-free. Rewarded/interstitial stay.
@@ -185,6 +187,13 @@ export function installM212ProductPass(
       state.nextFlightHudAt = now + 1 / 30;
       scene.refreshHud();
       if (now - state.flight.startedAt >= state.flight.duration) state.flight = null;
+    }
+
+    // Matching is not a duel yet, so the base scene does not schedule dynamic
+    // HUD uploads. Refresh at a modest cadence for elapsed time + scan pulse.
+    if (game.currentMode === 'online' && scene.online.snapshot().mode === 'matching' && now >= state.nextOnlineHudAt) {
+      state.nextOnlineHudAt = now + 1 / 12;
+      scene.refreshHud();
     }
   };
 
@@ -360,9 +369,15 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.fillStyle = '#fff0bd';
     ctx.font = '900 15px sans-serif';
     ctx.fillText('⚔  寻找同级对手', width / 2, cy + 30);
+    const elapsed = snap.state.matchmaking.joinedAt
+      ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000)
+      : 0;
     ctx.fillStyle = '#9fbabc';
     ctx.font = '700 9px sans-serif';
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, cy + 49);
+    ctx.fillStyle = '#c8d7d6';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`已搜索 ${elapsed.toFixed(1)}s · 队列 ${Math.max(1, snap.state.matchmaking.queueSize)}`, width / 2, cy + 69);
     return;
   }
   if (snap.mode !== 'playing' && snap.mode !== 'result') return;
