@@ -209,17 +209,26 @@ export function installM212RetentionHub(
         scene.refreshHud();
         return;
       }
-      if (layout?.daily && hit(x, y, layout.daily)) {
-        state.screen = 'daily';
+      const utility = homeUtilityLayout(info.width, layout);
+      if (hit(x, y, utility.collection)) {
+        state.screen = 'collection';
+        state.collectionTheme = game.theme;
         platform.haptics.trigger('light');
-        engagement.track('daily_center_open');
+        engagement.track('collection_open', { theme: game.theme, source: 'home' });
         scene.refreshHud();
         return;
       }
-      if (layout?.rank && hit(x, y, layout.rank)) {
+      if (hit(x, y, utility.rank)) {
         state.screen = 'rankings';
         platform.haptics.trigger('light');
         engagement.track('ranking_center_open', { theme: game.theme });
+        scene.refreshHud();
+        return;
+      }
+      if (hit(x, y, utility.daily)) {
+        state.screen = 'daily';
+        platform.haptics.trigger('light');
+        engagement.track('daily_center_open');
         scene.refreshHud();
         return;
       }
@@ -432,12 +441,23 @@ function handleHubTap(
 function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals): void {
   const info = scene.platform.getSystemInfo();
   const layout = scene.homeLayout(width, height, info.safeArea.bottom);
+  const utility = homeUtilityLayout(width, layout);
   scene.drawPillButton(ctx, layout.theme, '🌍 世界中心', 'secondary');
-  scene.drawPillButton(
+
+  // Replace the old two equal utility pills with three quieter destinations.
+  // This keeps Start/Online as the dominant Home actions.
+  ctx.fillStyle = 'rgba(7,23,30,.82)';
+  round(ctx, utility.cover.x, utility.cover.y, utility.cover.width, utility.cover.height, 18);
+  ctx.fill();
+
+  miniHomeButton(ctx, utility.collection, '📖', '图鉴', false);
+  miniHomeButton(ctx, utility.rank, '🏆', '排行', false);
+  miniHomeButton(
     ctx,
-    layout.daily,
-    scene.sidebarRewardReady?.() ? '🎁 今日可领' : '🎁 今日福利',
-    scene.sidebarRewardReady?.() ? 'primary' : 'secondary',
+    utility.daily,
+    scene.sidebarRewardReady?.() ? '🎁' : '✦',
+    scene.sidebarRewardReady?.() ? '可领取' : '福利',
+    Boolean(scene.sidebarRewardReady?.()),
   );
 }
 
@@ -823,6 +843,50 @@ function drawOnlinePolish(
       ctx.fillText(`最高 ${mePiece}  VS  ${rivalPiece}${spaces}`, width / 2, detailY);
     }
   }
+}
+
+function homeUtilityLayout(width: number, base: any) {
+  const left = Math.max(22, base.rank?.x ?? 22);
+  const right = Math.min(width - 22, (base.daily?.x ?? width - 22) + (base.daily?.width ?? 0));
+  const y = Math.min(base.rank?.y ?? base.daily?.y ?? 0, base.daily?.y ?? base.rank?.y ?? 0);
+  const height = Math.max(base.rank?.height ?? 36, base.daily?.height ?? 36);
+  const gap = 7;
+  const totalWidth = Math.max(180, right - left);
+  const buttonWidth = (totalWidth - gap * 2) / 3;
+  const make = (index: number): Rect => ({
+    x: left + index * (buttonWidth + gap),
+    y,
+    width: buttonWidth,
+    height,
+  });
+  return {
+    cover: { x: left - 5, y: y - 5, width: totalWidth + 10, height: height + 10 },
+    collection: make(0),
+    rank: make(1),
+    daily: make(2),
+  };
+}
+
+function miniHomeButton(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  icon: string,
+  label: string,
+  emphasized: boolean,
+): void {
+  round(ctx, rect.x, rect.y, rect.width, rect.height, 15);
+  ctx.fillStyle = emphasized ? 'rgba(45,92,74,.97)' : 'rgba(20,51,61,.96)';
+  ctx.fill();
+  ctx.strokeStyle = emphasized ? 'rgba(244,209,105,.65)' : 'rgba(223,235,230,.22)';
+  ctx.lineWidth = emphasized ? 1.3 : 1;
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = emphasized ? '#ffe089' : '#eef1e9';
+  ctx.font = '900 10px sans-serif';
+  ctx.fillText(icon, rect.x + rect.width / 2, rect.y + rect.height * 0.36);
+  ctx.fillStyle = emphasized ? '#fff0b8' : '#afc1c1';
+  ctx.font = '800 8px sans-serif';
+  ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * 0.72);
 }
 
 function rankingCenterLayout(width: number, height: number) {
