@@ -124,6 +124,11 @@ export interface DouyinApi {
   onHide(listener: () => void): void;
 
   reportAnalytics?(event: string, data: Record<string, string | number | boolean>): void;
+  addShortcut?(options: {
+    success?: (result: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: () => void;
+  }): void;
 
   connectSocket(options: { url: string; header?: Record<string, string>; fail?: (error: { errMsg?: string }) => void }): DouyinSocketTask;
 
