@@ -96,6 +96,9 @@ export class DouyinSoloScene {
     ascended: boolean;
   } | null = null;
   private profileOpen = false;
+  private rankingOpen = false;
+  private collectionOpen = false;
+  private collectionTheme: ThemeId;
   private lastDuelTimerSecond: number | null = null;
   private themeTransition: { startedAt: number; duration: number; label: string } | null = null;
 
@@ -111,6 +114,7 @@ export class DouyinSoloScene {
     private readonly auth: DouyinAuthClient,
   ) {
     this.currentTheme = theme;
+    this.collectionTheme = theme;
 
     setTextureCanvasFactory((width, height) => {
       const canvas = this.platform.createCanvas();
@@ -315,6 +319,14 @@ export class DouyinSoloScene {
         this.platform.haptics.trigger('light');
         this.refreshHud();
       }
+      return;
+    }
+    if (this.collectionOpen) {
+      this.handleCollectionTap(x, y);
+      return;
+    }
+    if (this.rankingOpen) {
+      this.handleRankingTap(x, y);
       return;
     }
     if (this.profileOpen) {
@@ -641,12 +653,10 @@ export class DouyinSoloScene {
     if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
     if (this.hit(x, y, layout.online)) { this.openOnline(); return; }
     if (this.hit(x, y, layout.rank)) {
-      void this.social.openSoloRank().then(ok => {
-        if (!ok) {
-          this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
-          this.refreshHud();
-        }
-      });
+      this.rankingOpen = true;
+      this.social.report('rank_center_open', { theme: this.currentTheme });
+      this.platform.haptics.trigger('light');
+      this.refreshHud();
       return;
     }
     if (this.hit(x, y, layout.daily)) {
@@ -1077,6 +1087,8 @@ export class DouyinSoloScene {
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
     if (this.settingsOpen) this.drawSettings(ctx, width, height);
     if (this.profileOpen) this.drawProfile(ctx, width, height);
+    if (this.rankingOpen) this.drawRankingCenter(ctx, width, height);
+    if (this.collectionOpen) this.drawCollection(ctx, width, height);
     if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
     this.uiTexture.needsUpdate = true;
   }
