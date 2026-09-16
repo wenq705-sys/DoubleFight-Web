@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feat/m2-10-2-douyin-product-shell, feat/m2-12-meta-retention-visual, feat/m2-12-server-authority]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -26,8 +26,16 @@ jobs:
         run: npm run typecheck
       - name: Test
         run: npm test
+      - name: Auth HTTP smoke (mock provider)
+        run: npm run smoke:auth
       - name: Build
         run: npm run build
+      - name: Build Douyin
+        run: npm run build:douyin
+      - name: Build Douyin release
+        run: npm run build:douyin:release
+      - name: Douyin release preflight
+        run: npm run preflight:douyin
       - name: Game server smoke test
         run: |
           HOST=127.0.0.1 node --import tsx server/index.ts > /tmp/doublefight-server.log 2>&1 &
@@ -36,6 +44,8 @@ jobs:
           for i in {1..20}; do
             if curl --fail --silent http://127.0.0.1:8787/health > /tmp/health.json; then
               cat /tmp/health.json
+              test "$(curl --silent --output /tmp/ready.json --write-out '%{http_code}' http://127.0.0.1:8787/ready)" = "503"
+              node -e "const r=require('/tmp/ready.json'); if(r.ready!==false||typeof r.authConfigured!=='boolean'||typeof r.sessionSigningConfigured!=='boolean'||typeof r.dataDirectoryWritable!=='boolean'||r.protocolVersion!==6)process.exit(1)"
               node scripts/smoke-online.mjs
               exit $?
             fi
@@ -50,10 +60,13 @@ jobs:
           set -euo pipefail
           trap 'docker compose -f ops/compose.server.yml down' EXIT
           bash -n ops/deploy-main.sh ops/reload-nginx.sh
+          grep -q 'location = /ready' ops/doublefight-tls.conf
           docker compose -f ops/compose.server.yml config --quiet
           docker compose -f ops/compose.server.yml build
           docker compose -f ops/compose.server.yml up -d --wait --wait-timeout 90
           test "$(docker compose -f ops/compose.server.yml port server 8787)" = "127.0.0.1:8787"
+          test "$(curl --silent --output /tmp/container-ready.json --write-out '%{http_code}' http://127.0.0.1:8787/ready)" = "503"
+          node -e "const r=require('/tmp/container-ready.json'); if(r.ready!==false||r.dataDirectoryWritable!==true||r.protocolVersion!==6)process.exit(1)"
           node scripts/smoke-online.mjs
           # Synthetic CI certificate only; never used on the production host.
           mkdir -p /tmp/ci-cert

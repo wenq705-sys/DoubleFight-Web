@@ -15,8 +15,11 @@ export class DouyinStorage implements StorageAdapter {
 }
 
 export class DouyinHaptics implements HapticsAdapter {
+  private enabled = true;
   constructor(private readonly api: Pick<DouyinApi, 'vibrateShort'>) {}
+  setEnabled(enabled: boolean): void { this.enabled = enabled; }
   trigger(_intent: 'light' | 'medium' | 'success' | 'error'): void {
+    if (!this.enabled) return;
     try { this.api.vibrateShort?.({ fail: () => { /* unsupported host */ } }); }
     catch { /* PC and unsupported hosts are silent */ }
   }
@@ -47,6 +50,7 @@ export class DouyinLifecycleAdapter implements LifecycleAdapter {
 export class DouyinAccountBootstrap implements AccountBootstrap {
   private result: Promise<AccountBootstrapResult> | null = null;
   constructor(private readonly api: Pick<DouyinApi, 'login'>) {}
+  reset(): void { this.result = null; }
   bootstrap(): Promise<AccountBootstrapResult> {
     if (this.result) return this.result;
     this.result = new Promise(resolve => {
@@ -66,7 +70,10 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
   }
 }
 
-export function normalizeDouyinSystemInfo(raw: ReturnType<DouyinApi['getSystemInfoSync']>): SystemInfo {
+export function normalizeDouyinSystemInfo(
+  raw: ReturnType<DouyinApi['getSystemInfoSync']>,
+  menuButton?: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>>,
+): SystemInfo {
   const width = Math.max(0, raw.windowWidth ?? raw.screenWidth);
   const height = Math.max(0, raw.windowHeight ?? raw.screenHeight);
   const safe = raw.safeArea;
@@ -75,7 +82,7 @@ export function normalizeDouyinSystemInfo(raw: ReturnType<DouyinApi['getSystemIn
     left: Math.max(0, safe?.left ?? 0),
     right: Math.max(0, raw.screenWidth - (safe?.right ?? raw.screenWidth)),
     bottom: Math.max(0, raw.screenHeight - (safe?.bottom ?? raw.screenHeight)),
-  } };
+  }, ...(menuButton ? { menuButton } : {}) };
 }
 
 export class DouyinPlatform implements Platform {
@@ -84,14 +91,31 @@ export class DouyinPlatform implements Platform {
   readonly haptics: DouyinHaptics;
   readonly lifecycle: DouyinLifecycleAdapter;
   readonly account: DouyinAccountBootstrap;
+  private systemInfo: SystemInfo | null = null;
+
   constructor(private readonly api: DouyinApi) {
     this.socket = new DouyinSocketTransport(api);
     this.storage = new DouyinStorage(api);
     this.haptics = new DouyinHaptics(api);
     this.lifecycle = new DouyinLifecycleAdapter(api);
     this.account = new DouyinAccountBootstrap(api);
+    this.lifecycle.subscribe(() => this.refreshSystemInfo(), () => {});
   }
-  getSystemInfo(): SystemInfo { return normalizeDouyinSystemInfo(this.api.getSystemInfoSync()); }
+
+  getSystemInfo(): SystemInfo {
+    return this.systemInfo ?? this.refreshSystemInfo();
+  }
+
+  refreshSystemInfo(): SystemInfo {
+    let menuButton: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>> | undefined;
+    try { menuButton = this.api.getMenuButtonLayout?.(); } catch { /* optional host chrome */ }
+    this.systemInfo = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+    return this.systemInfo;
+  }
+
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
-  createSwipeInput(onDirection: (direction: Direction) => void): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection); }
+  createSwipeInput(
+    onDirection: (direction: Direction) => void,
+    onTap?: (x: number, y: number) => void,
+  ): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection, onTap); }
 }

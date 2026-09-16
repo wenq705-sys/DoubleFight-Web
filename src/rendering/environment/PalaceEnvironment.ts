@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Direction } from '../../game/board/types';
 import { ART } from '../../config/artDirection';
+import { createTextureCanvas } from '../TextureCanvasFactory';
 
 const gradient = (() => {
   const data = new Uint8Array([40, 92, 164, 255]);
@@ -456,9 +457,7 @@ export class PalaceEnvironment {
   }
 
   private bannerTexture(text: string): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 192;
-    canvas.height = 640;
+    const canvas = createTextureCanvas(192, 640);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas2D required for palace banners.');
     context.clearRect(0, 0, canvas.width, canvas.height);

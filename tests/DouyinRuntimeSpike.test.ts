@@ -41,6 +41,28 @@ describe('Douyin runtime spike adapters', () => {
     expect(board.tiles().length).toBeGreaterThan(0);
   });
 
+  it('routes a short gesture to tap without also emitting a swipe', () => {
+    const { api, handlers } = fakeApi();
+    const directions: string[] = [];
+    const taps: Array<[number, number]> = [];
+    const touch = new DouyinSwipeInput(
+      api,
+      direction => directions.push(direction),
+      (x, y) => taps.push([x, y]),
+    );
+    touch.setActive(true);
+    handlers.get('start')!({
+      touches: [{ identifier: 1, clientX: 120, clientY: 240 }],
+      changedTouches: [{ identifier: 1, clientX: 120, clientY: 240 }],
+    });
+    handlers.get('end')!({
+      touches: [],
+      changedTouches: [{ identifier: 1, clientX: 126, clientY: 244 }],
+    });
+    expect(directions).toEqual([]);
+    expect(taps).toEqual([[126, 244]]);
+  });
+
   it('ignores touch after deactivation until the next active gesture', () => {
     const { api, handlers } = fakeApi();
     const moves: string[] = [];

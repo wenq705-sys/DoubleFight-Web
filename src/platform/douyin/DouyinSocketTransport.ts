@@ -40,13 +40,17 @@ class TaskConnection implements SocketConnection {
 export class DouyinSocketTransport implements SocketTransport {
   private generation = 0;
   private current: TaskConnection | null = null;
+  private authorization: string | null = null;
   constructor(private readonly api: Pick<DouyinApi, 'connectSocket'>) {}
+  setAuthorization(token: string | null): void {
+    this.authorization = token && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token) ? `Bearer ${token}` : null;
+  }
   connect(url: string): SocketConnection {
     this.current?.close();
     const generation = ++this.generation;
     let connection: TaskConnection | null = null;
     let pendingError: unknown = null;
-    const task = this.api.connectSocket({ url, fail: error => {
+    const task = this.api.connectSocket({ url, ...(this.authorization ? { header: { Authorization: this.authorization } } : {}), fail: error => {
       if (generation !== this.generation) return;
       if (connection) connection.reportConnectFailure(error);
       else pendingError = error;

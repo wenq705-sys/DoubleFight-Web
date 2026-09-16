@@ -1,5 +1,13 @@
 # Roadmap
 
+## Douyin Full Product RC — code-side hardening
+
+`rc/douyin-full-product-release-candidate` prepares release preflight, safe server readiness, logging/compliance review, offline-bundle operator deployment and a real-device PASS/FAIL matrix. Final RC acceptance still depends on out-of-band secrets, formal request/socket legal domains and actual iPhone/Android testing; the branch does not deploy.
+
+## M2.10.3 — Douyin server auth (branch implementation)
+
+Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. M2.10.4 adds account-bound WebSocket attribution and Solo/PvP progress without changing Protocol v6. Production deployment, real legal-domain validation and provider-backed ad proof remain separate acceptance work.
+
 ## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
 
 M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
