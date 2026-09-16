@@ -18,7 +18,7 @@ import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } fr
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
-import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
+import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | 'season' | null;
@@ -1262,7 +1262,7 @@ function miniHomeButton(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = emphasized ? '#fff0b8' : '#afc1c1';
-  ctx.font = '800 10px sans-serif';
+  fitText(ctx, label, rect.width - 10, 10, 800, 8.5);
   ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * .74);
 }
 
@@ -1403,10 +1403,10 @@ function actionCard(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = emphasized ? '#fff0b8' : '#e4ece9';
-  ctx.font = '900 13px sans-serif';
+  fitText(ctx, title, rect.width - 30 - iconSpace, 13, 900, 9.5);
   ctx.fillText(title, rect.x + 16 + iconSpace, rect.y + rect.height * .35);
   ctx.fillStyle = '#9db3b5';
-  ctx.font = '700 10px sans-serif';
+  fitText(ctx, subtitle, rect.width - 30 - iconSpace, 10, 700, 8);
   ctx.fillText(subtitle, rect.x + 16 + iconSpace, rect.y + rect.height * .69);
 }
 
