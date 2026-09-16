@@ -39,6 +39,7 @@ interface RetentionState {
   telemetryFrames: number;
   seasonLeaderboard: PvpLeaderboard | null;
   seasonLoading: boolean;
+  busyAction: 'shortcut' | 'sync' | 'sidebar' | null;
 }
 
 /**
@@ -70,6 +71,7 @@ export function installM212RetentionHub(
     telemetryFrames: 0,
     seasonLeaderboard: null,
     seasonLoading: false,
+    busyAction: null,
   };
 
   engagement.track('home_view', { theme: game.theme });
@@ -353,7 +355,7 @@ function handleHubTap(
   y: number,
 ): void {
   const info = platform.getSystemInfo();
-  if (scene.inputLocked) {
+  if (scene.inputLocked || state.busyAction) {
     platform.haptics.trigger('light');
     scene.notice = { text: '正在处理，请稍候…', until: number(scene.visualTime) + .9 };
     scene.refreshHud();
@@ -507,12 +509,17 @@ function handleHubTap(
       if (ready) {
         void scene.claimSidebarReward?.().finally(() => scene.refreshHud());
       } else {
+        state.busyAction = 'sidebar';
+        scene.notice = { text: '正在打开侧边栏…', until: number(scene.visualTime) + 2 };
+        scene.refreshHud();
         void social.navigateSidebar().then(ok => {
           scene.notice = {
             text: ok ? '已打开侧边栏入口' : '当前环境暂不支持侧边栏',
             until: number(scene.visualTime) + 1.5,
           };
           engagement.track('sidebar_navigate', { success: ok });
+        }).finally(() => {
+          state.busyAction = null;
           scene.refreshHud();
         });
       }
@@ -520,6 +527,9 @@ function handleHubTap(
     }
     if (hit(x, y, layout.shortcut)) {
       // Keep the native call in the direct touch stack; Douyin requires this.
+      state.busyAction = 'shortcut';
+      scene.notice = { text: '正在请求添加桌面…', until: number(scene.visualTime) + 2 };
+      scene.refreshHud();
       void engagement.addShortcutFromTap().then(result => {
         if (result === 'added') state.shortcutAdded = true;
         scene.notice = {
@@ -527,16 +537,23 @@ function handleHubTap(
           until: number(scene.visualTime) + 1.5,
         };
         engagement.track('shortcut_result', { result });
+      }).finally(() => {
+        state.busyAction = null;
         scene.refreshHud();
       });
       return;
     }
     if (hit(x, y, layout.refreshAccount)) {
+      state.busyAction = 'sync';
+      scene.notice = { text: '正在同步账号进度…', until: number(scene.visualTime) + 2 };
+      scene.refreshHud();
       void auth.refresh().then(() => {
         scene.notice = {
           text: auth.current.status === 'authenticated' ? '账号进度已同步' : '当前为本地游客进度',
           until: number(scene.visualTime) + 1.4,
         };
+      }).finally(() => {
+        state.busyAction = null;
         scene.refreshHud();
       });
       return;
@@ -977,19 +994,20 @@ function drawDailyCenter(
   );
 
   const adClaimed = daily?.adClaimed === true;
+  const rewardBusy = Boolean(scene.inputLocked);
   actionCard(
     ctx,
     layout.dailyAd,
-    adClaimed ? '今日广告 S 币已领取' : '看广告领 +30 S',
-    adClaimed ? '明天刷新 · 广告任务已完成' : '完整观看后到账 · 首次还会完成广告任务 +5 S',
-    !adClaimed && Boolean(player),
-    adClaimed ? 'check' : 'video',
+    rewardBusy ? '正在确认奖励…' : adClaimed ? '今日广告 S 币已领取' : '看广告领 +30 S',
+    rewardBusy ? '请不要重复点击 · 奖励到账后会自动刷新' : adClaimed ? '明天刷新 · 广告任务已完成' : '完整观看后到账 · 首次还会完成广告任务 +5 S',
+    !rewardBusy && !adClaimed && Boolean(player),
+    rewardBusy ? 'sync' : adClaimed ? 'check' : 'video',
   );
 
   actionCard(
     ctx,
     layout.sidebar,
-    sidebarClaimed ? '今日侧边栏奖励已领取' : sidebarReady ? '领取侧边栏 +10 S' : '去侧边栏',
+    state.busyAction === 'sidebar' ? '正在打开侧边栏…' : sidebarClaimed ? '今日侧边栏奖励已领取' : sidebarReady ? '领取侧边栏 +10 S' : '去侧边栏',
     sidebarClaimed ? '明天可再次领取' : sidebarReady ? '同时保留下局清块 +1' : '从侧边栏回来可领 +10 S 与下局加成',
     sidebarReady,
     sidebarClaimed ? 'check' : 'gift',
@@ -998,7 +1016,7 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.shortcut,
-    state.shortcutAdded ? '已添加到桌面' : '添加到桌面',
+    state.busyAction === 'shortcut' ? '正在添加到桌面…' : state.shortcutAdded ? '已添加到桌面' : '添加到桌面',
     state.shortcutAdded ? '以后可以更快回到双数对决' : '抖音官方快捷入口 · 由你主动添加',
     !state.shortcutAdded,
     state.shortcutAdded ? 'check' : 'share',
@@ -1007,7 +1025,7 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.refreshAccount,
-    '同步账号进度',
+    state.busyAction === 'sync' ? '正在同步账号…' : '同步账号进度',
     player ? `服务器已连接 · 永久主题目标 ${S_COIN.themeUnlock} S` : '当前为本地游客进度',
     !player,
     'sync',
