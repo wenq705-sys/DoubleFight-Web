@@ -57,6 +57,11 @@ export interface AuthoritativeRewardResult {
   taskAmount: number;
 }
 
+export interface DailyLoginGrant {
+  amount: number;
+  streakAmount: number;
+}
+
 export interface SoloProgressSyncResult {
   synced: boolean;
   discoveryAmount: number;
@@ -70,6 +75,7 @@ export class DouyinAuthClient {
   private token: string | null = null;
   private state: AuthState = { status: 'local' };
   private starting: Promise<AuthState> | null = null;
+  private pendingDailyLoginGrant: DailyLoginGrant | null = null;
 
   constructor(
     private readonly api: Pick<DouyinApi, 'request'>,
@@ -80,6 +86,12 @@ export class DouyinAuthClient {
 
   get current(): AuthState { return this.state; }
   get requiresServerLedger(): boolean { return this.token !== null; }
+
+  consumeDailyLoginGrant(): DailyLoginGrant | null {
+    const grant = this.pendingDailyLoginGrant;
+    this.pendingDailyLoginGrant = null;
+    return grant;
+  }
 
   start(): Promise<AuthState> {
     if (this.state.status === 'authenticated') return Promise.resolve(this.state);
@@ -97,6 +109,7 @@ export class DouyinAuthClient {
     if (!this.token) return this.start();
     try {
       const payload = await this.call('GET', '/me');
+      this.captureDailyLoginGrant(payload.dailyLogin);
       if (this.isPlayer(payload.player)) this.updatePlayer(payload.player);
     } catch (error) {
       this.handleSessionFailure(error);
@@ -110,6 +123,7 @@ export class DouyinAuthClient {
       this.setToken(stored);
       try {
         const restored = await this.call('GET', '/me');
+        this.captureDailyLoginGrant(restored.dailyLogin);
         if (this.isPlayer(restored.player)) {
           this.state = { status: 'authenticated', player: restored.player };
           this.restoreSoloCache(restored.player);
@@ -135,6 +149,7 @@ export class DouyinAuthClient {
         ...(login.status === 'logged_in' ? { code: login.code } : {}),
         ...(login.anonymousCode ? { anonymousCode: login.anonymousCode } : {}),
       });
+      this.captureDailyLoginGrant(payload.dailyLogin);
       if (typeof payload.token !== 'string' || !this.isPlayer(payload.player)) {
         this.platform.account.reset?.();
         return this.state;
@@ -245,6 +260,16 @@ export class DouyinAuthClient {
 
   async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
     return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
+  }
+
+  private captureDailyLoginGrant(value: unknown): void {
+    if (!value || typeof value !== 'object') return;
+    const grant = value as { granted?: unknown; amount?: unknown; streakAmount?: unknown };
+    if (grant.granted !== true) return;
+    const amount = safeAmount(grant.amount);
+    const streakAmount = safeAmount(grant.streakAmount);
+    if (amount <= 0 && streakAmount <= 0) return;
+    this.pendingDailyLoginGrant = { amount, streakAmount };
   }
 
   private handleSessionFailure(error: unknown): void {
