@@ -74,6 +74,22 @@ export function installM212RetentionHub(
   engagement.track('home_view', { theme: game.theme });
   if (scene.onboardingOpen) engagement.track('onboarding_view');
 
+  const unsubscribeDailyLogin = auth.subscribeDailyLoginGrant(grant => {
+    const total = grant.amount + grant.streakAmount;
+    const streakCopy = grant.streakAmount > 0 ? ` · 7日宝箱 +${grant.streakAmount} S` : '';
+    scene.notice = {
+      text: `每日登录 +${grant.amount} S${streakCopy}`,
+      until: number(scene.visualTime) + 2.1,
+    };
+    platform.haptics.trigger('success');
+    engagement.track('daily_login_reward', {
+      amount: grant.amount,
+      streak_amount: grant.streakAmount,
+      total,
+    });
+    if (!scene.disposed) scene.refreshHud();
+  });
+
   const originalRewarded = commercial.showRewarded.bind(commercial);
   commercial.showRewarded = async () => {
     engagement.track('rewarded_start', { mode: game.currentMode });
@@ -316,6 +332,7 @@ export function installM212RetentionHub(
   const originalDispose = game.dispose.bind(game);
   game.dispose = () => {
     unsubscribeOnline();
+    unsubscribeDailyLogin();
     originalDispose();
   };
 
