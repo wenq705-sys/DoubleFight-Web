@@ -56,6 +56,42 @@ describe('DouyinAuthClient authoritative refresh', () => {
     expect(platform.account.bootstrap).toHaveBeenCalledOnce();
   });
 
+  it('reauthenticates automatically when foreground refresh finds an expired session', async () => {
+    const storage = storageFixture();
+    let authCalls = 0;
+    const request = vi.fn((options: any) => {
+      if (options.url.endsWith('/auth/douyin')) {
+        authCalls += 1;
+        options.success({
+          statusCode: 200,
+          data: { token: `token.${authCalls}`, player: player(1000 + authCalls) },
+        });
+        return;
+      }
+      if (options.url.endsWith('/me')) {
+        options.success({ statusCode: 401, data: { error: 'unauthorized' } });
+        return;
+      }
+      options.fail?.({ errMsg: 'unexpected request' });
+    });
+    const platform = {
+      storage,
+      account: {
+        bootstrap: vi.fn(async () => ({ status: 'anonymous' as const, isLoggedIn: false as const, anonymousCode: 'anon1234' })),
+        reset: vi.fn(),
+      },
+    };
+
+    const auth = new DouyinAuthClient({ request }, platform, 'https://game.example.test');
+    expect((await auth.start()).status).toBe('authenticated');
+    const refreshed = await auth.refresh();
+    expect(refreshed.status).toBe('authenticated');
+    if (refreshed.status === 'authenticated') expect(refreshed.player.pvp.rating).toBe(1002);
+    expect(authCalls).toBe(2);
+    expect(platform.account.bootstrap).toHaveBeenCalledTimes(2);
+    expect(platform.account.reset).toHaveBeenCalled();
+  });
+
   it('consumes authoritative daily S Coin and official PvP leaderboard contracts', async () => {
     const storage = storageFixture();
     const additivePlayer = {
@@ -101,6 +137,8 @@ describe('DouyinAuthClient authoritative refresh', () => {
           data: {
             granted: true,
             reward: 'daily_s_coin',
+            amount: 30,
+            taskAmount: 5,
             player: {
               ...additivePlayer,
               rewards: {
@@ -155,7 +193,11 @@ describe('DouyinAuthClient authoritative refresh', () => {
     expect(auth.consumeDailyLoginGrant()).toBeNull();
     unsubscribeDailyLogin();
 
-    await expect(auth.claimDailySCoin('daily-claim-1234')).resolves.toBe('granted');
+    await expect(auth.claimDailySCoinDetailed('daily-claim-1234')).resolves.toEqual({
+      status: 'granted',
+      amount: 30,
+      taskAmount: 5,
+    });
     expect(auth.current.status).toBe('authenticated');
     if (auth.current.status === 'authenticated') {
       expect(auth.current.player.rewards.currency).toBe(50);
