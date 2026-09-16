@@ -473,8 +473,19 @@ function handleHubTap(
       return;
     }
     if (hit(x, y, layout.dailyAd)) {
-      const alreadyClaimed = auth.current.status === 'authenticated'
-        && auth.current.player.rewards.daily?.adClaimed === true;
+      if (auth.current.status !== 'authenticated') {
+        scene.notice = { text: '正在连接奖励账号…', until: number(scene.visualTime) + 1.6 };
+        scene.refreshHud();
+        void auth.refresh().then(current => {
+          scene.notice = {
+            text: current.status === 'authenticated' ? '账号已连接 · 可领取今日 S 币' : '奖励账号暂不可用',
+            until: number(scene.visualTime) + 1.6,
+          };
+          if (!scene.disposed) scene.refreshHud();
+        });
+        return;
+      }
+      const alreadyClaimed = auth.current.player.rewards.daily?.adClaimed === true;
       if (alreadyClaimed) {
         scene.notice = { text: '今日广告 S 币已领取', until: number(scene.visualTime) + 1.4 };
         scene.refreshHud();
