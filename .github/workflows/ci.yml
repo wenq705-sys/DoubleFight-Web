@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feat/m2-10-2-douyin-product-shell]
+    branches: [main, feat/m2-10-2-douyin-product-shell, feat/m2-12-meta-retention-visual]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
