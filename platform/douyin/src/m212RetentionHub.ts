@@ -353,6 +353,12 @@ function handleHubTap(
   y: number,
 ): void {
   const info = platform.getSystemInfo();
+  if (scene.inputLocked) {
+    platform.haptics.trigger('light');
+    scene.notice = { text: '正在处理，请稍候…', until: number(scene.visualTime) + .9 };
+    scene.refreshHud();
+    return;
+  }
 
   if (state.screen === 'themes') {
     const layout = themeCenterLayout(info.width, info.height);
@@ -675,23 +681,26 @@ function drawRankingCenter(
   actionCard(
     ctx,
     layout.ascension,
-    '⚡ 登顶竞速',
+    '登顶竞速',
     `${THEMES[game.theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '尚未登顶'}`,
     Boolean(mastery.bestAscensionMs),
+    'energy',
   );
   actionCard(
     ctx,
     layout.solo,
-    '🏆 Solo 周榜',
+    'Solo 周榜',
     weekly.best > 0 ? `本周 BEST ${weekly.best.toLocaleString('zh-CN')} · 好友/总榜` : '本周尚未留下成绩 · 好友/总榜',
     weekly.best > 0,
+    'rank',
   );
   actionCard(
     ctx,
     layout.pvp,
-    '⚔ 竞技赛季',
+    '竞技赛季',
     `服务器权威榜 · ${competitiveRankLabel(rating)} · ${rating} RP`,
     true,
+    'pvp',
   );
 
   ctx.fillStyle = '#73898b';
@@ -731,7 +740,7 @@ function drawSeasonLeaderboard(
     ctx.fillStyle = '#9fb3b4';
     ctx.font = '800 12px sans-serif';
     ctx.fillText('赛季榜暂时无法加载', width / 2, layout.panel.y + 145);
-    pill(ctx, layout.refresh, '↻ 重试', false);
+    drawPremiumButton(ctx, layout.refresh, '重试', { kind: 'secondary', icon: 'sync' });
   } else {
     const board = state.seasonLeaderboard;
     const end = formatShortDate(board.season.endsAt);
@@ -775,7 +784,7 @@ function drawSeasonLeaderboard(
     }
   }
 
-  pill(ctx, layout.social, '👥 抖音好友榜', false);
+  drawPremiumButton(ctx, layout.social, '抖音好友榜', { kind: 'secondary', icon: 'rank' });
 }
 
 function drawThemeCenter(
