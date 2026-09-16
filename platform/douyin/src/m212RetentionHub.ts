@@ -914,7 +914,7 @@ function drawDailyCenter(
   ctx.fillStyle = '#aebfc0';
   ctx.font = '700 10px sans-serif';
   ctx.fillText(
-    daily?.loginClaimed ? `今日登录 +15 · 连续 ${daily.streak} 天` : '账号连接后自动领取每日登录 S 币',
+    daily?.loginClaimed ? `今日登录 +15 · 连续 ${daily.streak} 天 · 每7天 +30` : '账号连接后自动领取每日登录 S 币',
     width / 2,
     layout.balance.y + 45,
   );
@@ -927,7 +927,7 @@ function drawDailyCenter(
   ctx.textAlign = 'left';
   ctx.fillStyle = '#e9f0ed';
   ctx.font = '900 12px sans-serif';
-  ctx.fillText(`今日任务  ${taskCount}/3`, layout.progress.x + 14, layout.progress.y + 20);
+  ctx.fillText(`今日任务  ${taskCount}/3 · 每项 +5 S`, layout.progress.x + 14, layout.progress.y + 20);
   ctx.fillStyle = '#9fc0be';
   ctx.font = '750 10px sans-serif';
   ctx.fillText(
