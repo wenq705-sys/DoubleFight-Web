@@ -76,6 +76,7 @@ export class DouyinAuthClient {
   private state: AuthState = { status: 'local' };
   private starting: Promise<AuthState> | null = null;
   private pendingDailyLoginGrant: DailyLoginGrant | null = null;
+  private dailyLoginListeners = new Set<(grant: DailyLoginGrant) => void>();
 
   constructor(
     private readonly api: Pick<DouyinApi, 'request'>,
@@ -91,6 +92,11 @@ export class DouyinAuthClient {
     const grant = this.pendingDailyLoginGrant;
     this.pendingDailyLoginGrant = null;
     return grant;
+  }
+
+  subscribeDailyLoginGrant(listener: (grant: DailyLoginGrant) => void): () => void {
+    this.dailyLoginListeners.add(listener);
+    return () => { this.dailyLoginListeners.delete(listener); };
   }
 
   start(): Promise<AuthState> {
@@ -149,11 +155,11 @@ export class DouyinAuthClient {
         ...(login.status === 'logged_in' ? { code: login.code } : {}),
         ...(login.anonymousCode ? { anonymousCode: login.anonymousCode } : {}),
       });
-      this.captureDailyLoginGrant(payload.dailyLogin);
       if (typeof payload.token !== 'string' || !this.isPlayer(payload.player)) {
         this.platform.account.reset?.();
         return this.state;
       }
+      this.captureDailyLoginGrant(payload.dailyLogin);
       this.setToken(payload.token);
       this.platform.storage.setItem(TOKEN_KEY, payload.token);
       this.state = { status: 'authenticated', player: payload.player };
@@ -269,7 +275,9 @@ export class DouyinAuthClient {
     const amount = safeAmount(grant.amount);
     const streakAmount = safeAmount(grant.streakAmount);
     if (amount <= 0 && streakAmount <= 0) return;
-    this.pendingDailyLoginGrant = { amount, streakAmount };
+    const valueGrant = { amount, streakAmount };
+    this.pendingDailyLoginGrant = valueGrant;
+    for (const listener of this.dailyLoginListeners) listener(valueGrant);
   }
 
   private handleSessionFailure(error: unknown): void {
