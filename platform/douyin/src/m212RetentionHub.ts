@@ -566,18 +566,30 @@ async function claimDailyCoinReward(
 
   await auth.start();
   const claimId = `${Date.now()}_${Math.random().toString(36).slice(2)}_daily`;
-  const result = auth.requiresServerLedger ? await auth.claimDailySCoin(claimId) : 'unavailable';
+  const result = auth.requiresServerLedger
+    ? await auth.claimDailySCoinDetailed(claimId)
+    : { status: 'unavailable' as const, amount: 0, taskAmount: 0 };
   scene.inputLocked = false;
-  if (result === 'granted') {
+  if (result.status === 'granted') {
     platform.haptics.trigger('success');
-    scene.notice = { text: '今日 S 币到账 · +30', until: number(scene.visualTime) + 1.6 };
-    engagement.track('daily_coin_reward', { result: 'granted' });
+    const total = result.amount + result.taskAmount;
+    const taskCopy = result.taskAmount > 0 ? ` · 广告任务 +${result.taskAmount} S` : '';
+    scene.notice = {
+      text: `今日广告奖励 +${result.amount || 30} S${taskCopy}`,
+      until: number(scene.visualTime) + 1.8,
+    };
+    engagement.track('daily_coin_reward', {
+      result: 'granted',
+      amount: result.amount,
+      task_amount: result.taskAmount,
+      total,
+    });
   } else {
     scene.notice = {
-      text: result === 'duplicate' ? '今日广告 S 币已领取' : 'S 币服务暂不可用',
+      text: result.status === 'duplicate' ? '今日广告 S 币已领取' : 'S 币服务暂不可用',
       until: number(scene.visualTime) + 1.6,
     };
-    engagement.track('daily_coin_reward', { result });
+    engagement.track('daily_coin_reward', { result: result.status });
   }
   scene.refreshHud();
 }
