@@ -277,7 +277,7 @@ export function installM212RetentionHub(
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen);
     if (!nativeModal && !state.screen) {
-      if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene);
+      if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene, auth);
       if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state, auth);
     }
 
@@ -581,7 +581,7 @@ async function claimDailyCoinReward(
   scene.refreshHud();
 }
 
-function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals): void {
+function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals, auth: DouyinAuthClient): void {
   const info = scene.platform.getSystemInfo();
   const layout = scene.homeLayout(width, height, info.safeArea.bottom);
   const utility = homeUtilityLayout(width, layout);
@@ -595,12 +595,14 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
 
   miniHomeButton(ctx, utility.collection, '📖', '图鉴', false);
   miniHomeButton(ctx, utility.rank, '🏆', '排行', false);
+  const daily = auth.current.status === 'authenticated' ? auth.current.player.rewards.daily : undefined;
+  const benefitReady = Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
   miniHomeButton(
     ctx,
     utility.daily,
-    scene.sidebarRewardReady?.() ? '🎁' : '✦',
-    scene.sidebarRewardReady?.() ? '可领取' : '福利',
-    Boolean(scene.sidebarRewardReady?.()),
+    benefitReady ? '🎁' : '✦',
+    benefitReady ? '可领取' : '福利',
+    benefitReady,
   );
 }
 
@@ -653,6 +655,82 @@ function drawRankingCenter(
   ctx.fillStyle = '#73898b';
   ctx.font = '700 10px sans-serif';
   ctx.fillText('平台原生榜单支持好友关系与快捷分享', width / 2, layout.panel.y + layout.panel.height - 22);
+}
+
+function drawSeasonLeaderboard(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  state: RetentionState,
+  auth: DouyinAuthClient,
+): void {
+  const layout = seasonLeaderboardLayout(width, height);
+  shade(ctx, width, height);
+  panel(ctx, layout.panel);
+  closeGlyph(ctx, layout.close);
+
+  const playerRating = auth.current.status === 'authenticated'
+    ? auth.current.player.season?.rating ?? auth.current.player.pvp.rating
+    : 1000;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffe4a0';
+  ctx.font = '900 23px sans-serif';
+  ctx.fillText('竞技赛季', width / 2, layout.panel.y + 36);
+  ctx.fillStyle = '#9fb6b8';
+  ctx.font = '700 10px sans-serif';
+  ctx.fillText(`${competitiveRankLabel(playerRating)} · ${playerRating} RP · 14 天权威结算`, width / 2, layout.panel.y + 58);
+
+  if (state.seasonLoading) {
+    ctx.fillStyle = '#d9e5e2';
+    ctx.font = '850 13px sans-serif';
+    ctx.fillText('正在加载服务器榜单…', width / 2, layout.panel.y + 150);
+  } else if (!state.seasonLeaderboard) {
+    ctx.fillStyle = '#9fb3b4';
+    ctx.font = '800 12px sans-serif';
+    ctx.fillText('赛季榜暂时无法加载', width / 2, layout.panel.y + 145);
+    pill(ctx, layout.refresh, '↻ 重试', false);
+  } else {
+    const board = state.seasonLeaderboard;
+    const end = formatShortDate(board.season.endsAt);
+    ctx.fillStyle = '#7fcfc8';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`赛季 ${end} 结束 · 仅统计有效认证对局`, width / 2, layout.panel.y + 82);
+
+    if (board.entries.length === 0) {
+      ctx.fillStyle = '#9fb3b4';
+      ctx.font = '800 12px sans-serif';
+      ctx.fillText('本赛季还没有有效对局', width / 2, layout.panel.y + 150);
+    } else {
+      board.entries.slice(0, 9).forEach((entry, index) => {
+        const row = {
+          x: layout.panel.x + 16,
+          y: layout.panel.y + 100 + index * 39,
+          width: layout.panel.width - 32,
+          height: 33,
+        };
+        round(ctx, row.x, row.y, row.width, row.height, 12);
+        ctx.fillStyle = index < 3 ? 'rgba(47,69,57,.92)' : 'rgba(17,46,55,.86)';
+        ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = index === 0 ? '#ffe083' : '#dce8e4';
+        ctx.font = '900 11px sans-serif';
+        ctx.fillText(index < 3 ? ['Ⅰ','Ⅱ','Ⅲ'][index] : String(entry.rank), row.x + 12, row.y + 17);
+        ctx.fillStyle = '#edf1eb';
+        ctx.font = '800 10px sans-serif';
+        ctx.fillText(entry.displayName.slice(0, 10), row.x + 38, row.y + 17);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#f0cf72';
+        ctx.font = '900 10px sans-serif';
+        ctx.fillText(String(entry.rating), row.x + row.width - 12, row.y + 15);
+        ctx.fillStyle = '#809a9b';
+        ctx.font = '700 8px sans-serif';
+        ctx.fillText(`${entry.wins}胜 ${entry.losses}负 ${entry.draws}平`, row.x + row.width - 12, row.y + 27);
+      });
+    }
+  }
+
+  pill(ctx, layout.social, '👥 抖音好友榜', false);
 }
 
 function drawThemeCenter(
@@ -795,33 +873,70 @@ function drawDailyCenter(
   panel(ctx, layout.panel);
   closeGlyph(ctx, layout.close);
 
-  const balance = auth.current.status === 'authenticated' ? auth.current.player.rewards.currency : 0;
+  const player = auth.current.status === 'authenticated' ? auth.current.player : null;
+  const balance = player?.rewards.currency ?? 0;
+  const daily = player?.rewards.daily;
+  const tasks = daily?.tasks ?? { solo: false, pvp: false, ad: false };
+  const taskCount = Number(tasks.solo) + Number(tasks.pvp) + Number(tasks.ad);
+  const today = new Date().toISOString().slice(0, 10);
+  const sidebarClaimed = player?.rewards.lastSidebarRewardDay === today;
+  const sidebarReady = !sidebarClaimed && Boolean(scene.sidebarRewardReady?.());
+
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe4a0';
   ctx.font = '900 23px sans-serif';
-  ctx.fillText('今日福利', width / 2, layout.panel.y + 36);
+  ctx.fillText('今日福利', width / 2, layout.panel.y + 34);
   ctx.fillStyle = '#9fb6b8';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText('轻量回流 · 不打断核心对局', width / 2, layout.panel.y + 58);
+  ctx.fillText('每天回来一点点 · 不卖 PvP 强度', width / 2, layout.panel.y + 54);
 
-  round(ctx, layout.balance.x, layout.balance.y, layout.balance.width, layout.balance.height, 20);
+  round(ctx, layout.balance.x, layout.balance.y, layout.balance.width, layout.balance.height, 18);
   ctx.fillStyle = 'rgba(40,56,52,.94)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.46)';
   ctx.stroke();
   ctx.fillStyle = '#f5d36d';
   ctx.font = '900 22px sans-serif';
-  ctx.fillText(`S ${balance}`, width / 2, layout.balance.y + 28);
+  ctx.fillText(`S ${balance}`, width / 2, layout.balance.y + 24);
   ctx.fillStyle = '#aebfc0';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText(`未来世界永久解锁目标 · ${S_COIN.themeUnlock} S`, width / 2, layout.balance.y + 51);
+  ctx.fillText(
+    daily?.loginClaimed ? `今日登录 +15 · 连续 ${daily.streak} 天` : '账号连接后自动领取每日登录 S 币',
+    width / 2,
+    layout.balance.y + 45,
+  );
 
-  const sidebarReady = Boolean(scene.sidebarRewardReady?.());
+  round(ctx, layout.progress.x, layout.progress.y, layout.progress.width, layout.progress.height, 17);
+  ctx.fillStyle = 'rgba(14,44,53,.94)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(126,210,201,.28)';
+  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e9f0ed';
+  ctx.font = '900 12px sans-serif';
+  ctx.fillText(`今日任务  ${taskCount}/3`, layout.progress.x + 14, layout.progress.y + 20);
+  ctx.fillStyle = '#9fc0be';
+  ctx.font = '750 10px sans-serif';
+  ctx.fillText(
+    `Solo ${tasks.solo ? '✓' : '○'}   PvP ${tasks.pvp ? '✓' : '○'}   广告 ${tasks.ad ? '✓' : '○'}`,
+    layout.progress.x + 14,
+    layout.progress.y + 42,
+  );
+
+  const adClaimed = daily?.adClaimed === true;
+  actionCard(
+    ctx,
+    layout.dailyAd,
+    adClaimed ? '✓ 今日广告 S 币已领取' : '▶ 看广告领 +30 S',
+    adClaimed ? '明天刷新 · 广告任务已完成' : '完整观看后到账 · 首次还会完成广告任务 +5 S',
+    !adClaimed && Boolean(player),
+  );
+
   actionCard(
     ctx,
     layout.sidebar,
-    sidebarReady ? '🎁 领取侧边栏回流奖励' : '↗ 前往侧边栏',
-    sidebarReady ? '今日可领 · 下局清块 +1' : '从侧边栏回来可获得今日回流权益',
+    sidebarClaimed ? '✓ 今日侧边栏奖励已领取' : sidebarReady ? '🎁 领取侧边栏 +10 S' : '↗ 去侧边栏',
+    sidebarClaimed ? '明天可再次领取' : sidebarReady ? '同时保留下局清块 +1' : '从侧边栏回来可领 +10 S 与下局加成',
     sidebarReady,
   );
 
@@ -829,7 +944,7 @@ function drawDailyCenter(
     ctx,
     layout.shortcut,
     state.shortcutAdded ? '✓ 已添加到桌面' : '＋ 添加到桌面',
-    state.shortcutAdded ? '以后可以更快回到双数对决' : '抖音官方快捷入口 · 仅由你主动添加',
+    state.shortcutAdded ? '以后可以更快回到双数对决' : '抖音官方快捷入口 · 由你主动添加',
     !state.shortcutAdded,
   );
 
@@ -837,8 +952,8 @@ function drawDailyCenter(
     ctx,
     layout.refreshAccount,
     '↻ 同步账号进度',
-    auth.current.status === 'authenticated' ? '服务器账号已连接' : '当前为本地游客进度',
-    auth.current.status !== 'authenticated',
+    player ? `服务器已连接 · 永久主题目标 ${S_COIN.themeUnlock} S` : '当前为本地游客进度',
+    !player,
   );
 
   if (DOUYIN_PRODUCT_CONFIG.retention.subscriptionTemplates.length > 0) {
@@ -851,9 +966,10 @@ function drawDailyCenter(
     );
   }
 
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#748b8d';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText('S币用于未来主题世界与长期收藏 · 不影响 PvP 强度', width / 2, layout.panel.y + layout.panel.height - 21);
+  ctx.fillText('S 币用于长期收藏与未来主题 · 不影响实时对战强度', width / 2, layout.panel.y + layout.panel.height - 16);
 }
 
 function drawOnlinePolish(
@@ -1076,21 +1192,41 @@ function collectionLayout(width: number, height: number) {
   };
 }
 
+function seasonLeaderboardLayout(width: number, height: number) {
+  const panelW = Math.min(338, width - 18);
+  const panelH = Math.min(590, height * 0.76);
+  const panel = { x: (width - panelW) / 2, y: (height - panelH) / 2, width: panelW, height: panelH };
+  return {
+    panel,
+    close: { x: panel.x + panel.width - 42, y: panel.y + 12, width: 28, height: 28 },
+    refresh: { x: width / 2 - 62, y: panel.y + 170, width: 124, height: 40 },
+    social: { x: panel.x + 56, y: panel.y + panel.height - 58, width: panel.width - 112, height: 38 },
+  };
+}
+
 function dailyLayout(width: number, height: number) {
   const panelW = Math.min(330, width - 24);
-  const panelH = Math.min(590, height * 0.74);
-  const panel = { x: (width - panelW) / 2, y: height * 0.15, width: panelW, height: panelH };
+  const panelH = Math.min(610, height * 0.82);
+  const panel = { x: (width - panelW) / 2, y: (height - panelH) / 2, width: panelW, height: panelH };
   const x = panel.x + 16;
   const w = panel.width - 32;
   return {
     panel,
-    close: { x: panel.x + panel.width - 42, y: panel.y + 14, width: 28, height: 28 },
-    balance: { x, y: panel.y + 82, width: w, height: 64 },
-    sidebar: { x, y: panel.y + 164, width: w, height: 66 },
-    shortcut: { x, y: panel.y + 240, width: w, height: 66 },
-    refreshAccount: { x, y: panel.y + 316, width: w, height: 66 },
-    subscription: { x, y: panel.y + 392, width: w, height: 66 },
+    close: { x: panel.x + panel.width - 42, y: panel.y + 12, width: 28, height: 28 },
+    balance: { x, y: panel.y + 66, width: w, height: 54 },
+    progress: { x, y: panel.y + 128, width: w, height: 54 },
+    dailyAd: { x, y: panel.y + 190, width: w, height: 58 },
+    sidebar: { x, y: panel.y + 256, width: w, height: 58 },
+    shortcut: { x, y: panel.y + 322, width: w, height: 52 },
+    refreshAccount: { x, y: panel.y + 382, width: w, height: 48 },
+    subscription: { x, y: panel.y + 438, width: w, height: 48 },
   };
+}
+
+function formatShortDate(timestamp: number): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '--';
+  const date = new Date(timestamp);
+  return `${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
 }
 
 function actionCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string, emphasized: boolean): void {
