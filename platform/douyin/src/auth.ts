@@ -2,12 +2,53 @@ import type { Platform } from '../../../src/platform/types';
 import type { DouyinApi } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 
-interface PublicPlayer {
+export interface PublicPlayerDailyState {
+  day: string;
+  loginClaimed: boolean;
+  adClaimed: boolean;
+  tasks: { solo: boolean; pvp: boolean; ad: boolean };
+  streak: number;
+}
+
+export interface PublicPlayerSeason {
+  seasonId: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  matches: number;
+  endsAt: number;
+}
+
+export interface PublicPlayer {
   id: string;
   displayName: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
   pvp: { wins: number; losses: number; draws: number; rating: number };
-  rewards: { currency: number; lastSidebarRewardDay?: string };
+  rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
+  season?: PublicPlayerSeason;
+  themes?: { owned: string[] };
+}
+
+export interface PvpLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  matches: number;
+}
+
+export interface PvpLeaderboard {
+  season: { id: string; startsAt: number; endsAt: number };
+  entries: PvpLeaderboardEntry[];
+}
+
+export interface ThemeCatalogueEntry {
+  id: string;
+  free: boolean;
+  cost: number;
 }
 
 type AuthState = { status: 'authenticated'; player: PublicPlayer } | { status: 'local' };
@@ -123,6 +164,44 @@ export class DouyinAuthClient {
     }
   }
 
+  async claimDailySCoin(claimId: string): Promise<'granted' | 'duplicate' | 'unavailable'> {
+    if (!this.token) return 'unavailable';
+    try {
+      const data = await this.call('POST', '/rewards/ad', { kind: 'daily_s_coin', claimId });
+      this.updatePlayer(data.player);
+      return data.granted === true ? 'granted' : 'duplicate';
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return 'unavailable';
+    }
+  }
+
+  async fetchPvpLeaderboard(limit = 20): Promise<PvpLeaderboard | null> {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    try {
+      const data = await this.call('GET', `/leaderboards/pvp?limit=${safeLimit}`);
+      if (!this.isLeaderboard(data)) return null;
+      return data;
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return null;
+    }
+  }
+
+  async fetchThemes(): Promise<ThemeCatalogueEntry[] | null> {
+    if (!this.token) return null;
+    try {
+      const data = await this.call('GET', '/themes');
+      this.updatePlayer(data.player);
+      if (!Array.isArray(data.themes)) return null;
+      const themes = data.themes.filter((value): value is ThemeCatalogueEntry => this.isTheme(value));
+      return themes.length === data.themes.length ? themes : null;
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return null;
+    }
+  }
+
   async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
     await this.start();
     if (!this.token) return false;
@@ -180,6 +259,31 @@ export class DouyinAuthClient {
       && typeof (value as PublicPlayer).solo?.bestPalace === 'number'
       && typeof (value as PublicPlayer).solo?.highestPalace === 'number'
       && typeof (value as PublicPlayer).rewards?.currency === 'number');
+  }
+
+  private isLeaderboard(value: unknown): value is PvpLeaderboard {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as PvpLeaderboard;
+    return Boolean(candidate.season
+      && typeof candidate.season.id === 'string'
+      && typeof candidate.season.startsAt === 'number'
+      && typeof candidate.season.endsAt === 'number'
+      && Array.isArray(candidate.entries)
+      && candidate.entries.every(entry => entry
+        && Number.isInteger(entry.rank)
+        && typeof entry.displayName === 'string'
+        && typeof entry.rating === 'number'
+        && typeof entry.wins === 'number'
+        && typeof entry.losses === 'number'
+        && typeof entry.draws === 'number'
+        && typeof entry.matches === 'number'));
+  }
+
+  private isTheme(value: unknown): value is ThemeCatalogueEntry {
+    return Boolean(value && typeof value === 'object'
+      && typeof (value as ThemeCatalogueEntry).id === 'string'
+      && typeof (value as ThemeCatalogueEntry).free === 'boolean'
+      && typeof (value as ThemeCatalogueEntry).cost === 'number');
   }
 
   private call(method: 'GET' | 'POST', path: string, data?: Record<string, unknown>): Promise<Record<string, unknown>> {
