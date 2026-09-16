@@ -414,14 +414,34 @@ function handleHubTap(
       return;
     }
     if (hit(x, y, layout.pvp)) {
+      state.screen = 'season';
+      requestSeasonLeaderboard(scene, auth, engagement, state);
+      platform.haptics.trigger('light');
+      return;
+    }
+    return;
+  }
+
+  if (state.screen === 'season') {
+    const layout = seasonLeaderboardLayout(info.width, info.height);
+    if (hit(x, y, layout.close)) {
+      state.screen = 'rankings';
+      scene.refreshHud();
+      return;
+    }
+    if (hit(x, y, layout.social)) {
       void social.openPvpRank().then(ok => {
         scene.notice = {
-          text: ok ? '已打开竞技好友榜' : '当前环境暂不支持竞技榜',
+          text: ok ? '已打开竞技好友榜' : '当前环境暂不支持好友榜',
           until: number(scene.visualTime) + 1.4,
         };
         engagement.track('rank_open', { board: 'pvp_social', success: ok });
         scene.refreshHud();
       });
+      return;
+    }
+    if (hit(x, y, layout.refresh)) {
+      requestSeasonLeaderboard(scene, auth, engagement, state);
       return;
     }
     return;
@@ -432,6 +452,17 @@ function handleHubTap(
     if (hit(x, y, layout.close)) {
       state.screen = null;
       scene.refreshHud();
+      return;
+    }
+    if (hit(x, y, layout.dailyAd)) {
+      const alreadyClaimed = auth.current.status === 'authenticated'
+        && auth.current.player.rewards.daily?.adClaimed === true;
+      if (alreadyClaimed) {
+        scene.notice = { text: '今日广告 S 币已领取', until: number(scene.visualTime) + 1.4 };
+        scene.refreshHud();
+        return;
+      }
+      void claimDailyCoinReward(scene, platform, auth, commercial, engagement);
       return;
     }
     if (hit(x, y, layout.sidebar)) {
@@ -488,6 +519,66 @@ function handleHubTap(
       });
     }
   }
+}
+
+function requestSeasonLeaderboard(
+  scene: SceneInternals,
+  auth: DouyinAuthClient,
+  engagement: DouyinEngagement,
+  state: RetentionState,
+): void {
+  if (state.seasonLoading) return;
+  state.seasonLoading = true;
+  scene.refreshHud();
+  void auth.fetchPvpLeaderboard(20).then(board => {
+    state.seasonLeaderboard = board;
+    state.seasonLoading = false;
+    engagement.track('rank_open', { board: 'pvp_season', success: Boolean(board) });
+    if (!board) {
+      scene.notice = { text: '赛季榜暂时无法加载', until: number(scene.visualTime) + 1.5 };
+    }
+    if (!scene.disposed && state.screen === 'season') scene.refreshHud();
+  });
+}
+
+async function claimDailyCoinReward(
+  scene: SceneInternals,
+  platform: DouyinPlatform,
+  auth: DouyinAuthClient,
+  commercial: DouyinCommercial,
+  engagement: DouyinEngagement,
+): Promise<void> {
+  if (scene.inputLocked) return;
+  scene.inputLocked = true;
+  scene.notice = { text: '正在准备今日 S 币奖励…', until: number(scene.visualTime) + 8 };
+  scene.refreshHud();
+  const ad = await commercial.showRewarded();
+  if (ad !== 'rewarded') {
+    scene.inputLocked = false;
+    scene.notice = {
+      text: ad === 'skipped' ? '完整观看后才能领取 S 币' : '暂时没有可用广告',
+      until: number(scene.visualTime) + 1.5,
+    };
+    scene.refreshHud();
+    return;
+  }
+
+  await auth.start();
+  const claimId = `${Date.now()}_${Math.random().toString(36).slice(2)}_daily`;
+  const result = auth.requiresServerLedger ? await auth.claimDailySCoin(claimId) : 'unavailable';
+  scene.inputLocked = false;
+  if (result === 'granted') {
+    platform.haptics.trigger('success');
+    scene.notice = { text: '今日 S 币到账 · +30', until: number(scene.visualTime) + 1.6 };
+    engagement.track('daily_coin_reward', { result: 'granted' });
+  } else {
+    scene.notice = {
+      text: result === 'duplicate' ? '今日广告 S 币已领取' : 'S 币服务暂不可用',
+      until: number(scene.visualTime) + 1.6,
+    };
+    engagement.track('daily_coin_reward', { result });
+  }
+  scene.refreshHud();
 }
 
 function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals): void {
