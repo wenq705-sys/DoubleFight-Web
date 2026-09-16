@@ -51,6 +51,18 @@ export interface ThemeCatalogueEntry {
   cost: number;
 }
 
+export interface AuthoritativeRewardResult {
+  status: 'granted' | 'duplicate' | 'unavailable';
+  amount: number;
+  taskAmount: number;
+}
+
+export interface SoloProgressSyncResult {
+  synced: boolean;
+  discoveryAmount: number;
+  taskAmount: number;
+}
+
 type AuthState = { status: 'authenticated'; player: PublicPlayer } | { status: 'local' };
 const TOKEN_KEY = 'doublefight-session-token';
 
@@ -164,16 +176,24 @@ export class DouyinAuthClient {
     }
   }
 
-  async claimDailySCoin(claimId: string): Promise<'granted' | 'duplicate' | 'unavailable'> {
-    if (!this.token) return 'unavailable';
+  async claimDailySCoinDetailed(claimId: string): Promise<AuthoritativeRewardResult> {
+    if (!this.token) return { status: 'unavailable', amount: 0, taskAmount: 0 };
     try {
       const data = await this.call('POST', '/rewards/ad', { kind: 'daily_s_coin', claimId });
       this.updatePlayer(data.player);
-      return data.granted === true ? 'granted' : 'duplicate';
+      return {
+        status: data.granted === true ? 'granted' : 'duplicate',
+        amount: safeAmount(data.amount),
+        taskAmount: safeAmount(data.taskAmount),
+      };
     } catch (error) {
       this.handleSessionFailure(error);
-      return 'unavailable';
+      return { status: 'unavailable', amount: 0, taskAmount: 0 };
     }
+  }
+
+  async claimDailySCoin(claimId: string): Promise<'granted' | 'duplicate' | 'unavailable'> {
+    return (await this.claimDailySCoinDetailed(claimId)).status;
   }
 
   async fetchPvpLeaderboard(limit = 20): Promise<PvpLeaderboard | null> {
@@ -202,17 +222,29 @@ export class DouyinAuthClient {
     }
   }
 
-  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+  async syncSoloProgressDetailed(
+    theme: 'kingdom' | 'palace',
+    best: number,
+    highest: number,
+  ): Promise<SoloProgressSyncResult> {
     await this.start();
-    if (!this.token) return false;
+    if (!this.token) return { synced: false, discoveryAmount: 0, taskAmount: 0 };
     try {
       const data = await this.call('POST', '/progress/solo', { theme, best, highest });
       this.updatePlayer(data.player);
-      return this.isPlayer(data.player);
+      return {
+        synced: this.isPlayer(data.player),
+        discoveryAmount: safeAmount(data.discoveryAmount),
+        taskAmount: safeAmount(data.taskAmount),
+      };
     } catch (error) {
       this.handleSessionFailure(error);
-      return false;
+      return { synced: false, discoveryAmount: 0, taskAmount: 0 };
     }
+  }
+
+  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+    return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
   }
 
   private handleSessionFailure(error: unknown): void {
@@ -321,4 +353,8 @@ class HttpError extends Error {
 
 function safeJson(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+function safeAmount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
