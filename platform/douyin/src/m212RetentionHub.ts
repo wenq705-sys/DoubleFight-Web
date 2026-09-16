@@ -18,7 +18,7 @@ import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } fr
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
-import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, hitTarget, type UiIcon } from './uiSystem';
+import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | 'season' | null;
@@ -1057,13 +1057,14 @@ function drawOnlinePolish(
       ctx.strokeStyle = 'rgba(242,205,105,.55)';
       ctx.lineWidth = 1.2;
       ctx.stroke();
+      drawUiIcon(ctx, skillUiIcon(skillId), rect.x + 17, rect.y + 20, 16, '#ffe09a');
       ctx.textAlign = 'center';
       ctx.fillStyle = '#fff0b8';
-      ctx.font = '900 11px sans-serif';
-      ctx.fillText(`${def.icon} ${def.shortLabel}`, rect.x + rect.width / 2, rect.y + 20);
+      ctx.font = '900 10.5px sans-serif';
+      ctx.fillText(def.shortLabel, rect.x + rect.width / 2 + 5, rect.y + 20);
       ctx.fillStyle = '#94c9c4';
-      ctx.font = '750 10px sans-serif';
-      ctx.fillText(`${def.cost}⚡ · SLOT ${index + 1}`, rect.x + rect.width / 2, rect.y + 41);
+      ctx.font = '750 9px sans-serif';
+      ctx.fillText(`${def.cost} 能量 · SLOT ${index + 1}`, rect.x + rect.width / 2, rect.y + 41);
     });
     return;
   }
@@ -1095,14 +1096,22 @@ function drawOnlinePolish(
       ctx.strokeStyle = ready ? `rgba(245,210,108,${pulse})` : 'rgba(116,133,136,.35)';
       ctx.lineWidth = ready ? 1.8 : 1;
       ctx.stroke();
+      drawUiIcon(
+        ctx,
+        skillUiIcon(skillId),
+        rect.x + 15,
+        rect.y + 18,
+        15,
+        ready ? '#ffe09a' : '#839396',
+      );
       ctx.textAlign = 'center';
       ctx.fillStyle = ready ? '#fff0b8' : '#a5b2b3';
-      ctx.font = '900 10px sans-serif';
-      ctx.fillText(`${def.icon} ${def.shortLabel}`, rect.x + rect.width / 2, rect.y + 18);
+      ctx.font = '900 9.5px sans-serif';
+      ctx.fillText(def.shortLabel, rect.x + rect.width / 2 + 5, rect.y + 18);
       ctx.fillStyle = ready ? '#74e1d5' : '#839396';
-      ctx.font = '800 10px sans-serif';
+      ctx.font = '800 9.5px sans-serif';
       ctx.fillText(
-        remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : ready ? 'READY' : `${def.cost}⚡`,
+        remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : ready ? 'READY' : `${def.cost} 能量`,
         rect.x + rect.width / 2,
         rect.y + 37,
       );
