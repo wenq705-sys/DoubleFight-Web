@@ -141,7 +141,7 @@ export function installM212ProductPass(
         return;
       }
       if (hit(x, y, layout.pvp)) {
-        const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
+        const rating = auth.current.status === 'authenticated' ? (auth.current.player.season?.rating ?? auth.current.player.pvp.rating) : 1000;
         scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: number(scene.visualTime) + 1.5 };
         scene.refreshHud();
         return;
@@ -260,7 +260,7 @@ function drawHomeMeta(
   platform: DouyinPlatform,
 ): void {
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
-  const rating = player?.pvp.rating ?? 1000;
+  const rating = player?.season?.rating ?? player?.pvp.rating ?? 1000;
   const balance = player?.rewards.currency ?? 0;
   const highest = Number(platform.storage.getItem(`doublefight-highest-${game.theme}`) ?? 2);
   const profile = profileRect(width, top);
@@ -489,7 +489,7 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
   ctx.fillText(`S ${player?.rewards.currency ?? 0}`, width / 2, y + 106);
   ctx.fillStyle = '#d8e5e3';
   ctx.font = '800 11px sans-serif';
-  ctx.fillText(`PvP  ${player?.pvp.wins ?? 0}胜  ${player?.pvp.losses ?? 0}负  ${player?.pvp.draws ?? 0}平`, width / 2, y + 132);
+  ctx.fillText(`赛季  ${player?.season?.wins ?? player?.pvp.wins ?? 0}胜  ${player?.season?.losses ?? player?.pvp.losses ?? 0}负  ${player?.season?.draws ?? player?.pvp.draws ?? 0}平`, width / 2, y + 132);
 
   (['kingdom', 'palace'] as ThemeId[]).forEach((theme, index) => {
     const rowY = y + 174 + index * 88;
