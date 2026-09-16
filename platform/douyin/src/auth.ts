@@ -118,7 +118,9 @@ export class DouyinAuthClient {
       this.captureDailyLoginGrant(payload.dailyLogin);
       if (this.isPlayer(payload.player)) this.updatePlayer(payload.player);
     } catch (error) {
+      const unauthorized = error instanceof HttpError && error.status === 401;
       this.handleSessionFailure(error);
+      if (unauthorized) return this.start();
     }
     return this.state;
   }
