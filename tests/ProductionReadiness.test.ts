@@ -51,6 +51,7 @@ describe('safe production readiness', () => {
   it('keeps the production deploy helper offline and loads operator secrets explicitly', async () => {
     const deploy = await readFile('ops/deploy-main.sh', 'utf8');
     expect(deploy).toContain('/etc/doublefight/server.env');
+    expect(deploy).toContain('sudo test -r "$env_file"');
     expect(deploy).toContain('--env-file "$env_file"');
     expect(deploy).not.toContain('git fetch origin');
   });
