@@ -21,7 +21,7 @@ import { DouyinAudio } from './audio';
 import type { DouyinAuthClient } from './auth';
 import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
-import { drawPremiumButton, drawUiIcon, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
+import { drawPremiumButton, drawUiIcon, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
@@ -1071,9 +1071,10 @@ export class DouyinSoloScene {
     this.drawSkillButton(
       ctx,
       skill,
-      canReward ? '▶ 补充清块' : '✦ 清块',
+      canReward ? '补充清块' : '清块',
       canReward ? '完整观看广告 · +1 次' : `剩余 ${this.skillCharges} 次 · 随机清除 2 格`,
       this.skillCharges > 0 || canReward,
+      'skill-clear',
     );
 
     ctx.fillStyle = 'rgba(255,255,255,.72)';
@@ -1161,7 +1162,7 @@ export class DouyinSoloScene {
     ctx.fillText('点击技能卡可轮换', width / 2, layout.skills[0].y - 14);
     snap.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
-      this.drawSkillButton(ctx, layout.skills[index], `${def.icon} ${def.shortLabel}`, `${def.cost}⚡`, true);
+      this.drawSkillButton(ctx, layout.skills[index], def.shortLabel, `${def.cost} 能量`, true, skillUiIcon(skillId));
     });
 
     this.drawPillButton(ctx, layout.quick, '开始匹配', 'primary', 'pvp');
@@ -1225,7 +1226,7 @@ export class DouyinSoloScene {
       const def = SKILL_DEFINITIONS[skillId];
       const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - this.online.serverNow());
       const ready = remaining <= 0 && me.energy >= def.cost;
-      this.drawSkillButton(ctx, rects[index], `${def.icon} ${def.shortLabel}`, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost}⚡`, ready);
+      this.drawSkillButton(ctx, rects[index], def.shortLabel, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost} 能量`, ready, skillUiIcon(skillId));
     });
 
     if (this.client.snapshot().status === 'reconnecting') {
@@ -1476,19 +1477,41 @@ export class DouyinSoloScene {
     }
   }
 
-  private drawSkillButton(ctx: CanvasRenderingContext2D, rect: Rect, label: string, meta: string, ready: boolean): void {
+  private drawSkillButton(
+    ctx: CanvasRenderingContext2D,
+    rect: Rect,
+    label: string,
+    meta: string,
+    ready: boolean,
+    icon?: UiIcon,
+  ): void {
     this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, Math.min(16, rect.height / 2));
-    ctx.fillStyle = ready ? 'rgba(24,86,95,.92)' : 'rgba(45,55,60,.78)';
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.height);
+    gradient.addColorStop(0, ready ? 'rgba(26,91,98,.98)' : 'rgba(47,58,63,.90)');
+    gradient.addColorStop(1, ready ? 'rgba(13,57,69,.98)' : 'rgba(32,43,48,.90)');
+    ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.strokeStyle = ready ? '#f1ce6a' : '#718084';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = ready ? 'rgba(243,207,106,.78)' : 'rgba(130,146,148,.38)';
+    ctx.lineWidth = ready ? 1.35 : 1;
     ctx.stroke();
+    if (icon) {
+      drawUiIcon(
+        ctx,
+        icon,
+        rect.x + Math.min(18, rect.width * .20),
+        rect.y + rect.height * .38,
+        Math.min(17, rect.height * .34),
+        ready ? '#ffe397' : '#849395',
+      );
+    }
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = ready ? '#fff0b6' : '#aeb9ba';
-    ctx.font = '800 11px sans-serif';
-    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * 0.4);
-    ctx.font = '700 9px sans-serif';
-    ctx.fillText(meta, rect.x + rect.width / 2, rect.y + rect.height * 0.72);
+    ctx.font = '900 10.5px sans-serif';
+    ctx.fillText(label, rect.x + rect.width / 2 + (icon ? 6 : 0), rect.y + rect.height * .34);
+    ctx.fillStyle = ready ? '#8ee4db' : '#7f9093';
+    ctx.font = '750 8.8px sans-serif';
+    ctx.fillText(meta, rect.x + rect.width / 2, rect.y + rect.height * .72);
   }
 
   private drawPillButton(
