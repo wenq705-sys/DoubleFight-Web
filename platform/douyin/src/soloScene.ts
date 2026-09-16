@@ -1026,17 +1026,18 @@ export class DouyinSoloScene {
     ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
     ctx.fillStyle = '#f6e9c5';
     ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
+    ctx.fillText(`最高 · ${pieceName(this.currentTheme, highest)}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
 
     this.drawPillButton(ctx, layout.theme, '切换世界', 'secondary', 'world');
     this.drawPillButton(ctx, layout.solo, '进入世界', 'primary', 'solo');
     this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
-    this.drawPillButton(ctx, layout.rank, '🏆 排行榜', 'secondary');
+    this.drawPillButton(ctx, layout.rank, '排行榜', 'secondary', 'rank');
     this.drawPillButton(
       ctx,
       layout.daily,
-      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 侧边栏福利',
+      this.sidebarRewardReady() ? '领取福利' : '侧边栏福利',
       this.sidebarRewardReady() ? 'primary' : 'secondary',
+      'gift',
     );
 
     ctx.fillStyle = 'rgba(255,255,255,.62)';
@@ -1058,10 +1059,8 @@ export class DouyinSoloScene {
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffe9ab';
-    ctx.font = '900 24px sans-serif';
+    drawUiIcon(ctx, 'back', edge + 16, hudTop + 29, 18, '#ffe9ab');
     ctx.textAlign = 'left';
-    ctx.fillText('‹', edge + 16, hudTop + 29);
 
     ctx.fillStyle = '#fff1c9';
     ctx.font = '900 18px sans-serif';
@@ -1237,7 +1236,8 @@ export class DouyinSoloScene {
     ctx.fillStyle = '#dce8e8';
     ctx.font = '650 9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 119);
+    drawUiIcon(ctx, 'energy', width / 2 - 34, top + 119, 10, '#dce8e8');
+    ctx.fillText(`对手 ${opponent?.energy ?? 0}`, width / 2 + 8, top + 119);
 
     const safeBottom = Math.max(14, this.platform.getSystemInfo().safeArea.bottom + 10);
     const energyY = height - safeBottom - 106;
@@ -1245,7 +1245,8 @@ export class DouyinSoloScene {
     this.drawEnergyBar(ctx, { x: 28, y: energyY, width: width - 56, height: 8 }, localRatio, '#4fd4c8');
     ctx.fillStyle = '#fff0c8';
     ctx.font = '800 10px sans-serif';
-    ctx.fillText(`⚡ ${me?.energy ?? 0} / ${me?.maxEnergy ?? 100}`, width / 2, energyY - 10);
+    drawUiIcon(ctx, 'energy', width / 2 - 39, energyY - 10, 11, '#fff0c8');
+    ctx.fillText(`${me?.energy ?? 0} / ${me?.maxEnergy ?? 100}`, width / 2 + 8, energyY - 10);
 
     const rects = this.duelSkillRects(width, height);
     me?.loadout.forEach((skillId, index) => {

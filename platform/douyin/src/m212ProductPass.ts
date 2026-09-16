@@ -13,7 +13,7 @@ import type { DouyinAuthClient } from './auth';
 import type { DouyinCommercial } from './commercial';
 import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } from './metaProgress';
 import type { DouyinSoloScene } from './soloScene';
-import { drawPremiumPanel, drawSCoinIcon, hitTarget, uiMetrics } from './uiSystem';
+import { drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type SceneInternals = Record<string, any>;
@@ -412,7 +412,8 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff0bd';
     ctx.font = '900 15px sans-serif';
-    ctx.fillText('⚔  寻找同级对手', width / 2, cy + 30);
+    drawUiIcon(ctx, 'pvp', width / 2 - 62, cy + 29, 16, '#ffe09a');
+    ctx.fillText('寻找同级对手', width / 2 + 9, cy + 30);
     const elapsed = snap.state.matchmaking.joinedAt
       ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000)
       : 0;
@@ -536,10 +537,10 @@ function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 60);
 
   const mastery = loadThemeMastery(platform.storage, theme);
-  drawRankCard(ctx, layout.ascension, '⚡ 登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`);
-  drawRankCard(ctx, layout.solo, '🏆 Solo 周榜', '每周最高分 · 好友排行');
+  drawRankCard(ctx, layout.ascension, '登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`, 'energy');
+  drawRankCard(ctx, layout.solo, 'Solo 周榜', '每周最高分 · 好友排行', 'rank');
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-  drawRankCard(ctx, layout.pvp, '⚔ 竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`);
+  drawRankCard(ctx, layout.pvp, '竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`, 'pvp');
   ctx.fillStyle = '#819799';
   ctx.font = '700 10px sans-serif';
   ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
@@ -565,19 +566,20 @@ function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height
   ctx.fillText('相同棋子合成，解锁更高阶角色', width / 2 - 103, y + 124);
 }
 
-function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string): void {
+function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string, icon: UiIcon): void {
   round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
   ctx.fillStyle = 'rgba(21,54,64,.9)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.28)';
   ctx.stroke();
+  drawUiIcon(ctx, icon, rect.x + 24, rect.y + rect.height / 2, 20, '#f4d67e');
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff0bd';
-  ctx.font = '850 13px sans-serif';
-  ctx.fillText(title, rect.x + 16, rect.y + 23);
+  fitText(ctx, title, rect.width - 58, 13, 850, 10);
+  ctx.fillText(title, rect.x + 44, rect.y + 23);
   ctx.fillStyle = '#a9bec0';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText(subtitle, rect.x + 16, rect.y + 43);
+  fitText(ctx, subtitle, rect.width - 58, 10, 700, 8);
+  ctx.fillText(subtitle, rect.x + 44, rect.y + 43);
 }
 
 function profileRect(width: number, top: number): Rect {

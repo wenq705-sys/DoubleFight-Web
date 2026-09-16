@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ensureTouchRect, hitTarget, skillUiIcon, uiMetrics } from '../platform/douyin/src/uiSystem';
 
@@ -38,5 +39,14 @@ describe('M2.13 adaptive mobile UI metrics', () => {
     expect(new Set(['random_clear', 'shield', 'petrify', 'shuffle', 'purify'].map(skillUiIcon))).toEqual(new Set([
       'skill-clear', 'skill-shield', 'skill-petrify', 'skill-shuffle', 'skill-purify',
     ]));
+  });
+
+  it('keeps core Douyin product surfaces free of placeholder emoji UI art', () => {
+    const banned = /[🎁🏆🌍⚔⚙📖🔔▶✦🎮✨🔥💎🎯🛡🗿🔀💧⚡]/u;
+    const files = ['m212ProductPass.ts', 'm212RetentionHub.ts', 'soloScene.ts'];
+    for (const file of files) {
+      const source = readFileSync(new URL(`../platform/douyin/src/${file}`, import.meta.url), 'utf8');
+      expect(source, `${file} contains placeholder emoji UI art`).not.toMatch(banned);
+    }
   });
 });

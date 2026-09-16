@@ -880,7 +880,7 @@ function drawThemeCenter(
     );
   });
 
-  pill(ctx, layout.collection, '📖 打开棋子图鉴', true);
+  pill(ctx, layout.collection, '打开棋子图鉴', true, 'collection');
   ctx.fillStyle = '#758b8e';
   ctx.font = '700 10px sans-serif';
   ctx.textAlign = 'center';
@@ -1216,7 +1216,8 @@ function drawOnlinePolish(
     ctx.font = '900 10px sans-serif';
     const delta = state.resultRatingDelta;
     const deltaText = delta === null ? '' : ` · ${delta >= 0 ? '+' : ''}${delta}`;
-    ctx.fillText(`⚔ ${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2, y + 16);
+    drawUiIcon(ctx, 'pvp', width / 2 - 76, y + 16, 13, '#f2d273');
+    ctx.fillText(`${competitiveRankLabel(rating)} · ${rating}${deltaText}`, width / 2 + 6, y + 16);
 
   }
 }
@@ -1422,8 +1423,8 @@ function tab(ctx: CanvasRenderingContext2D, rect: Rect, label: string, active: b
   ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
 }
 
-function pill(ctx: CanvasRenderingContext2D, rect: Rect, label: string, primary: boolean): void {
-  drawPremiumButton(ctx, rect, label, { kind: primary ? 'primary' : 'secondary' });
+function pill(ctx: CanvasRenderingContext2D, rect: Rect, label: string, primary: boolean, icon?: UiIcon): void {
+  drawPremiumButton(ctx, rect, label, { kind: primary ? 'primary' : 'secondary', icon });
 }
 
 function shade(ctx: CanvasRenderingContext2D, width: number, height: number): void {
