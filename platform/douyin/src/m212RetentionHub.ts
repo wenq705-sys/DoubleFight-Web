@@ -11,7 +11,7 @@ import {
 import { S_COIN, competitiveRankLabel } from '../../../src/meta/productMeta';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
-import type { DouyinAuthClient } from './auth';
+import type { DouyinAuthClient, PvpLeaderboard } from './auth';
 import type { DouyinEngagement } from './engagement';
 import type { DouyinCommercial } from './commercial';
 import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } from './metaProgress';
@@ -20,7 +20,7 @@ import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
 
 type Rect = { x: number; y: number; width: number; height: number };
-type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | null;
+type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | 'season' | null;
 type SceneInternals = Record<string, any>;
 
 const TIER_LABELS = ['一阶', '二阶', '三阶', '四阶', '五阶', '六阶', '七阶', '八阶', '九阶', '十阶', '十一阶'] as const;
@@ -36,6 +36,8 @@ interface RetentionState {
   resultRatingDelta: number | null;
   telemetryStartedAt: number;
   telemetryFrames: number;
+  seasonLeaderboard: PvpLeaderboard | null;
+  seasonLoading: boolean;
 }
 
 /**
@@ -65,6 +67,8 @@ export function installM212RetentionHub(
     resultRatingDelta: null,
     telemetryStartedAt: number(scene.visualTime),
     telemetryFrames: 0,
+    seasonLeaderboard: null,
+    seasonLoading: false,
   };
 
   engagement.track('home_view', { theme: game.theme });
@@ -213,7 +217,7 @@ export function installM212RetentionHub(
     const info = platform.getSystemInfo();
 
     if (state.screen) {
-      handleHubTap(scene, game, platform, auth, social, engagement, state, x, y);
+      handleHubTap(scene, game, platform, auth, social, commercial, engagement, state, x, y);
       return;
     }
 
@@ -248,6 +252,7 @@ export function installM212RetentionHub(
         platform.haptics.trigger('light');
         engagement.track('daily_center_open');
         scene.refreshHud();
+        void auth.refresh().then(() => { if (!scene.disposed && state.screen === 'daily') scene.refreshHud(); });
         return;
       }
       // The M2.12 three-destination row visually covers the legacy two-button
@@ -280,6 +285,7 @@ export function installM212RetentionHub(
     if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
     if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
+    if (state.screen === 'season') drawSeasonLeaderboard(ctx, width, height, state, auth);
 
     scene.uiTexture.needsUpdate = true;
   };
@@ -321,6 +327,7 @@ function handleHubTap(
   platform: DouyinPlatform,
   auth: DouyinAuthClient,
   social: DouyinSocial,
+  commercial: DouyinCommercial,
   engagement: DouyinEngagement,
   state: RetentionState,
   x: number,
