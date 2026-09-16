@@ -21,7 +21,7 @@ import { DouyinAudio } from './audio';
 import type { DouyinAuthClient } from './auth';
 import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
-import { drawPremiumButton, drawUiIcon, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
+import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
@@ -992,8 +992,9 @@ export class DouyinSoloScene {
 
     if (this.auth.current.status === 'authenticated') {
       ctx.fillStyle = 'rgba(233,244,216,.78)';
-      ctx.font = '700 10px sans-serif';
-      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
+      const accountLabel = `● ${this.auth.current.player.displayName}`;
+      fitText(ctx, accountLabel, Math.max(120, width - 150), 10, 700, 8.5);
+      ctx.fillText(accountLabel, width / 2, titleTop + 68);
     }
 
     const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
@@ -1148,7 +1149,9 @@ export class DouyinSoloScene {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#fff1c9';
         ctx.font = '800 13px sans-serif';
-        ctx.fillText(`${player.name}${me ? ' · 我' : ''}`, 50, y + 18);
+        const roomName = `${player.name}${me ? ' · 我' : ''}`;
+        fitText(ctx, roomName, Math.max(90, width - 150), 13, 800, 9);
+        ctx.fillText(roomName, 50, y + 18);
         ctx.fillStyle = '#bcd0d1';
         ctx.font = '650 10px sans-serif';
         ctx.fillText(THEMES[player.theme].label, 50, y + 34);
@@ -1211,7 +1214,9 @@ export class DouyinSoloScene {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(me?.name ?? '我', 20, top + 66);
+    const myName = me?.name ?? '我';
+    fitText(ctx, myName, width * .34, 11, 800, 8.5);
+    ctx.fillText(myName, 20, top + 66);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
     ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
@@ -1219,7 +1224,9 @@ export class DouyinSoloScene {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 66);
+    const opponentName = opponent?.name ?? '对手';
+    fitText(ctx, opponentName, width * .34, 11, 800, 8.5);
+    ctx.fillText(opponentName, width - 20, top + 66);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
     ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 89);
