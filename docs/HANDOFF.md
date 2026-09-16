@@ -1,5 +1,10 @@
 # Handoff
 
+## M2.12 server authority
+
+`feat/m2-12-server-authority` adds the server-only S Coin ledger, UTC daily/streak grants, derived Solo/PvP/ad tasks, monotonic discovery grants, permanent theme ownership and current 14-day authoritative PvP seasons. Account JSON v1 data migrates in place without resetting Solo or lifetime PvP fields; Protocol remains v6. New additive HTTP reads are `GET /themes`, `GET /season/current` and `GET /leaderboards/pvp`; `POST /themes/unlock` and existing reward/progress routes return updated additive player state. Follow-up audit hardening caps discovery rewards to the shipped 11 tiers, resets public daily-task flags at the UTC boundary, rejects duplicate-account/guest-only season accounting, excludes inactive players from the season leaderboard, validates theme unlocks as 400-level client errors, and keeps unreleased paid themes out of the production registry while retaining an injectable paid-theme contract for tests. The branch has no deployment.
+
+
 ## Douyin Full Product RC code-side hardening
 
 `rc/douyin-full-product-release-candidate` adds release preflight, safe `/ready`, production environment categories, reviewed Nginx readiness route and CI smokes. The release client no longer ships M2.9/M2.10 probe log prefixes, and its guest nickname is fixed rather than read from customizable storage. Operator bundle deployment and real-device PASS/FAIL instructions are in `docs/DOUYIN_RC_DEPLOYMENT.md` and `docs/DOUYIN_RC_DEVICE_ACCEPTANCE.md`. A code-side green build is not real-device RC acceptance: provider secrets, legal domains, live account/ad behavior and the complete matrix remain manual. No production deployment occurs on this branch.
