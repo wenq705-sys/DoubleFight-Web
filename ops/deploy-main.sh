@@ -5,7 +5,7 @@ env_file="/etc/doublefight/server.env"
 cd /opt/doublefight
 test "$(git branch --show-current)" = main
 test -z "$(git status --porcelain)"
-test -r "$env_file"
+sudo test -r "$env_file"
 export DOUBLEFIGHT_RELEASE="$(git rev-parse HEAD)"
 test "$DOUBLEFIGHT_RELEASE" = "$expected_release"
 sudo env DOUBLEFIGHT_RELEASE="$DOUBLEFIGHT_RELEASE" docker compose --env-file "$env_file" -f ops/compose.server.yml build --pull

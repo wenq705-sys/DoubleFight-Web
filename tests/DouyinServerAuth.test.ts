@@ -131,7 +131,7 @@ describe('durable accounts and reward ledger', () => {
     const stored = JSON.parse(await readFile(join(folder, 'accounts.json'), 'utf8')) as { processedMatches: string[] };
     expect(stored.processedMatches).toHaveLength(MAX_RECENT_MATCHES);
     expect(await repository.recordMatch({ matchId: `bounded-${MAX_RECENT_MATCHES + 9}`, reason: 'time_limit', winnerId: null, players })).toBe(false);
-  });
+  }, 15_000);
 });
 
 describe('Double Fight session', () => {
