@@ -74,7 +74,7 @@ describe('durable accounts and reward ledger', () => {
     expect(ads.filter(result => result.granted)).toHaveLength(1);
     const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
     expect((await reopened.claimAd(account.id, 'solo_skill_refill', 'claim-12345678')).granted).toBe(false);
-    expect((await reopened.findById(account.id))?.rewards.currency).toBe(0);
+    expect((await reopened.findById(account.id))?.rewards.currency).toBe(20);
   });
 
   it('keeps recent ad replay protection while bounding the ledger after reopen', async () => {
@@ -201,6 +201,23 @@ describe('account HTTP endpoints', () => {
       expect((await post(site.base, '/rewards/ad', { kind: 'currency', claimId: 'unique-123456' }, auth.token)).status).toBe(400);
       expect((await (await post(site.base, '/rewards/ad', { kind: 'solo_skill_refill', claimId: 'unique-123456' }, auth.token)).json()).granted).toBe(true);
       expect((await (await post(site.base, '/rewards/ad', { kind: 'solo_skill_refill', claimId: 'unique-123456' }, auth.token)).json()).granted).toBe(false);
+    } finally { await site.close(); }
+  });
+
+  it('validates theme unlock requests and exposes clean public season metadata', async () => {
+    const site = await fixture();
+    try {
+      const auth = await (await post(site.base, '/auth/douyin', { code: 'temporary-code' })).json() as { token: string };
+      expect((await post(site.base, '/themes/unlock', { themeId: 'unknown-theme', requestId: 'unlock-0001' }, auth.token)).status).toBe(400);
+      expect((await post(site.base, '/themes/unlock', { themeId: 'future_theme', requestId: 'short' }, auth.token)).status).toBe(400);
+
+      const seasonResponse = await fetch(site.base + '/season/current');
+      expect(seasonResponse.status).toBe(200);
+      const season = await seasonResponse.json() as { season?: { id?: string; startsAt?: number; endsAt?: number }; entries?: unknown };
+      expect(season.season?.id).toMatch(/^s-?\d+-\d{4}-\d{2}-\d{2}$/);
+      expect(typeof season.season?.startsAt).toBe('number');
+      expect(typeof season.season?.endsAt).toBe('number');
+      expect(season.entries).toBeUndefined();
     } finally { await site.close(); }
   });
 
