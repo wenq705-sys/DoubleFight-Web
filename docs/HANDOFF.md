@@ -2,7 +2,7 @@
 
 ## M2.12 server authority
 
-`feat/m2-12-server-authority` adds the server-only S Coin ledger, UTC daily/streak grants, derived Solo/PvP/ad tasks, monotonic discovery grants, permanent theme ownership and current 14-day authoritative PvP seasons. Account JSON v1 data migrates in place without resetting Solo or lifetime PvP fields; Protocol remains v6. New additive HTTP reads are `GET /themes`, `GET /season/current` and `GET /leaderboards/pvp`; `POST /themes/unlock` and existing reward/progress routes return updated additive player state. The branch has no deployment.
+`feat/m2-12-server-authority` adds the server-only S Coin ledger, UTC daily/streak grants, derived Solo/PvP/ad tasks, monotonic discovery grants, permanent theme ownership and current 14-day authoritative PvP seasons. Account JSON v1 data migrates in place without resetting Solo or lifetime PvP fields; Protocol remains v6. New additive HTTP reads are `GET /themes`, `GET /season/current` and `GET /leaderboards/pvp`; `POST /themes/unlock` and existing reward/progress routes return updated additive player state. Follow-up audit hardening caps discovery rewards to the shipped 11 tiers, resets public daily-task flags at the UTC boundary, rejects duplicate-account/guest-only season accounting, excludes inactive players from the season leaderboard, validates theme unlocks as 400-level client errors, and keeps unreleased paid themes out of the production registry while retaining an injectable paid-theme contract for tests. The branch has no deployment.
 
 ## Douyin Full Product RC code-side hardening
 
