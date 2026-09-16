@@ -43,6 +43,8 @@ describe('DouyinAuthClient authoritative refresh', () => {
     };
 
     const auth = new DouyinAuthClient({ request }, platform, 'https://game.example.test');
+    const dailyLogin = vi.fn();
+    const unsubscribeDailyLogin = auth.subscribeDailyLoginGrant(dailyLogin);
     const started = await auth.start();
     expect(started.status).toBe('authenticated');
     if (started.status === 'authenticated') expect(started.player.pvp.rating).toBe(1000);
@@ -83,7 +85,14 @@ describe('DouyinAuthClient authoritative refresh', () => {
     const request = vi.fn((options: any) => {
       requests.push(options);
       if (options.url.endsWith('/auth/douyin')) {
-        options.success({ statusCode: 200, data: { token: 'abc.def', player: additivePlayer } });
+        options.success({
+          statusCode: 200,
+          data: {
+            token: 'abc.def',
+            player: additivePlayer,
+            dailyLogin: { granted: true, amount: 15, streakAmount: 30 },
+          },
+        });
         return;
       }
       if (options.url.endsWith('/rewards/ad')) {
@@ -141,6 +150,10 @@ describe('DouyinAuthClient authoritative refresh', () => {
       expect(started.player.season?.rating).toBe(1036);
       expect(started.player.rewards.daily?.streak).toBe(2);
     }
+    expect(dailyLogin).toHaveBeenCalledWith({ amount: 15, streakAmount: 30 });
+    expect(auth.consumeDailyLoginGrant()).toEqual({ amount: 15, streakAmount: 30 });
+    expect(auth.consumeDailyLoginGrant()).toBeNull();
+    unsubscribeDailyLogin();
 
     await expect(auth.claimDailySCoin('daily-claim-1234')).resolves.toBe('granted');
     expect(auth.current.status).toBe('authenticated');
