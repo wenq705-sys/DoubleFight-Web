@@ -105,7 +105,7 @@ export function installM212RetentionHub(
     if (!scene.disposed && state.screen === 'daily') scene.refreshHud();
   });
   void auth.start().then(current => {
-    if (current.status === 'authenticated') void social.setPvpRank(current.player.pvp.rating);
+    if (current.status === 'authenticated') void social.setPvpRank(current.player.season?.rating ?? current.player.pvp.rating);
   });
 
   const originalStartSolo = scene.startSolo.bind(scene) as () => void;
@@ -182,7 +182,7 @@ export function installM212RetentionHub(
     if (mode === 'matching') engagement.track('matchmaking_start', { theme: snap.selectedTheme });
     if (mode === 'playing') {
       state.matchIntroUntil = number(scene.visualTime) + 1.25;
-      state.matchStartRating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : null;
+      state.matchStartRating = auth.current.status === 'authenticated' ? competitiveRating(auth) : null;
       state.resultRatingDelta = null;
       engagement.track('match_start', { theme: snap.me?.theme ?? snap.selectedTheme });
     }
@@ -198,12 +198,13 @@ export function installM212RetentionHub(
       setTimeout(() => {
         void auth.refresh().then(refreshed => {
           if (refreshed.status === 'authenticated' && state.matchStartRating !== null) {
-            state.resultRatingDelta = refreshed.player.pvp.rating - state.matchStartRating;
+            const settledRating = refreshed.player.season?.rating ?? refreshed.player.pvp.rating;
+            state.resultRatingDelta = settledRating - state.matchStartRating;
             engagement.track('rating_settled', {
-              rating: refreshed.player.pvp.rating,
+              rating: settledRating,
               delta: state.resultRatingDelta,
             });
-            void social.setPvpRank(refreshed.player.pvp.rating);
+            void social.setPvpRank(settledRating);
           }
           if (!scene.disposed) scene.refreshHud();
         });
@@ -621,7 +622,7 @@ function drawRankingCenter(
 
   const mastery = loadThemeMastery(platform.storage, game.theme);
   const weekly = loadWeeklySolo(platform.storage);
-  const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
+  const rating = competitiveRating(auth);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffe5a0';
   ctx.font = '900 24px sans-serif';
@@ -647,8 +648,8 @@ function drawRankingCenter(
   actionCard(
     ctx,
     layout.pvp,
-    '⚔ 竞技好友榜',
-    `官方赛季由服务器结算 · ${competitiveRankLabel(rating)} · ${rating}`,
+    '⚔ 竞技赛季',
+    `服务器权威榜 · ${competitiveRankLabel(rating)} · ${rating} RP`,
     true,
   );
 
@@ -1318,6 +1319,11 @@ function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: numbe
 
 function hit(x: number, y: number, rect: Rect): boolean {
   return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+}
+
+function competitiveRating(auth: DouyinAuthClient): number {
+  if (auth.current.status !== 'authenticated') return 1000;
+  return auth.current.player.season?.rating ?? auth.current.player.pvp.rating;
 }
 
 function number(value: unknown): number {
