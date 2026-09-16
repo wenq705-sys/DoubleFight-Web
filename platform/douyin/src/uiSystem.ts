@@ -1,7 +1,8 @@
 export type UiRect = { x: number; y: number; width: number; height: number };
 export type UiIcon =
   | 'coin' | 'world' | 'collection' | 'rank' | 'gift' | 'solo' | 'pvp'
-  | 'settings' | 'video' | 'sync' | 'share' | 'room' | 'back' | 'close' | 'check' | 'energy';
+  | 'settings' | 'video' | 'sync' | 'share' | 'room' | 'back' | 'close' | 'check' | 'energy'
+  | 'skill-clear' | 'skill-shield' | 'skill-petrify' | 'skill-shuffle' | 'skill-purify';
 
 export type UiMetrics = {
   scale: number;
@@ -337,6 +338,37 @@ export function drawUiIcon(
     case 'energy':
       ctx.beginPath(); ctx.moveTo(s * .08, -s * .86); ctx.lineTo(-s * .46, s * .08); ctx.lineTo(-s * .02, s * .08); ctx.lineTo(-s * .16, s * .86); ctx.lineTo(s * .52, -s * .16); ctx.lineTo(s * .08, -s * .16); ctx.closePath(); ctx.fill();
       break;
+    case 'skill-clear':
+      ctx.beginPath();
+      ctx.moveTo(0, -s * .84); ctx.lineTo(s * .14, -s * .18); ctx.lineTo(s * .82, 0);
+      ctx.lineTo(s * .14, s * .18); ctx.lineTo(0, s * .84); ctx.lineTo(-s * .14, s * .18);
+      ctx.lineTo(-s * .82, 0); ctx.lineTo(-s * .14, -s * .18); ctx.closePath(); ctx.stroke();
+      break;
+    case 'skill-shield':
+      ctx.beginPath();
+      ctx.moveTo(0, -s * .82); ctx.lineTo(s * .66, -s * .50); ctx.lineTo(s * .56, s * .22);
+      ctx.quadraticCurveTo(0, s * .82, 0, s * .82);
+      ctx.quadraticCurveTo(-s * .56, s * .22, -s * .56, s * .22);
+      ctx.lineTo(-s * .66, -s * .50); ctx.closePath(); ctx.stroke();
+      break;
+    case 'skill-petrify':
+      for (let i = 0; i < 3; i += 1) {
+        const a = i * Math.PI / 3;
+        ctx.beginPath(); ctx.moveTo(Math.cos(a) * -s * .78, Math.sin(a) * -s * .78);
+        ctx.lineTo(Math.cos(a) * s * .78, Math.sin(a) * s * .78); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.arc(0, 0, s * .16, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'skill-shuffle':
+      ctx.beginPath(); ctx.moveTo(-s * .74, -s * .42); ctx.lineTo(-s * .34, -s * .42); ctx.quadraticCurveTo(0, -s * .42, s * .22, 0); ctx.quadraticCurveTo(s * .42, s * .42, s * .72, s * .42); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s * .52, s * .18); ctx.lineTo(s * .78, s * .42); ctx.lineTo(s * .52, s * .66); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-s * .74, s * .42); ctx.lineTo(-s * .34, s * .42); ctx.quadraticCurveTo(0, s * .42, s * .22, 0); ctx.quadraticCurveTo(s * .42, -s * .42, s * .72, -s * .42); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(s * .52, -s * .66); ctx.lineTo(s * .78, -s * .42); ctx.lineTo(s * .52, -s * .18); ctx.stroke();
+      break;
+    case 'skill-purify':
+      ctx.beginPath(); ctx.moveTo(0, -s * .84); ctx.quadraticCurveTo(s * .62, -s * .15, s * .52, s * .34); ctx.quadraticCurveTo(s * .38, s * .78, 0, s * .82); ctx.quadraticCurveTo(-s * .38, s * .78, -s * .52, s * .34); ctx.quadraticCurveTo(-s * .62, -s * .15, 0, -s * .84); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-s * .22, s * .10); ctx.lineTo(-s * .02, s * .30); ctx.lineTo(s * .32, -s * .10); ctx.stroke();
+      break;
   }
   ctx.restore();
 }
@@ -357,4 +389,13 @@ export function fitText(
   }
   ctx.font = `${weight} ${minSize}px sans-serif`;
   return minSize;
+}
+
+
+export function skillUiIcon(skillId: string): UiIcon {
+  if (skillId === 'shield') return 'skill-shield';
+  if (skillId === 'petrify') return 'skill-petrify';
+  if (skillId === 'shuffle') return 'skill-shuffle';
+  if (skillId === 'purify') return 'skill-purify';
+  return 'skill-clear';
 }
