@@ -182,6 +182,8 @@ describe('DouyinAuthClient authoritative refresh', () => {
     };
 
     const auth = new DouyinAuthClient({ request }, platform, 'https://game.example.test');
+    const dailyLogin = vi.fn();
+    const unsubscribeDailyLogin = auth.subscribeDailyLoginGrant(dailyLogin);
     const started = await auth.start();
     expect(started.status).toBe('authenticated');
     if (started.status === 'authenticated') {
