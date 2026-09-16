@@ -742,11 +742,23 @@ export class DouyinSoloScene {
     }
     if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
     if (improved || forceSync) {
-      void this.auth.syncSoloProgress(
+      void this.auth.syncSoloProgressDetailed(
         this.currentTheme,
         Math.max(previousBest, this.score),
         Math.max(previousHighest, this.highest),
-      );
+      ).then(result => {
+        if (this.disposed || !result.synced || (result.discoveryAmount <= 0 && result.taskAmount <= 0)) return;
+        const rewards: string[] = [];
+        if (result.discoveryAmount > 0) rewards.push(`发现奖励 +${result.discoveryAmount} S`);
+        if (result.taskAmount > 0) rewards.push(`今日 Solo +${result.taskAmount} S`);
+        const rewardText = rewards.join(' · ');
+        if (this.notice && this.notice.until > this.visualTime && !this.notice.text.includes(rewardText)) {
+          this.notice = { text: `${this.notice.text} · ${rewardText}`, until: Math.max(this.notice.until, this.visualTime + 1.8) };
+        } else {
+          this.notice = { text: rewardText, until: this.visualTime + 1.8 };
+        }
+        this.refreshHud();
+      });
     }
   }
 
@@ -1532,6 +1544,10 @@ export class DouyinSoloScene {
   private sidebarRewardReady(): boolean {
     if (!this.social.cameFromSidebar()) return false;
     const today = new Date().toISOString().slice(0, 10);
+    if (
+      this.auth.current.status === 'authenticated'
+      && this.auth.current.player.rewards.lastSidebarRewardDay === today
+    ) return false;
     return this.platform.storage.getItem('doublefight-sidebar-reward-date') !== today;
   }
 
@@ -1549,7 +1565,7 @@ export class DouyinSoloScene {
     const today = new Date().toISOString().slice(0, 10);
     this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
     this.platform.storage.setItem('doublefight-next-solo-bonus', '1');
-    this.notice = { text: '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
+    this.notice = { text: this.auth.requiresServerLedger ? '每日福利到账 · +10 S · 下局清块 +1' : '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
     this.platform.haptics.trigger('success');
     this.refreshHud();
   }
