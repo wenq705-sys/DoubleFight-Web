@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonAccountRepository, currentSeason, DAILY_AD_S, DAILY_LOGIN_S, DAILY_SIDEBAR_S, DAILY_TASK_S, DISCOVERY_S, STREAK_CHEST_S, THEME_UNLOCK_COST } from '../server/auth/AccountRepository';
+import { JsonAccountRepository, currentSeason, DAILY_AD_S, DAILY_LOGIN_S, DAILY_SIDEBAR_S, DAILY_TASK_S, DISCOVERY_S, publicPlayer, STREAK_CHEST_S, THEME_UNLOCK_COST } from '../server/auth/AccountRepository';
 
 const folders:string[]=[];
 async function fixture(){const dir=await mkdtemp(join(tmpdir(),'doublefight-m212-'));folders.push(dir);return {dir,repo:await JsonAccountRepository.open(join(dir,'accounts.json'))};}
@@ -36,12 +36,26 @@ describe('M2.12 authoritative economy migration',()=>{
     expect((await repo.unlockTheme(a.id,'future_theme','unlock-0001',day(36))).amount).toBe(0);
     expect((await repo.findById(a.id))?.themes.owned).toContain('future_theme');
   });
-  it('processes authenticated season Elo once, rolls over and returns stable public leaderboard',async()=>{
+  it('caps discovery rewards at the shipped 11 tiers and resets displayed daily tasks by UTC day',async()=>{
+    const {repo}=await fixture(),a=(await repo.findOrCreate('cap-player',undefined,undefined,day(1))).account;
+    const maxed=await repo.mergeSoloProgress(a.id,'kingdom',5000,1_048_576,day(1));
+    expect(maxed.discoveryAmount).toBe(DISCOVERY_S*10);
+    expect(publicPlayer(maxed.account,day(1)).rewards.daily.tasks.solo).toBe(true);
+    expect(publicPlayer(maxed.account,day(2)).rewards.daily.tasks).toEqual({solo:false,pvp:false,ad:false});
+    expect((await repo.mergeSoloProgress(a.id,'kingdom',6000,1_048_576,day(2))).discoveryAmount).toBe(0);
+  });
+  it('processes authenticated season Elo once, rejects duplicate-account matches, and lists only active players',async()=>{
     const {repo}=await fixture(),now=Date.parse('2026-09-10T00:00:00Z'),a=(await repo.findOrCreate('a',undefined,undefined,now)).account,b=(await repo.findOrCreate('b',undefined,undefined,now)).account;
+    await repo.findOrCreate('inactive',undefined,undefined,now);
+    expect(await repo.recordMatch({matchId:'same-account',reason:'time_limit',winnerId:'one',players:[{playerId:'one',accountId:a.id},{playerId:'two',accountId:a.id}]},now)).toBe(false);
+    expect(await repo.recordMatch({matchId:'guest-only',reason:'time_limit',winnerId:null,players:[{playerId:'guest-one'},{playerId:'guest-two'}]},now)).toBe(false);
     const players=[{playerId:'one',accountId:a.id},{playerId:'two',accountId:b.id}];
     expect(await repo.recordMatch({matchId:'match-one',reason:'time_limit',winnerId:'one',players},now)).toBe(true);
     expect(await repo.recordMatch({matchId:'match-one',reason:'time_limit',winnerId:'one',players},now)).toBe(false);
-    const list=await repo.leaderboard(now,50);expect(list.entries[0]?.displayName).toBe((await repo.findById(a.id))?.profile.displayName);expect(list.season.id).toBe(currentSeason(now).id);
+    const list=await repo.leaderboard(now,50);
+    expect(list.entries).toHaveLength(2);
+    expect(list.entries[0]?.displayName).toBe((await repo.findById(a.id))?.profile.displayName);
+    expect(list.season.id).toBe(currentSeason(now).id);
     const future=now+14*86400000;await repo.leaderboard(future);expect((await repo.findById(a.id))?.pvpSeason.seasonId).toBe(currentSeason(future).id);
   });
 });
