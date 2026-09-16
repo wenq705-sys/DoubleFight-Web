@@ -1200,17 +1200,23 @@ function miniHomeButton(
 }
 
 function rankingCenterLayout(width: number, height: number) {
-  const panelW = Math.min(330, width - 24);
-  const panelH = Math.min(430, height * 0.60);
-  const panel = { x: (width - panelW) / 2, y: height * 0.19, width: panelW, height: panelH };
+  const panelW = Math.min(336, width - 20);
+  const panelH = Math.min(430, Math.max(334, height - 72));
+  const panel = { x: (width - panelW) / 2, y: (height - panelH) / 2, width: panelW, height: panelH };
   const x = panel.x + 16;
   const w = panel.width - 32;
+  const header = 78;
+  const footer = 34;
+  const gap = panelH < 390 ? 7 : 10;
+  const available = Math.max(180, panel.height - header - footer - gap * 2);
+  const rowH = Math.max(58, Math.min(72, available / 3));
+  const y0 = panel.y + header;
   return {
     panel,
-    close: { x: panel.x + panel.width - 42, y: panel.y + 14, width: 28, height: 28 },
-    ascension: { x, y: panel.y + 88, width: w, height: 72 },
-    solo: { x, y: panel.y + 172, width: w, height: 72 },
-    pvp: { x, y: panel.y + 256, width: w, height: 72 },
+    close: { x: panel.x + panel.width - 46, y: panel.y + 10, width: 34, height: 34 },
+    ascension: { x, y: y0, width: w, height: rowH },
+    solo: { x, y: y0 + rowH + gap, width: w, height: rowH },
+    pvp: { x, y: y0 + (rowH + gap) * 2, width: w, height: rowH },
   };
 }
 
@@ -1272,21 +1278,32 @@ function seasonLeaderboardLayout(width: number, height: number) {
 }
 
 function dailyLayout(width: number, height: number) {
-  const panelW = Math.min(330, width - 24);
-  const panelH = Math.min(610, height * 0.82);
+  const panelW = Math.min(338, width - 20);
+  const panelH = Math.min(610, Math.max(452, height - 36));
   const panel = { x: (width - panelW) / 2, y: (height - panelH) / 2, width: panelW, height: panelH };
-  const x = panel.x + 16;
-  const w = panel.width - 32;
+  const x = panel.x + 14;
+  const w = panel.width - 28;
+  const dense = panelH < 540;
+  const gap = dense ? 6 : 8;
+  const heights = dense
+    ? [46, 46, 48, 48, 44, 42, 42]
+    : [54, 54, 58, 58, 50, 46, 46];
+  let y = panel.y + (dense ? 60 : 66);
+  const next = (index: number): Rect => {
+    const rect = { x, y, width: w, height: heights[index] };
+    y += heights[index] + gap;
+    return rect;
+  };
   return {
     panel,
-    close: { x: panel.x + panel.width - 42, y: panel.y + 12, width: 28, height: 28 },
-    balance: { x, y: panel.y + 66, width: w, height: 54 },
-    progress: { x, y: panel.y + 128, width: w, height: 54 },
-    dailyAd: { x, y: panel.y + 190, width: w, height: 58 },
-    sidebar: { x, y: panel.y + 256, width: w, height: 58 },
-    shortcut: { x, y: panel.y + 322, width: w, height: 52 },
-    refreshAccount: { x, y: panel.y + 382, width: w, height: 48 },
-    subscription: { x, y: panel.y + 438, width: w, height: 48 },
+    close: { x: panel.x + panel.width - 46, y: panel.y + 10, width: 34, height: 34 },
+    balance: next(0),
+    progress: next(1),
+    dailyAd: next(2),
+    sidebar: next(3),
+    shortcut: next(4),
+    refreshAccount: next(5),
+    subscription: next(6),
   };
 }
 
