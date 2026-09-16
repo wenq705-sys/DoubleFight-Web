@@ -40,6 +40,8 @@ interface RetentionState {
   seasonLeaderboard: PvpLeaderboard | null;
   seasonLoading: boolean;
   busyAction: 'shortcut' | 'sync' | 'sidebar' | null;
+  coinBurst: { amount: number; startedAt: number } | null;
+  nextCoinBurstHudAt: number;
 }
 
 /**
@@ -72,6 +74,8 @@ export function installM212RetentionHub(
     seasonLeaderboard: null,
     seasonLoading: false,
     busyAction: null,
+    coinBurst: null,
+    nextCoinBurstHudAt: 0,
   };
 
   engagement.track('home_view', { theme: game.theme });
@@ -80,6 +84,7 @@ export function installM212RetentionHub(
   const unsubscribeDailyLogin = auth.subscribeDailyLoginGrant(grant => {
     const total = grant.amount + grant.streakAmount;
     const streakCopy = grant.streakAmount > 0 ? ` · 7日宝箱 +${grant.streakAmount} S` : '';
+    state.coinBurst = { amount: total, startedAt: number(scene.visualTime) };
     scene.notice = {
       text: `每日登录 +${grant.amount} S${streakCopy}`,
       until: number(scene.visualTime) + 2.1,
@@ -306,6 +311,7 @@ export function installM212RetentionHub(
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
     if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
     if (state.screen === 'season') drawSeasonLeaderboard(ctx, width, height, state, auth);
+    if (state.coinBurst) drawCoinBurst(ctx, width, height, state.coinBurst, number(scene.visualTime));
 
     scene.uiTexture.needsUpdate = true;
   };
@@ -315,6 +321,16 @@ export function installM212RetentionHub(
     originalRender();
     state.telemetryFrames += 1;
     const now = number(scene.visualTime);
+    if (state.coinBurst) {
+      const age = now - state.coinBurst.startedAt;
+      if (age >= 1.25) {
+        state.coinBurst = null;
+        scene.refreshHud();
+      } else if (now >= state.nextCoinBurstHudAt) {
+        state.nextCoinBurstHudAt = now + 1 / 30;
+        scene.refreshHud();
+      }
+    }
     const elapsed = now - state.telemetryStartedAt;
     if (elapsed < 30) return;
 
@@ -500,7 +516,7 @@ function handleHubTap(
         scene.refreshHud();
         return;
       }
-      void claimDailyCoinReward(scene, platform, auth, commercial, engagement);
+      void claimDailyCoinReward(scene, platform, auth, commercial, engagement, state);
       return;
     }
     if (hit(x, y, layout.sidebar)) {
@@ -600,6 +616,7 @@ async function claimDailyCoinReward(
   auth: DouyinAuthClient,
   commercial: DouyinCommercial,
   engagement: DouyinEngagement,
+  state: RetentionState,
 ): Promise<void> {
   if (scene.inputLocked) return;
   scene.inputLocked = true;
@@ -626,6 +643,7 @@ async function claimDailyCoinReward(
     platform.haptics.trigger('success');
     const total = result.amount + result.taskAmount;
     const taskCopy = result.taskAmount > 0 ? ` · 广告任务 +${result.taskAmount} S` : '';
+    state.coinBurst = { amount: total, startedAt: number(scene.visualTime) };
     scene.notice = {
       text: `今日广告奖励 +${result.amount || 30} S${taskCopy}`,
       until: number(scene.visualTime) + 1.8,
@@ -1045,6 +1063,37 @@ function drawDailyCenter(
   ctx.fillStyle = '#748b8d';
   ctx.font = '700 10px sans-serif';
   ctx.fillText('S 币用于长期收藏与未来主题 · 不影响实时对战强度', width / 2, layout.panel.y + layout.panel.height - 16);
+}
+
+function drawCoinBurst(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  burst: { amount: number; startedAt: number },
+  now: number,
+): void {
+  const p = Math.max(0, Math.min(1, (now - burst.startedAt) / 1.1));
+  const ease = 1 - Math.pow(1 - p, 3);
+  const alpha = Math.max(0, 1 - Math.max(0, p - .72) / .28);
+  const centerX = width / 2;
+  const centerY = height * .38 - ease * 42;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let index = 0; index < 5; index += 1) {
+    const phase = index / 4 - .5;
+    const x = centerX + phase * 92 * Math.sin(Math.PI * Math.min(1, p * 1.25));
+    const y = centerY - Math.abs(phase) * 18 + Math.sin((p + index * .13) * Math.PI) * -12;
+    drawSCoinIcon(ctx, x, y, 20 + (index === 2 ? 5 : 0), index === 2);
+  }
+  const panel = { x: centerX - 62, y: centerY + 34, width: 124, height: 36 };
+  drawPremiumPanel(ctx, panel, true);
+  drawSCoinIcon(ctx, panel.x + 21, panel.y + 18, 22, true);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffe493';
+  ctx.font = '900 15px sans-serif';
+  ctx.fillText(`+${Math.max(0, Math.floor(burst.amount))}`, panel.x + 40, panel.y + 18);
+  ctx.restore();
 }
 
 function drawOnlinePolish(
