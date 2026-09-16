@@ -91,18 +91,28 @@ export class DouyinPlatform implements Platform {
   readonly haptics: DouyinHaptics;
   readonly lifecycle: DouyinLifecycleAdapter;
   readonly account: DouyinAccountBootstrap;
+  private systemInfo: SystemInfo | null = null;
+
   constructor(private readonly api: DouyinApi) {
     this.socket = new DouyinSocketTransport(api);
     this.storage = new DouyinStorage(api);
     this.haptics = new DouyinHaptics(api);
     this.lifecycle = new DouyinLifecycleAdapter(api);
     this.account = new DouyinAccountBootstrap(api);
+    this.lifecycle.subscribe(() => this.refreshSystemInfo(), () => {});
   }
+
   getSystemInfo(): SystemInfo {
+    return this.systemInfo ?? this.refreshSystemInfo();
+  }
+
+  refreshSystemInfo(): SystemInfo {
     let menuButton: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>> | undefined;
     try { menuButton = this.api.getMenuButtonLayout?.(); } catch { /* optional host chrome */ }
-    return normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+    this.systemInfo = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+    return this.systemInfo;
   }
+
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
   createSwipeInput(
     onDirection: (direction: Direction) => void,

@@ -39,6 +39,18 @@ export class DouyinAuthClient {
     return attempt;
   }
 
+  /** Pull the latest server-owned profile after PvP/reward mutations. */
+  async refresh(): Promise<AuthState> {
+    if (!this.token) return this.start();
+    try {
+      const payload = await this.call('GET', '/me');
+      if (this.isPlayer(payload.player)) this.updatePlayer(payload.player);
+    } catch (error) {
+      this.handleSessionFailure(error);
+    }
+    return this.state;
+  }
+
   private async initialize(): Promise<AuthState> {
     const stored = this.platform.storage.getItem(TOKEN_KEY);
     if (stored) {

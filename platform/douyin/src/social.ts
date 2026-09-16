@@ -1,5 +1,7 @@
 import type { DouyinApi, DouyinLaunchOptions, DouyinShowOptions } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
+import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { formatDuration } from './metaProgress';
 
 export class DouyinSocial {
   private latestShow: DouyinShowOptions;
@@ -129,10 +131,92 @@ export class DouyinSocial {
         this.api.getImRankList?.({
           relationType: 'default',
           dataType: 0,
-          rankType: 'all',
+          rankType: 'week',
           suffix: '分',
-          rankTitle: '双数对决 · 最高分',
+          rankTitle: '双数对决 · Solo 周榜',
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async setAscensionRank(theme: ThemeId, elapsedMs: number): Promise<boolean> {
+    if (!this.api.setImRankData || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return false;
+    const duration = Math.min(1_999_999_999, Math.max(1, Math.floor(elapsedMs)));
+    // Native numeric ranks sort descending. Ascension is lower-is-better, so use
+    // an enum row whose visible value is the formatted time and priority is the
+    // inverted duration.
+    const priority = 2_000_000_000 - duration;
+    return new Promise(resolve => {
+      try {
+        this.api.setImRankData?.({
+          dataType: 1,
+          value: formatDuration(duration),
+          priority,
+          extra: JSON.stringify({ elapsedMs: duration }),
+          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async openAscensionRank(theme: ThemeId): Promise<boolean> {
+    if (!this.api.getImRankList) return false;
+    return new Promise(resolve => {
+      try {
+        this.api.getImRankList?.({
+          relationType: 'default',
+          dataType: 1,
+          rankType: 'all',
+          suffix: '',
+          rankTitle: `${THEMES[theme].label} · 登顶竞速`,
+          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async setPvpRank(rating: number): Promise<boolean> {
+    if (!this.api.setImRankData || !Number.isFinite(rating) || rating < 0) return false;
+    return new Promise(resolve => {
+      try {
+        this.api.setImRankData?.({
+          dataType: 0,
+          value: String(Math.max(0, Math.floor(rating))),
+          priority: 0,
+          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.pvpZone,
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      } catch {
+        resolve(false);
+      }
+    });
+  }
+
+  async openPvpRank(): Promise<boolean> {
+    if (!this.api.getImRankList) return false;
+    return new Promise(resolve => {
+      try {
+        this.api.getImRankList?.({
+          relationType: 'default',
+          dataType: 0,
+          rankType: 'all',
+          suffix: ' RP',
+          rankTitle: '双数对决 · 竞技好友榜',
+          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.pvpZone,
           success: () => resolve(true),
           fail: () => resolve(false),
         });

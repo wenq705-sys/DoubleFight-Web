@@ -16,5 +16,14 @@ export const DOUYIN_PRODUCT_CONFIG = {
   ranking: {
     soloZone: 'solo',
     pvpZone: 'pvp',
+    ascensionZones: {
+      kingdom: 'ascension-kingdom',
+      palace: 'ascension-palace',
+    },
+  },
+  retention: {
+    // Configure up to three approved Douyin subscription template IDs before
+    // enabling the reminder card in the daily center.
+    subscriptionTemplates: [] as string[],
   },
 } as const;
