@@ -742,11 +742,23 @@ export class DouyinSoloScene {
     }
     if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
     if (improved || forceSync) {
-      void this.auth.syncSoloProgress(
+      void this.auth.syncSoloProgressDetailed(
         this.currentTheme,
         Math.max(previousBest, this.score),
         Math.max(previousHighest, this.highest),
-      );
+      ).then(result => {
+        if (this.disposed || !result.synced || (result.discoveryAmount <= 0 && result.taskAmount <= 0)) return;
+        const rewards: string[] = [];
+        if (result.discoveryAmount > 0) rewards.push(`发现奖励 +${result.discoveryAmount} S`);
+        if (result.taskAmount > 0) rewards.push(`今日 Solo +${result.taskAmount} S`);
+        const rewardText = rewards.join(' · ');
+        if (this.notice && this.notice.until > this.visualTime && !this.notice.text.includes(rewardText)) {
+          this.notice = { text: `${this.notice.text} · ${rewardText}`, until: Math.max(this.notice.until, this.visualTime + 1.8) };
+        } else {
+          this.notice = { text: rewardText, until: this.visualTime + 1.8 };
+        }
+        this.refreshHud();
+      });
     }
   }
 
