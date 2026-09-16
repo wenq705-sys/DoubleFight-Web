@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountRepository } from './AccountRepository';
-import { publicPlayer, THEME_REGISTRY } from './AccountRepository';
+import { currentSeason, publicPlayer, THEME_REGISTRY } from './AccountRepository';
 import type { DouyinProvider } from './DouyinProvider';
 import { ProviderError } from './DouyinProvider';
 import { SessionToken } from './SessionToken';
@@ -46,7 +46,7 @@ export function createAuthHandler(deps: AuthDependencies) {
         json(response, 200, { ...session, player: publicPlayer(login.account, now()), dailyLogin: { granted: login.granted, amount: login.amount, streakAmount: login.streakAmount } });
         return true;
       }
-      if (path === '/season/current') { json(response, 200, await deps.repository.leaderboard(now(), 1)); return true; }
+      if (path === '/season/current') { json(response, 200, { season: currentSeason(now()) }); return true; }
       if (path === '/leaderboards/pvp') {
         const rawLimit = new URL(request.url ?? '/', 'http://localhost').searchParams.get('limit');
         const limit = rawLimit ? Number(rawLimit) : 50;
@@ -94,7 +94,10 @@ export function createAuthHandler(deps: AuthDependencies) {
 
       const body = await readBody(request);
       if (path === '/themes/unlock') {
-        if (typeof body.themeId !== 'string' || typeof body.requestId !== 'string') throw new RequestError(400, 'invalid_theme_request');
+        if (typeof body.themeId !== 'string' || !(body.themeId in THEME_REGISTRY)
+          || typeof body.requestId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.requestId)) {
+          throw new RequestError(400, 'invalid_theme_request');
+        }
         const result = await deps.repository.unlockTheme(account.id, body.themeId, body.requestId, now());
         json(response, result.unlocked ? 200 : 409, { unlocked: result.unlocked, amount: result.amount, player: publicPlayer(result.account, now()) });
         return true;
