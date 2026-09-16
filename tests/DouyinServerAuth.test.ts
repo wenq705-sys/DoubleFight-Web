@@ -204,6 +204,23 @@ describe('account HTTP endpoints', () => {
     } finally { await site.close(); }
   });
 
+  it('validates theme unlock requests and exposes clean public season metadata', async () => {
+    const site = await fixture();
+    try {
+      const auth = await (await post(site.base, '/auth/douyin', { code: 'temporary-code' })).json() as { token: string };
+      expect((await post(site.base, '/themes/unlock', { themeId: 'unknown-theme', requestId: 'unlock-0001' }, auth.token)).status).toBe(400);
+      expect((await post(site.base, '/themes/unlock', { themeId: 'future_theme', requestId: 'short' }, auth.token)).status).toBe(400);
+
+      const seasonResponse = await fetch(site.base + '/season/current');
+      expect(seasonResponse.status).toBe(200);
+      const season = await seasonResponse.json() as { season?: { id?: string; startsAt?: number; endsAt?: number }; entries?: unknown };
+      expect(season.season?.id).toMatch(/^s-?\d+-\d{4}-\d{2}-\d{2}$/);
+      expect(typeof season.season?.startsAt).toBe('number');
+      expect(typeof season.season?.endsAt).toBe('number');
+      expect(season.entries).toBeUndefined();
+    } finally { await site.close(); }
+  });
+
   it('requires bearer for Solo progress and rejects malformed or extreme values', async () => {
     const site = await fixture();
     try {
