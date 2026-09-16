@@ -2,10 +2,10 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JsonAccountRepository, currentSeason, DAILY_AD_S, DAILY_LOGIN_S, DAILY_SIDEBAR_S, DAILY_TASK_S, DISCOVERY_S, publicPlayer, STREAK_CHEST_S, THEME_UNLOCK_COST } from '../server/auth/AccountRepository';
+import { JsonAccountRepository, currentSeason, DAILY_AD_S, DAILY_LOGIN_S, DAILY_SIDEBAR_S, DAILY_TASK_S, DISCOVERY_S, publicPlayer, STREAK_CHEST_S, THEME_REGISTRY, THEME_UNLOCK_COST, type ThemeRegistry } from '../server/auth/AccountRepository';
 
 const folders:string[]=[];
-async function fixture(){const dir=await mkdtemp(join(tmpdir(),'doublefight-m212-'));folders.push(dir);return {dir,repo:await JsonAccountRepository.open(join(dir,'accounts.json'))};}
+async function fixture(themeRegistry?:ThemeRegistry){const dir=await mkdtemp(join(tmpdir(),'doublefight-m212-'));folders.push(dir);return {dir,repo:await JsonAccountRepository.open(join(dir,'accounts.json'),themeRegistry?{themeRegistry}:undefined)};}
 afterEach(async()=>{await Promise.all(folders.splice(0).map(x=>rm(x,{recursive:true,force:true})));});
 const day=(n:number)=>Date.parse('2026-09-01T12:00:00Z')+(n-1)*86400000;
 
@@ -27,7 +27,8 @@ describe('M2.12 authoritative economy migration',()=>{
     const state=await repo.findById(a.id);expect(state?.economy.balance).toBe(7*DAILY_LOGIN_S+STREAK_CHEST_S+DISCOVERY_S*2+DAILY_TASK_S*2+DAILY_AD_S+DAILY_SIDEBAR_S);
   });
   it('derives discovery monotonically and theme purchase is atomic and free themes remain owned',async()=>{
-    const {repo}=await fixture(),a=(await repo.findOrCreate('a')).account;
+    const registry:ThemeRegistry={...THEME_REGISTRY,future_theme:{free:false,cost:THEME_UNLOCK_COST}};
+    const {repo}=await fixture(registry),a=(await repo.findOrCreate('a')).account;
     expect((await repo.mergeSoloProgress(a.id,'palace',10,32,day(1))).discoveryAmount).toBe(DISCOVERY_S*4);
     expect((await repo.mergeSoloProgress(a.id,'palace',1,4,day(1))).discoveryAmount).toBe(0);
     expect((await repo.unlockTheme(a.id,'future_theme','unlock-0001',day(1))).unlocked).toBe(false);
