@@ -61,7 +61,7 @@ const loop = new DouyinRenderLoop(
     touch.setActive(true);
     platform.refreshSystemInfo();
     game.refreshSystemLayout();
-    void auth.start().then(() => client.connect());
+    void auth.refresh().then(() => client.connect());
   },
   () => {
     touch.setActive(false);

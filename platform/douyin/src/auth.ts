@@ -2,12 +2,70 @@ import type { Platform } from '../../../src/platform/types';
 import type { DouyinApi } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 
-interface PublicPlayer {
+export interface PublicPlayerDailyState {
+  day: string;
+  loginClaimed: boolean;
+  adClaimed: boolean;
+  tasks: { solo: boolean; pvp: boolean; ad: boolean };
+  streak: number;
+}
+
+export interface PublicPlayerSeason {
+  seasonId: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  matches: number;
+  endsAt: number;
+}
+
+export interface PublicPlayer {
   id: string;
   displayName: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
   pvp: { wins: number; losses: number; draws: number; rating: number };
-  rewards: { currency: number; lastSidebarRewardDay?: string };
+  rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
+  season?: PublicPlayerSeason;
+  themes?: { owned: string[] };
+}
+
+export interface PvpLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  rating: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  matches: number;
+}
+
+export interface PvpLeaderboard {
+  season: { id: string; startsAt: number; endsAt: number };
+  entries: PvpLeaderboardEntry[];
+}
+
+export interface ThemeCatalogueEntry {
+  id: string;
+  free: boolean;
+  cost: number;
+}
+
+export interface AuthoritativeRewardResult {
+  status: 'granted' | 'duplicate' | 'unavailable';
+  amount: number;
+  taskAmount: number;
+}
+
+export interface DailyLoginGrant {
+  amount: number;
+  streakAmount: number;
+}
+
+export interface SoloProgressSyncResult {
+  synced: boolean;
+  discoveryAmount: number;
+  taskAmount: number;
 }
 
 type AuthState = { status: 'authenticated'; player: PublicPlayer } | { status: 'local' };
@@ -17,6 +75,8 @@ export class DouyinAuthClient {
   private token: string | null = null;
   private state: AuthState = { status: 'local' };
   private starting: Promise<AuthState> | null = null;
+  private pendingDailyLoginGrant: DailyLoginGrant | null = null;
+  private dailyLoginListeners = new Set<(grant: DailyLoginGrant) => void>();
 
   constructor(
     private readonly api: Pick<DouyinApi, 'request'>,
@@ -27,6 +87,17 @@ export class DouyinAuthClient {
 
   get current(): AuthState { return this.state; }
   get requiresServerLedger(): boolean { return this.token !== null; }
+
+  consumeDailyLoginGrant(): DailyLoginGrant | null {
+    const grant = this.pendingDailyLoginGrant;
+    this.pendingDailyLoginGrant = null;
+    return grant;
+  }
+
+  subscribeDailyLoginGrant(listener: (grant: DailyLoginGrant) => void): () => void {
+    this.dailyLoginListeners.add(listener);
+    return () => { this.dailyLoginListeners.delete(listener); };
+  }
 
   start(): Promise<AuthState> {
     if (this.state.status === 'authenticated') return Promise.resolve(this.state);
@@ -44,9 +115,12 @@ export class DouyinAuthClient {
     if (!this.token) return this.start();
     try {
       const payload = await this.call('GET', '/me');
+      this.captureDailyLoginGrant(payload.dailyLogin);
       if (this.isPlayer(payload.player)) this.updatePlayer(payload.player);
     } catch (error) {
+      const unauthorized = error instanceof HttpError && error.status === 401;
       this.handleSessionFailure(error);
+      if (unauthorized) return this.start();
     }
     return this.state;
   }
@@ -57,6 +131,7 @@ export class DouyinAuthClient {
       this.setToken(stored);
       try {
         const restored = await this.call('GET', '/me');
+        this.captureDailyLoginGrant(restored.dailyLogin);
         if (this.isPlayer(restored.player)) {
           this.state = { status: 'authenticated', player: restored.player };
           this.restoreSoloCache(restored.player);
@@ -86,6 +161,7 @@ export class DouyinAuthClient {
         this.platform.account.reset?.();
         return this.state;
       }
+      this.captureDailyLoginGrant(payload.dailyLogin);
       this.setToken(payload.token);
       this.platform.storage.setItem(TOKEN_KEY, payload.token);
       this.state = { status: 'authenticated', player: payload.player };
@@ -123,17 +199,87 @@ export class DouyinAuthClient {
     }
   }
 
-  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+  async claimDailySCoinDetailed(claimId: string): Promise<AuthoritativeRewardResult> {
+    if (!this.token) return { status: 'unavailable', amount: 0, taskAmount: 0 };
+    try {
+      const data = await this.call('POST', '/rewards/ad', { kind: 'daily_s_coin', claimId });
+      this.updatePlayer(data.player);
+      return {
+        status: data.granted === true ? 'granted' : 'duplicate',
+        amount: safeAmount(data.amount),
+        taskAmount: safeAmount(data.taskAmount),
+      };
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return { status: 'unavailable', amount: 0, taskAmount: 0 };
+    }
+  }
+
+  async claimDailySCoin(claimId: string): Promise<'granted' | 'duplicate' | 'unavailable'> {
+    return (await this.claimDailySCoinDetailed(claimId)).status;
+  }
+
+  async fetchPvpLeaderboard(limit = 20): Promise<PvpLeaderboard | null> {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    try {
+      const data = await this.call('GET', `/leaderboards/pvp?limit=${safeLimit}`);
+      if (!this.isLeaderboard(data)) return null;
+      return data;
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return null;
+    }
+  }
+
+  async fetchThemes(): Promise<ThemeCatalogueEntry[] | null> {
+    if (!this.token) return null;
+    try {
+      const data = await this.call('GET', '/themes');
+      this.updatePlayer(data.player);
+      if (!Array.isArray(data.themes)) return null;
+      const themes = data.themes.filter((value): value is ThemeCatalogueEntry => this.isTheme(value));
+      return themes.length === data.themes.length ? themes : null;
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return null;
+    }
+  }
+
+  async syncSoloProgressDetailed(
+    theme: 'kingdom' | 'palace',
+    best: number,
+    highest: number,
+  ): Promise<SoloProgressSyncResult> {
     await this.start();
-    if (!this.token) return false;
+    if (!this.token) return { synced: false, discoveryAmount: 0, taskAmount: 0 };
     try {
       const data = await this.call('POST', '/progress/solo', { theme, best, highest });
       this.updatePlayer(data.player);
-      return this.isPlayer(data.player);
+      return {
+        synced: this.isPlayer(data.player),
+        discoveryAmount: safeAmount(data.discoveryAmount),
+        taskAmount: safeAmount(data.taskAmount),
+      };
     } catch (error) {
       this.handleSessionFailure(error);
-      return false;
+      return { synced: false, discoveryAmount: 0, taskAmount: 0 };
     }
+  }
+
+  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+    return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
+  }
+
+  private captureDailyLoginGrant(value: unknown): void {
+    if (!value || typeof value !== 'object') return;
+    const grant = value as { granted?: unknown; amount?: unknown; streakAmount?: unknown };
+    if (grant.granted !== true) return;
+    const amount = safeAmount(grant.amount);
+    const streakAmount = safeAmount(grant.streakAmount);
+    if (amount <= 0 && streakAmount <= 0) return;
+    const valueGrant = { amount, streakAmount };
+    this.pendingDailyLoginGrant = valueGrant;
+    for (const listener of this.dailyLoginListeners) listener(valueGrant);
   }
 
   private handleSessionFailure(error: unknown): void {
@@ -182,6 +328,31 @@ export class DouyinAuthClient {
       && typeof (value as PublicPlayer).rewards?.currency === 'number');
   }
 
+  private isLeaderboard(value: unknown): value is PvpLeaderboard {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as PvpLeaderboard;
+    return Boolean(candidate.season
+      && typeof candidate.season.id === 'string'
+      && typeof candidate.season.startsAt === 'number'
+      && typeof candidate.season.endsAt === 'number'
+      && Array.isArray(candidate.entries)
+      && candidate.entries.every(entry => entry
+        && Number.isInteger(entry.rank)
+        && typeof entry.displayName === 'string'
+        && typeof entry.rating === 'number'
+        && typeof entry.wins === 'number'
+        && typeof entry.losses === 'number'
+        && typeof entry.draws === 'number'
+        && typeof entry.matches === 'number'));
+  }
+
+  private isTheme(value: unknown): value is ThemeCatalogueEntry {
+    return Boolean(value && typeof value === 'object'
+      && typeof (value as ThemeCatalogueEntry).id === 'string'
+      && typeof (value as ThemeCatalogueEntry).free === 'boolean'
+      && typeof (value as ThemeCatalogueEntry).cost === 'number');
+  }
+
   private call(method: 'GET' | 'POST', path: string, data?: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.api.request || !this.baseUrl.startsWith('https://')) return Promise.reject(new Error('HTTPS request unavailable'));
     return new Promise((resolve, reject) => {
@@ -217,4 +388,8 @@ class HttpError extends Error {
 
 function safeJson(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return null; }
+}
+
+function safeAmount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }

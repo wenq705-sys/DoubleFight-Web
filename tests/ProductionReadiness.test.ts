@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -39,6 +39,20 @@ describe('safe production readiness', () => {
     await writeFile(file, 'fixture');
     expect(await dataDirectoryWritable(join(folder, 'missing'))).toBe(false);
     expect(await dataDirectoryWritable(file)).toBe(false);
+  });
+
+  it('proxies all M2.12 HTTP surfaces through the production Nginx config', async () => {
+    const nginx = await readFile('ops/doublefight-tls.conf', 'utf8');
+    for (const route of ['themes(/unlock)?', 'season/current', 'leaderboards/pvp']) {
+      expect(nginx).toContain(route);
+    }
+  });
+
+  it('keeps the production deploy helper offline and loads operator secrets explicitly', async () => {
+    const deploy = await readFile('ops/deploy-main.sh', 'utf8');
+    expect(deploy).toContain('/etc/doublefight/server.env');
+    expect(deploy).toContain('--env-file "$env_file"');
+    expect(deploy).not.toContain('git fetch origin');
   });
 
   it('runs the operator env check with safe status output and fails on app ID drift', () => {
