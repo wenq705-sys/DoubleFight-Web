@@ -18,6 +18,7 @@ import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } fr
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
+import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, hitTarget, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | 'season' | null;
@@ -626,7 +627,7 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
   const info = scene.platform.getSystemInfo();
   const layout = scene.homeLayout(width, height, info.safeArea.bottom);
   const utility = homeUtilityLayout(width, layout);
-  scene.drawPillButton(ctx, layout.theme, '🌍 世界中心', 'secondary');
+  scene.drawPillButton(ctx, layout.theme, '世界中心', 'secondary', 'world');
 
   // Replace the old two equal utility pills with three quieter destinations.
   // This keeps Start/Online as the dominant Home actions.
@@ -634,14 +635,14 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
   round(ctx, utility.cover.x, utility.cover.y, utility.cover.width, utility.cover.height, 18);
   ctx.fill();
 
-  miniHomeButton(ctx, utility.collection, '📖', '图鉴', false);
-  miniHomeButton(ctx, utility.rank, '🏆', '排行', false);
+  miniHomeButton(ctx, utility.collection, 'collection', '图鉴', false);
+  miniHomeButton(ctx, utility.rank, 'rank', '排行', false);
   const daily = auth.current.status === 'authenticated' ? auth.current.player.rewards.daily : undefined;
   const benefitReady = Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
   miniHomeButton(
     ctx,
     utility.daily,
-    benefitReady ? '🎁' : '✦',
+    'gift',
     benefitReady ? '可领取' : '福利',
     benefitReady,
   );
@@ -934,21 +935,20 @@ function drawDailyCenter(
   ctx.font = '700 10px sans-serif';
   ctx.fillText('每天回来一点点 · 不卖 PvP 强度', width / 2, layout.panel.y + 54);
 
-  round(ctx, layout.balance.x, layout.balance.y, layout.balance.width, layout.balance.height, 18);
-  ctx.fillStyle = 'rgba(40,56,52,.94)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.46)';
-  ctx.stroke();
-  ctx.fillStyle = '#f5d36d';
-  ctx.font = '900 22px sans-serif';
-  ctx.fillText(`S ${balance}`, width / 2, layout.balance.y + 24);
+  drawPremiumPanel(ctx, layout.balance, true);
+  drawSCoinIcon(ctx, layout.balance.x + 28, layout.balance.y + 27, 34, true);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffe18a';
+  ctx.font = '900 23px sans-serif';
+  ctx.fillText(balance.toLocaleString('zh-CN'), layout.balance.x + 52, layout.balance.y + 25);
   ctx.fillStyle = '#aebfc0';
   ctx.font = '700 10px sans-serif';
   ctx.fillText(
     daily?.loginClaimed ? `今日登录 +15 · 连续 ${daily.streak} 天 · 每7天 +30` : '账号连接后自动领取每日登录 S 币',
-    width / 2,
+    layout.balance.x + 52,
     layout.balance.y + 45,
   );
+  ctx.textAlign = 'center';
 
   round(ctx, layout.progress.x, layout.progress.y, layout.progress.width, layout.progress.height, 17);
   ctx.fillStyle = 'rgba(14,44,53,.94)';
@@ -971,40 +971,44 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.dailyAd,
-    adClaimed ? '✓ 今日广告 S 币已领取' : '▶ 看广告领 +30 S',
+    adClaimed ? '今日广告 S 币已领取' : '看广告领 +30 S',
     adClaimed ? '明天刷新 · 广告任务已完成' : '完整观看后到账 · 首次还会完成广告任务 +5 S',
     !adClaimed && Boolean(player),
+    adClaimed ? 'check' : 'video',
   );
 
   actionCard(
     ctx,
     layout.sidebar,
-    sidebarClaimed ? '✓ 今日侧边栏奖励已领取' : sidebarReady ? '🎁 领取侧边栏 +10 S' : '↗ 去侧边栏',
+    sidebarClaimed ? '今日侧边栏奖励已领取' : sidebarReady ? '领取侧边栏 +10 S' : '去侧边栏',
     sidebarClaimed ? '明天可再次领取' : sidebarReady ? '同时保留下局清块 +1' : '从侧边栏回来可领 +10 S 与下局加成',
     sidebarReady,
+    sidebarClaimed ? 'check' : 'gift',
   );
 
   actionCard(
     ctx,
     layout.shortcut,
-    state.shortcutAdded ? '✓ 已添加到桌面' : '＋ 添加到桌面',
+    state.shortcutAdded ? '已添加到桌面' : '添加到桌面',
     state.shortcutAdded ? '以后可以更快回到双数对决' : '抖音官方快捷入口 · 由你主动添加',
     !state.shortcutAdded,
+    state.shortcutAdded ? 'check' : 'share',
   );
 
   actionCard(
     ctx,
     layout.refreshAccount,
-    '↻ 同步账号进度',
+    '同步账号进度',
     player ? `服务器已连接 · 永久主题目标 ${S_COIN.themeUnlock} S` : '当前为本地游客进度',
     !player,
+    'sync',
   );
 
   if (DOUYIN_PRODUCT_CONFIG.retention.subscriptionTemplates.length > 0) {
     actionCard(
       ctx,
       layout.subscription,
-      '🔔 订阅赛季提醒',
+      '订阅赛季提醒',
       '由你主动授权 · 可随时在抖音设置中管理',
       false,
     );
@@ -1157,23 +1161,24 @@ function homeUtilityLayout(width: number, base: any) {
 function miniHomeButton(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
-  icon: string,
+  icon: UiIcon,
   label: string,
   emphasized: boolean,
 ): void {
-  round(ctx, rect.x, rect.y, rect.width, rect.height, 15);
-  ctx.fillStyle = emphasized ? 'rgba(45,92,74,.97)' : 'rgba(20,51,61,.96)';
-  ctx.fill();
-  ctx.strokeStyle = emphasized ? 'rgba(244,209,105,.65)' : 'rgba(223,235,230,.22)';
-  ctx.lineWidth = emphasized ? 1.3 : 1;
-  ctx.stroke();
+  drawPremiumPanel(ctx, rect, emphasized);
+  drawUiIcon(
+    ctx,
+    icon,
+    rect.x + rect.width / 2,
+    rect.y + rect.height * .34,
+    Math.min(18, rect.height * .38),
+    emphasized ? '#ffe089' : '#dce9e5',
+  );
   ctx.textAlign = 'center';
-  ctx.fillStyle = emphasized ? '#ffe089' : '#eef1e9';
-  ctx.font = '900 10px sans-serif';
-  ctx.fillText(icon, rect.x + rect.width / 2, rect.y + rect.height * 0.36);
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = emphasized ? '#fff0b8' : '#afc1c1';
   ctx.font = '800 10px sans-serif';
-  ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * 0.72);
+  ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * .74);
 }
 
 function rankingCenterLayout(width: number, height: number) {
@@ -1273,20 +1278,34 @@ function formatShortDate(timestamp: number): string {
   return `${date.getUTCMonth() + 1}月${date.getUTCDate()}日`;
 }
 
-function actionCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string, emphasized: boolean): void {
-  round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
-  ctx.fillStyle = emphasized ? 'rgba(25,75,76,.96)' : 'rgba(18,47,57,.94)';
-  ctx.fill();
-  ctx.strokeStyle = emphasized ? 'rgba(242,205,105,.58)' : 'rgba(201,222,220,.20)';
-  ctx.lineWidth = emphasized ? 1.3 : 1;
-  ctx.stroke();
+function actionCard(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  title: string,
+  subtitle: string,
+  emphasized: boolean,
+  icon?: UiIcon,
+): void {
+  drawPremiumPanel(ctx, rect, emphasized);
+  const iconSpace = icon ? 40 : 0;
+  if (icon) {
+    drawUiIcon(
+      ctx,
+      icon,
+      rect.x + 21,
+      rect.y + rect.height / 2,
+      Math.min(21, rect.height * .38),
+      emphasized ? '#ffe08a' : '#b9d4d1',
+    );
+  }
   ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = emphasized ? '#fff0b8' : '#e4ece9';
   ctx.font = '900 13px sans-serif';
-  ctx.fillText(title, rect.x + 16, rect.y + 24);
+  ctx.fillText(title, rect.x + 16 + iconSpace, rect.y + rect.height * .35);
   ctx.fillStyle = '#9db3b5';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText(subtitle, rect.x + 16, rect.y + 46);
+  ctx.fillText(subtitle, rect.x + 16 + iconSpace, rect.y + rect.height * .69);
 }
 
 function tab(ctx: CanvasRenderingContext2D, rect: Rect, label: string, active: boolean): void {
@@ -1302,23 +1321,7 @@ function tab(ctx: CanvasRenderingContext2D, rect: Rect, label: string, active: b
 }
 
 function pill(ctx: CanvasRenderingContext2D, rect: Rect, label: string, primary: boolean): void {
-  round(ctx, rect.x, rect.y, rect.width, rect.height, rect.height / 2);
-  const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y);
-  if (primary) {
-    gradient.addColorStop(0, '#f2cf70');
-    gradient.addColorStop(1, '#df9a53');
-  } else {
-    gradient.addColorStop(0, 'rgba(19,53,63,.96)');
-    gradient.addColorStop(1, 'rgba(28,65,76,.96)');
-  }
-  ctx.fillStyle = gradient;
-  ctx.fill();
-  ctx.strokeStyle = primary ? '#ffe7a2' : 'rgba(255,230,161,.45)';
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = primary ? '#432e1d' : '#fff0c0';
-  ctx.font = primary ? '900 14px sans-serif' : '850 12px sans-serif';
-  ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
+  drawPremiumButton(ctx, rect, label, { kind: primary ? 'primary' : 'secondary' });
 }
 
 function shade(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1327,22 +1330,11 @@ function shade(ctx: CanvasRenderingContext2D, width: number, height: number): vo
 }
 
 function panel(ctx: CanvasRenderingContext2D, rect: Rect): void {
-  round(ctx, rect.x, rect.y, rect.width, rect.height, 28);
-  const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.height);
-  gradient.addColorStop(0, 'rgba(10,34,42,.985)');
-  gradient.addColorStop(1, 'rgba(7,24,32,.985)');
-  ctx.fillStyle = gradient;
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.42)';
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+  drawPremiumPanel(ctx, rect, true);
 }
 
 function closeGlyph(ctx: CanvasRenderingContext2D, rect: Rect): void {
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#a9bbbc';
-  ctx.font = '900 18px sans-serif';
-  ctx.fillText('×', rect.x + rect.width / 2, rect.y + rect.height / 2);
+  drawUiIcon(ctx, 'close', rect.x + rect.width / 2, rect.y + rect.height / 2, 17, '#b9cbca');
 }
 
 function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
@@ -1361,7 +1353,7 @@ function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: numbe
 }
 
 function hit(x: number, y: number, rect: Rect): boolean {
-  return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+  return hitTarget(x, y, rect, 44);
 }
 
 function competitiveRating(auth: DouyinAuthClient): number {
