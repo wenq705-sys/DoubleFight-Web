@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ensureTouchRect, hitTarget, uiMetrics } from '../platform/douyin/src/uiSystem';
+import { ensureTouchRect, hitTarget, skillUiIcon, uiMetrics } from '../platform/douyin/src/uiSystem';
 
 describe('M2.13 adaptive mobile UI metrics', () => {
   it.each([
@@ -18,7 +18,12 @@ describe('M2.13 adaptive mobile UI metrics', () => {
     expect(metrics.contentWidth).toBeGreaterThan(250);
     expect(metrics.scale).toBeGreaterThanOrEqual(.88);
     expect(metrics.scale).toBeLessThanOrEqual(1.12);
+    it('maps every PvP skill to dedicated non-emoji vector art', () => {
+    expect(new Set(['random_clear', 'shield', 'petrify', 'shuffle', 'purify'].map(skillUiIcon))).toEqual(new Set([
+      'skill-clear', 'skill-shield', 'skill-petrify', 'skill-shuffle', 'skill-purify',
+    ]));
   });
+});
 
   it('classifies short and tall mobile canvases without relying on one reference phone', () => {
     expect(uiMetrics(320, 568).compact).toBe(true);
