@@ -1532,6 +1532,10 @@ export class DouyinSoloScene {
   private sidebarRewardReady(): boolean {
     if (!this.social.cameFromSidebar()) return false;
     const today = new Date().toISOString().slice(0, 10);
+    if (
+      this.auth.current.status === 'authenticated'
+      && this.auth.current.player.rewards.lastSidebarRewardDay === today
+    ) return false;
     return this.platform.storage.getItem('doublefight-sidebar-reward-date') !== today;
   }
 
@@ -1549,7 +1553,7 @@ export class DouyinSoloScene {
     const today = new Date().toISOString().slice(0, 10);
     this.platform.storage.setItem('doublefight-sidebar-reward-date', today);
     this.platform.storage.setItem('doublefight-next-solo-bonus', '1');
-    this.notice = { text: '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
+    this.notice = { text: this.auth.requiresServerLedger ? '每日福利到账 · +10 S · 下局清块 +1' : '每日福利到账 · 下局清块 +1', until: this.visualTime + 1.8 };
     this.platform.haptics.trigger('success');
     this.refreshHud();
   }
