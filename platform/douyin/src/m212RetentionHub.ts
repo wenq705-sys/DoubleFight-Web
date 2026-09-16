@@ -715,10 +715,13 @@ function drawSeasonLeaderboard(
       ctx.font = '800 12px sans-serif';
       ctx.fillText('本赛季还没有有效对局', width / 2, layout.panel.y + 150);
     } else {
-      board.entries.slice(0, 9).forEach((entry, index) => {
+      const rowStart = layout.panel.y + 100;
+      const available = Math.max(0, layout.social.y - rowStart - 10);
+      const visibleRows = Math.max(1, Math.min(9, Math.floor(available / 39)));
+      board.entries.slice(0, visibleRows).forEach((entry, index) => {
         const row = {
           x: layout.panel.x + 16,
-          y: layout.panel.y + 100 + index * 39,
+          y: rowStart + index * 39,
           width: layout.panel.width - 32,
           height: 33,
         };
