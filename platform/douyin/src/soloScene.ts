@@ -515,6 +515,7 @@ export class DouyinSoloScene {
     if (this.hit(x, y, layout.solo)) { this.flashTap(layout.solo); this.startSolo(); return; }
     if (this.hit(x, y, layout.online)) { this.flashTap(layout.online); this.openOnline(); return; }
     if (this.hit(x, y, layout.rank)) {
+      this.flashTap(layout.rank);
       void this.social.openSoloRank().then(ok => {
         if (!ok) {
           this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
@@ -524,6 +525,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, layout.daily)) {
+      this.flashTap(layout.daily);
       if (this.sidebarRewardReady()) {
         void this.claimSidebarReward();
       } else if (this.sidebarSupported) {
@@ -550,6 +552,7 @@ export class DouyinSoloScene {
     const close = { x: x0 + 42, y: y0 + 196, width: width - 84, height: 42 };
 
     if (this.hit(x, y, sound)) {
+      this.flashTap(sound);
       this.soundEnabled = !this.soundEnabled;
       this.platform.storage.setItem('doublefight-sound-enabled', this.soundEnabled ? '1' : '0');
       this.audio.setEnabled(this.soundEnabled);
@@ -558,6 +561,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, haptics)) {
+      this.flashTap(haptics);
       this.hapticsEnabled = !this.hapticsEnabled;
       this.platform.storage.setItem('doublefight-haptics-enabled', this.hapticsEnabled ? '1' : '0');
       this.platform.haptics.setEnabled(this.hapticsEnabled);
@@ -566,6 +570,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, close)) {
+      this.flashTap(close);
       this.settingsOpen = false;
       this.refreshHud();
     }
@@ -583,6 +588,7 @@ export class DouyinSoloScene {
 
     const skill = this.soloSkillRect(info.width, info.height, safeBottom);
     if (this.hit(x, y, skill)) {
+      this.flashTap(skill);
       if (this.skillCharges > 0) void this.useRandomClear();
       else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
     }
@@ -615,6 +621,7 @@ export class DouyinSoloScene {
 
     const back = { x: 16, y: this.hudTop() + 5, width: 46, height: 46 };
     if (this.hit(x, y, back)) {
+      this.flashTap(back);
       if (snap.mode === 'playing') {
         this.exitConfirm = true;
         this.refreshHud();
@@ -629,10 +636,12 @@ export class DouyinSoloScene {
     if (snap.mode === 'lobby') {
       const layout = this.onlineLobbyLayout(info.width, info.height);
       if (this.hit(x, y, layout.theme)) {
+        this.flashTap(layout.theme);
         this.online.setTheme(snap.selectedTheme === 'kingdom' ? 'palace' : 'kingdom');
         return;
       }
       for (let i = 0; i < layout.skills.length; i++) if (this.hit(x, y, layout.skills[i])) {
+        this.flashTap(layout.skills[i]);
         this.online.cycleSkill(i);
         return;
       }
@@ -660,7 +669,7 @@ export class DouyinSoloScene {
 
     if (snap.mode === 'matching') {
       const cancel = this.matchingCancelRect(info.width, info.height);
-      if (this.hit(x, y, cancel)) this.online.cancelMatch();
+      if (this.hit(x, y, cancel)) { this.flashTap(cancel); this.online.cancelMatch(); }
       return;
     }
 
@@ -670,11 +679,15 @@ export class DouyinSoloScene {
       const share = this.roomShareRect(info.width, info.height);
       const ready = { x: 48, y: info.height - Math.max(18, info.safeArea.bottom + 14) - 62, width: info.width - 96, height: 48 };
       if (this.hit(x, y, share) && room?.code) {
+        this.flashTap(share);
+        this.notice = { text: '正在打开好友邀请…', until: this.visualTime + 2 };
+        this.refreshHud();
         void this.social.shareRoom(room.code).then(ok => {
           this.notice = { text: ok ? '已打开好友邀请' : '分享暂不可用', until: this.visualTime + 1.2 };
           this.refreshHud();
         });
       } else if (this.hit(x, y, ready) && me) {
+        this.flashTap(ready);
         this.online.toggleReady();
       }
       return;
@@ -686,6 +699,7 @@ export class DouyinSoloScene {
       const skillRects = this.duelSkillRects(info.width, info.height);
       for (let i = 0; i < skillRects.length; i++) {
         if (!this.hit(x, y, skillRects[i])) continue;
+        this.flashTap(skillRects[i]);
         const skillId = me.loadout[i];
         const result = this.online.castSkill(skillId);
         if (!result.ok && result.reason) {
@@ -703,14 +717,19 @@ export class DouyinSoloScene {
       const { primary, lobby, share } = this.resultActionRects(info.width, info.height);
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
+        this.flashTap(primary);
         if (opponentRoom) this.online.setRematchReady();
         else {
           this.online.leaveRoom();
           this.online.quickMatch();
         }
       } else if (this.hit(x, y, lobby)) {
+        this.flashTap(lobby);
         this.returnOnlineLobby();
       } else if (this.hit(x, y, share)) {
+        this.flashTap(share);
+        this.notice = { text: '正在打开分享…', until: this.visualTime + 2 };
+        this.refreshHud();
         const score = snap.state.match?.result?.players.find(player => player.playerId === snap.state.playerId)?.score ?? 0;
         const won = snap.state.match?.winnerId === snap.state.playerId;
         void this.social.shareResult(score, won).then(ok => {
