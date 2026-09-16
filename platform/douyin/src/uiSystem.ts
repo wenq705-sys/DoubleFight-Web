@@ -264,7 +264,7 @@ export function drawUiIcon(
   cx: number,
   cy: number,
   size: number,
-  color = UI_COLORS.goldLight,
+  color: string = UI_COLORS.goldLight,
 ): void {
   if (icon === 'coin') { drawSCoinIcon(ctx, cx, cy, size); return; }
   ctx.save();
