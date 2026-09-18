@@ -11,6 +11,11 @@ export class SoloController {
     const result = this.board.move(direction);
     return { ...result, finished: this.view.present({ type: 'move', direction, result }) };
   }
+  clearObstacles(count: number) {
+    const result = this.board.clearLowest(count, true);
+    if (result.removed.length) void this.view.present({ type: 'skill_cast', skill: 'random_clear' });
+    return { ...result, finished: this.view.present({ type: 'skill_hit', skill: 'random_clear', removed: result.removed }) };
+  }
   clearRandom(count: number) {
     const result = this.board.clearRandom(count);
     if (result.removed.length) void this.view.present({ type: 'skill_cast', skill: 'random_clear' });

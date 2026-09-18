@@ -24,15 +24,11 @@ type PassState = {
   ascended: boolean;
   flight: { value: number; startedAt: number; duration: number } | null;
   profileOpen: boolean;
-  rankingOpen: boolean;
   perfTime: number;
   perfFrames: number;
   goodWindows: number;
   nextFlightHudAt: number;
   nextOnlineHudAt: number;
-  ascensionCelebrateStartedAt: number;
-  ascensionCelebrateUntil: number;
-  ascensionDurationMs: number | null;
 };
 
 /** Adds M2.12 product presentation without changing Board2048 or Protocol v6. */
@@ -50,15 +46,11 @@ export function installM212ProductPass(
     ascended: false,
     flight: null,
     profileOpen: false,
-    rankingOpen: false,
     perfTime: 0,
     perfFrames: 0,
     goodWindows: 0,
     nextFlightHudAt: 0,
     nextOnlineHudAt: 0,
-    ascensionCelebrateStartedAt: 0,
-    ascensionCelebrateUntil: 0,
-    ascensionDurationMs: null,
   };
 
   // Premium gameplay surfaces remain Banner-free. Rewarded/interstitial stay.
@@ -73,11 +65,7 @@ export function installM212ProductPass(
     state.runHighest = 2;
     state.ascended = false;
     state.flight = null;
-    state.ascensionCelebrateStartedAt = 0;
-    state.ascensionCelebrateUntil = 0;
-    state.ascensionDurationMs = null;
     state.profileOpen = false;
-    state.rankingOpen = false;
     originalStartSolo();
     state.runHighest = game.highest;
     recordDiscovery(platform.storage, game.theme, state.runHighest);
@@ -102,17 +90,7 @@ export function installM212ProductPass(
     if (event.value >= MAX_PIECE_VALUE && !state.ascended && state.runStartedAt !== null) {
       state.ascended = true;
       const elapsedMs = Math.max(1, Math.round((number(scene.visualTime) - state.runStartedAt) * 1000));
-      const result = recordAscension(platform.storage, game.theme, elapsedMs);
-      const badge = result.first ? '首次登顶' : result.personalBest ? 'NEW PB' : '登顶成功';
-      const now = number(scene.visualTime);
-      state.ascensionCelebrateStartedAt = now;
-      state.ascensionCelebrateUntil = now + 1.8;
-      state.ascensionDurationMs = elapsedMs;
-      scene.notice = {
-        text: `${badge} · ${pieceName(game.theme, MAX_PIECE_VALUE)} · ${formatDuration(elapsedMs)}`,
-        until: now + 2.4,
-      };
-      platform.haptics.trigger('success');
+      recordAscension(platform.storage, game.theme, elapsedMs);
     }
     scene.refreshHud();
   };
@@ -121,47 +99,10 @@ export function installM212ProductPass(
   game.handleTap = (x: number, y: number) => {
     const info = platform.getSystemInfo();
     if (state.profileOpen) { state.profileOpen = false; scene.refreshHud(); return; }
-    if (state.rankingOpen) {
-      const layout = rankingLayout(info.width, info.height);
-      if (hit(x, y, layout.solo)) {
-        void scene.social.openSoloRank().then((ok: boolean) => {
-          if (!ok) scene.notice = { text: 'Solo 周榜暂不可用', until: number(scene.visualTime) + 1.3 };
-          scene.refreshHud();
-        });
-        return;
-      }
-      if (hit(x, y, layout.ascension)) {
-        const progress = loadThemeMastery(platform.storage, game.theme);
-        scene.notice = {
-          text: progress.bestAscensionMs
-            ? `${THEMES[game.theme].label} · PB ${formatDuration(progress.bestAscensionMs)}`
-            : '先完成一次登顶，解锁竞速纪录',
-          until: number(scene.visualTime) + 1.5,
-        };
-        scene.refreshHud();
-        return;
-      }
-      if (hit(x, y, layout.pvp)) {
-        const rating = auth.current.status === 'authenticated' ? (auth.current.player.season?.rating ?? auth.current.player.pvp.rating) : 1000;
-        scene.notice = { text: `竞技赛季 · ${competitiveRankLabel(rating)} · ${rating}`, until: number(scene.visualTime) + 1.5 };
-        scene.refreshHud();
-        return;
-      }
-      state.rankingOpen = false;
-      scene.refreshHud();
-      return;
-    }
 
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       if (hit(x, y, profileRect(info.width, scene.hudTop()))) {
         state.profileOpen = true;
-        platform.haptics.trigger('light');
-        scene.refreshHud();
-        return;
-      }
-      const home = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
-      if (home?.rank && hit(x, y, home.rank)) {
-        state.rankingOpen = true;
         platform.haptics.trigger('light');
         scene.refreshHud();
         return;
@@ -183,12 +124,10 @@ export function installM212ProductPass(
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen);
     if (!nativeModal && !scene.onboardingOpen) {
       if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
-      if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, game, platform, state, number(scene.visualTime));
+      if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, state, number(scene.visualTime));
       if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene);
       if (state.profileOpen) drawProfile(ctx, width, height, auth, platform);
-      if (state.rankingOpen) drawRankingHub(ctx, width, height, game.theme, auth, platform);
     }
-    if (scene.onboardingOpen) drawOnboardingMeta(ctx, width, height);
     scene.uiTexture.needsUpdate = true;
   };
 
@@ -209,14 +148,7 @@ export function installM212ProductPass(
       scene.refreshHud();
     }
 
-    if (game.currentMode === 'solo' && now < state.ascensionCelebrateUntil && now >= state.nextOnlineHudAt) {
-      state.nextOnlineHudAt = now + 1 / 12;
-      scene.refreshHud();
-    }
-    if (state.ascensionCelebrateUntil > 0 && now >= state.ascensionCelebrateUntil) {
-      state.ascensionCelebrateUntil = 0;
-      scene.refreshHud();
-    }
+
   };
 
   // Medium-first quality avoids the current "start high, stutter, then drop" path.
@@ -263,7 +195,6 @@ function drawHomeMeta(
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const rating = player?.season?.rating ?? player?.pvp.rating ?? 1000;
   const balance = player?.rewards.currency ?? 0;
-  const highest = Number(platform.storage.getItem(`doublefight-highest-${game.theme}`) ?? 2);
   const profile = profileRect(width, top);
 
   round(ctx, profile.x, profile.y, profile.width, profile.height, 15);
@@ -289,92 +220,38 @@ function drawHomeMeta(
   ctx.fillStyle = '#ffe69a';
   ctx.font = '900 12px sans-serif';
   ctx.fillText(balance.toLocaleString('zh-CN'), coinX + 35, profile.y + 20);
-
-  const y = Math.max(top + 72, platform.getSystemInfo().height * 0.56) + 60;
-  ctx.fillStyle = 'rgba(12,28,36,.95)';
-  ctx.fillRect(width / 2 - 108, y - 8, 216, 17);
-  ctx.fillStyle = '#f6e9c5';
-  ctx.font = '750 10px sans-serif';
-  ctx.fillText(`最高 · ${pieceName(game.theme, highest)}`, width / 2, y);
 }
 
 function drawSoloMeta(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  game: DouyinSoloScene,
-  platform: DouyinPlatform,
   state: PassState,
   visualTime: number,
 ): void {
-  const info = platform.getSystemInfo();
-  const top = Math.max(12, info.safeArea.top + 8, (info.menuButton?.bottom ?? 0) + 8);
-  const mastery = loadThemeMastery(platform.storage, game.theme);
+  if (!state.flight) return;
+  const p = Math.min(1, Math.max(0, (visualTime - state.flight.startedAt) / state.flight.duration));
+  if (p >= 1) return;
 
-  ctx.fillStyle = 'rgba(14,34,43,.97)';
-  ctx.fillRect(width - 156, top + 33, 138, 18);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#dfe9e6';
-  ctx.font = '800 10px sans-serif';
-  ctx.fillText(`最高 · ${pieceName(game.theme, game.highest)}`, width - 32, top + 43);
+  const ease = 1 - Math.pow(1 - p, 3);
+  const targetX = width / 2;
+  const targetY = Math.max(76, height * 0.13);
+  const x = width * 0.52 + (targetX - width * 0.52) * ease;
+  const y = height * 0.48 + (targetY - height * 0.48) * ease - Math.sin(Math.PI * p) * 54;
 
-  if (mastery.bestAscensionMs !== null) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,240,190,.82)';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText(`登顶 PB ${formatDuration(mastery.bestAscensionMs)}`, width / 2, top + 74);
-  }
-
-  if (state.ascensionCelebrateUntil > visualTime && state.ascensionDurationMs !== null) {
-    const age = Math.max(0, visualTime - state.ascensionCelebrateStartedAt);
-    const remaining = Math.max(0, state.ascensionCelebrateUntil - visualTime);
-    const alpha = Math.min(1, age / 0.18, remaining / 0.28);
-    const panelW = Math.min(278, width - 42);
-    const x = (width - panelW) / 2;
-    const y = height * 0.315;
-    round(ctx, x, y, panelW, 82, 24);
-    ctx.fillStyle = `rgba(8,27,34,${0.72 + alpha * 0.22})`;
-    ctx.fill();
-    ctx.strokeStyle = `rgba(247,211,111,${0.35 + alpha * 0.55})`;
-    ctx.lineWidth = 1.6;
-    ctx.stroke();
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = `rgba(255,231,154,${Math.max(0.25, alpha)})`;
-    ctx.font = '900 20px sans-serif';
-    ctx.fillText(`登顶 · ${pieceName(game.theme, MAX_PIECE_VALUE)}`, width / 2, y + 30);
-    ctx.fillStyle = `rgba(207,224,220,${Math.max(0.25, alpha)})`;
-    ctx.font = '800 11px sans-serif';
-    ctx.fillText(`本局用时 ${formatDuration(state.ascensionDurationMs)} · 继续挑战更高分`, width / 2, y + 56);
-  }
-
-  if (state.flight) {
-    const p = Math.min(1, Math.max(0, (visualTime - state.flight.startedAt) / state.flight.duration));
-    if (p < 1) {
-      const ease = 1 - Math.pow(1 - p, 3);
-      const x = width * 0.52 + (width - 70 - width * 0.52) * ease;
-      const y = height * 0.48 + (top + 43 - height * 0.48) * ease - Math.sin(Math.PI * p) * 58;
-      ctx.beginPath();
-      ctx.arc(x, y, 15 - p * 5, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(249,211,105,${0.9 - p * 0.25})`;
-      ctx.shadowColor = '#ffe58a';
-      ctx.shadowBlur = 18;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#4b3420';
-      ctx.font = '900 10px sans-serif';
-      ctx.fillText('NEW', x, y + 1);
-    }
-  }
-
-  const hintY = height - Math.max(14, info.safeArea.bottom + 10) - 65;
-  ctx.fillStyle = 'rgba(8,20,27,.68)';
-  ctx.fillRect(width / 2 - 108, hintY - 8, 216, 17);
-  ctx.fillStyle = 'rgba(255,255,255,.76)';
-  ctx.font = '650 10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('相同棋子合成 · 解锁更高阶', width / 2, hintY);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 14 - p * 5, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(249,211,105,${0.92 - p * 0.28})`;
+  ctx.shadowColor = '#ffe58a';
+  ctx.shadowBlur = 18;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, 19 - p * 7, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255,236,168,${0.62 - p * 0.42})`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals): void {
@@ -471,7 +348,7 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
   ctx.fillText(player?.displayName ?? '游客玩家', width / 2, y + 42);
   ctx.fillStyle = '#9fd5d1';
   ctx.font = '850 12px sans-serif';
-  ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, y + 70);
+  ctx.fillText(`${competitiveRankLabel(rating)} · 竞技分 ${rating}`, width / 2, y + 70);
 
   const rankProgress = competitiveRankProgress(rating);
   const rankBarX = x + 52;
@@ -506,11 +383,11 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
     ctx.fillText(THEMES[theme].label, x + 24, rowY);
     ctx.fillStyle = '#b9cdce';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText(`最高 · ${pieceName(theme, highest)}`, x + 24, rowY + 24);
-    ctx.fillText(`BEST ${best.toLocaleString('zh-CN')}`, x + 24, rowY + 43);
+    ctx.fillText(`已到达 · ${pieceName(theme, highest)}`, x + 24, rowY + 24);
+    ctx.fillText(`最高分 ${best.toLocaleString('zh-CN')}`, x + 24, rowY + 43);
     ctx.textAlign = 'right';
     ctx.fillStyle = mastery.bestAscensionMs ? '#f1ce70' : '#758b8e';
-    ctx.fillText(mastery.bestAscensionMs ? `登顶 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶', x + panelW - 24, rowY + 33);
+    ctx.fillText(mastery.bestAscensionMs ? `最快 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶', x + panelW - 24, rowY + 33);
   });
 
   ctx.textAlign = 'center';
@@ -534,13 +411,13 @@ function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
   ctx.fillStyle = '#9eb4b6';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 60);
+  ctx.fillText('你的记录与排行', width / 2, layout.panel.y + 60);
 
   const mastery = loadThemeMastery(platform.storage, theme);
-  drawRankCard(ctx, layout.ascension, '登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`, 'energy');
-  drawRankCard(ctx, layout.solo, 'Solo 周榜', '每周最高分 · 好友排行', 'rank');
+  drawRankCard(ctx, layout.ascension, '最快登顶', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '尚未登顶'}`, 'energy');
+  drawRankCard(ctx, layout.solo, '最高分', '本周成绩 · 好友排行', 'rank');
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-  drawRankCard(ctx, layout.pvp, '竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`, 'pvp');
+  drawRankCard(ctx, layout.pvp, '竞技排行', `${competitiveRankLabel(rating)} · ${rating}`, 'pvp');
   ctx.fillStyle = '#819799';
   ctx.font = '700 10px sans-serif';
   ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
