@@ -248,6 +248,34 @@ export class Board2048 {
     };
   }
 
+  /** Solo helper: remove the lowest-value movable tiles while protecting every current highest tile. */
+  clearLowest(count = 2, protectHighest = true): ClearResult {
+    const occupied = this.tiles().filter((tile) => !this.isBlocked(tile));
+    if (occupied.length === 0 || count <= 0) {
+      return { removed: [], gameOver: !this.canMove() };
+    }
+
+    const highest = Math.max(...occupied.map((tile) => tile.value));
+    const pool = occupied
+      .filter((tile) => !protectHighest || tile.value !== highest)
+      .sort((a, b) => a.value - b.value || a.id - b.id);
+    const removed: BoardTile[] = [];
+    const targetCount = Math.min(Math.floor(count), pool.length);
+
+    for (let index = 0; index < targetCount; index += 1) {
+      const lowestValue = pool[0]?.value;
+      if (lowestValue === undefined) break;
+      const sameTier = pool.filter((tile) => tile.value === lowestValue);
+      const pick = sameTier[Math.min(sameTier.length - 1, Math.floor(this.random() * sameTier.length))];
+      const poolIndex = pool.findIndex((tile) => tile.id === pick.id);
+      if (poolIndex >= 0) pool.splice(poolIndex, 1);
+      this.grid[pick.row][pick.col] = null;
+      removed.push({ ...pick });
+    }
+
+    return { removed, gameOver: !this.canMove() };
+  }
+
   clearRandom(count = 2): ClearResult {
     const occupied = this.tiles().filter((tile) => !this.isBlocked(tile));
     if (occupied.length === 0 || count <= 0) {

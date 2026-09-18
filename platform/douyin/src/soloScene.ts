@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
-import { THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
+import { MAX_PIECE_VALUE, THEMES, pieceName, pieceTier, type ThemeId } from '../../../src/config/themes';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -25,6 +25,13 @@ import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetri
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
+type SoloResultState = {
+  kind: 'cleared' | 'stuck';
+  score: number;
+  highest: number;
+  elapsedMs: number;
+};
+type MergeBurst = { count: number; maxValue: number; startedAt: number; until: number };
 
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
@@ -84,6 +91,11 @@ export class DouyinSoloScene {
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
   private tapFlash: { rect: Rect; until: number } | null = null;
+  private soloResult: SoloResultState | null = null;
+  private soloStartedAt: number | null = null;
+  private mergeBurst: MergeBurst | null = null;
+  private readonly stageGlow = new THREE.PointLight(0xffd36f, 0, 24, 2);
+  private readonly dangerGlow = new THREE.PointLight(0xff5c64, 0, 18, 2);
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -239,28 +251,51 @@ export class DouyinSoloScene {
   }
 
   async move(direction: Direction): Promise<boolean> {
-    if (this.mode !== 'solo' || this.disposed || this.inputLocked) return false;
+    if (this.mode !== 'solo' || this.disposed || this.inputLocked || this.soloResult) return false;
     const result = this.controller.move(direction);
     if (!result.changed) {
-      this.platform.haptics.trigger('light');
+      if (result.gameOver) this.finishSolo('stuck');
+      else this.platform.haptics.trigger('light');
       return false;
     }
+
+    if (this.soloStartedAt === null) this.soloStartedAt = this.visualTime;
+    if (result.merges.length > 1) {
+      const maxValue = Math.max(...result.merges.map((merge) => merge.value));
+      this.mergeBurst = {
+        count: result.merges.length,
+        maxValue,
+        startedAt: this.visualTime,
+        until: this.visualTime + 0.78,
+      };
+      this.boardView.cameraPunch = Math.max(this.boardView.cameraPunch, 0.06 + result.merges.length * 0.025);
+      this.boardView.cameraShake = Math.max(this.boardView.cameraShake, 0.018 + result.merges.length * 0.012);
+    }
+
     this.inputLocked = true;
-    this.platform.haptics.trigger(result.merges.length > 0 ? 'medium' : 'light');
+    this.platform.haptics.trigger(result.merges.length > 1 ? 'light' : result.merges.length === 1 ? 'medium' : 'light');
     await result.finished;
     if (this.disposed) return true;
     this.inputLocked = false;
     this.persistRecord();
-    this.refreshHud();
+
+    const cleared = result.merges.some((merge) => merge.value >= MAX_PIECE_VALUE);
+    if (cleared) this.finishSolo('cleared');
+    else if (result.gameOver) this.finishSolo('stuck');
+    else {
+      if (result.merges.length > 1) this.platform.haptics.trigger('success');
+      this.applySoloAtmosphere();
+      this.refreshHud();
+    }
     return true;
   }
 
   async useRandomClear(): Promise<boolean> {
-    if (this.mode !== 'solo' || this.disposed || this.inputLocked || this.skillCharges <= 0) {
+    if (this.mode !== 'solo' || this.disposed || this.inputLocked || this.soloResult || this.skillCharges <= 0) {
       this.platform.haptics.trigger('light');
       return false;
     }
-    const result = this.controller.clearRandom(2);
+    const result = this.controller.clearObstacles(2);
     if (result.removed.length === 0) {
       this.platform.haptics.trigger('light');
       return false;
@@ -273,6 +308,7 @@ export class DouyinSoloScene {
     if (!this.disposed) {
       this.inputLocked = false;
       this.persistRecord();
+      this.applySoloAtmosphere();
       this.refreshHud();
     }
     return true;
@@ -370,6 +406,16 @@ export class DouyinSoloScene {
       this.renderer.render(this.scene, this.camera);
     }
 
+    if (this.mode === 'solo' && this.mergeBurst) {
+      if (this.visualTime >= this.mergeBurst.until) {
+        this.mergeBurst = null;
+        this.refreshHud();
+      } else if (this.visualTime >= this.nextDynamicHudAt) {
+        this.nextDynamicHudAt = this.visualTime + 1 / 24;
+        this.refreshHud();
+      }
+    }
+
     if (this.notice && this.visualTime >= this.notice.until) {
       this.notice = null;
       this.refreshHud();
@@ -403,9 +449,9 @@ export class DouyinSoloScene {
 
   private handlePresentationFeedback(event: PresentationEvent): void {
     this.audio.playEvent(event);
-    if (event.type === 'merge') {
-      this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
-    }
+    if (event.type !== 'merge') return;
+    if (this.mode === 'solo' && this.mergeBurst && this.mergeBurst.count > 1) return;
+    this.platform.haptics.trigger(event.value >= 512 ? 'success' : 'medium');
   }
 
   private startSolo(): void {
@@ -414,6 +460,9 @@ export class DouyinSoloScene {
     this.platform.storage.removeItem('doublefight-next-solo-bonus');
     this.skillCharges = 3 + bonus;
     this.rewardedSkillClaims = 0;
+    this.soloResult = null;
+    this.soloStartedAt = null;
+    this.mergeBurst = null;
     this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
@@ -425,8 +474,72 @@ export class DouyinSoloScene {
     this.controller.reset();
     this.configureCamera();
     this.applyThemeLook();
+    this.applySoloAtmosphere();
     this.platform.haptics.trigger('medium');
     this.refreshHud();
+  }
+
+  private finishSolo(kind: SoloResultState['kind']): void {
+    if (this.mode !== 'solo' || this.soloResult) return;
+    const elapsedMs = this.soloStartedAt === null
+      ? 0
+      : Math.max(1, Math.round((this.visualTime - this.soloStartedAt) * 1000));
+    this.soloResult = {
+      kind,
+      score: this.score,
+      highest: this.highest,
+      elapsedMs,
+    };
+    this.inputLocked = false;
+    this.mergeBurst = null;
+    this.persistRecord(true);
+    this.applySoloAtmosphere();
+    if (kind === 'cleared') {
+      this.audio.victory();
+      this.platform.haptics.trigger('success');
+    } else {
+      this.platform.haptics.trigger('medium');
+    }
+    this.refreshHud();
+  }
+
+  private applySoloAtmosphere(): void {
+    if (this.mode !== 'solo') {
+      this.stageGlow.intensity = 0;
+      this.dangerGlow.intensity = 0;
+      return;
+    }
+
+    const presentation = this.boardView.presentation;
+    const tier = pieceTier(this.highest);
+    const progress = Math.max(0, Math.min(1, (tier - 1) / 10));
+    const empty = this.controller.board.emptyCells().length;
+    const danger = empty <= 1 ? 1 : empty <= 3 ? 0.55 : 0;
+    const sky = new THREE.Color(presentation.sky);
+    const fog = new THREE.Color(presentation.fog);
+    const stageTint = new THREE.Color(this.currentTheme === 'palace' ? 0xe8a29d : 0x8fb6c8);
+    const finalTint = new THREE.Color(this.currentTheme === 'palace' ? 0xc96977 : 0x657f9c);
+    const dangerTint = new THREE.Color(0x6d3034);
+
+    sky.lerp(stageTint, 0.05 + progress * 0.18);
+    fog.lerp(stageTint, 0.04 + progress * 0.13);
+    if (progress > 0.7) {
+      const finale = (progress - 0.7) / 0.3;
+      sky.lerp(finalTint, finale * 0.22);
+      fog.lerp(finalTint, finale * 0.16);
+    }
+    if (danger > 0) {
+      sky.lerp(dangerTint, danger * 0.11);
+      fog.lerp(dangerTint, danger * 0.09);
+    }
+
+    const distance = this.cameraHome.length() || 24;
+    this.scene.background = sky;
+    this.scene.fog = new THREE.Fog(fog, distance + 7 - danger * 1.5, distance + 28 - danger * 4.5);
+    this.renderer.toneMappingExposure = presentation.exposure + progress * 0.07 - danger * 0.035;
+    this.stageGlow.color.set(this.currentTheme === 'palace' ? 0xffc16c : 0x78d7ff);
+    this.stageGlow.intensity = 0.14 + progress * 0.82;
+    this.dangerGlow.intensity = danger * 0.82;
   }
 
   private openOnline(): void {
@@ -461,6 +574,9 @@ export class DouyinSoloScene {
     this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
+    this.soloResult = null;
+    this.soloStartedAt = null;
+    this.mergeBurst = null;
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
     if (showInterstitial) void this.commercial.maybeShowInterstitial();
     this.inputLocked = false;
@@ -580,6 +696,20 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const hudTop = this.hudTop();
     const safeBottom = Math.max(14, info.safeArea.bottom + 10);
+
+    if (this.soloResult) {
+      const actions = this.soloResultActionRects(info.width, info.height);
+      if (this.hit(x, y, actions.primary)) {
+        this.flashTap(actions.primary);
+        this.startSolo();
+        return;
+      }
+      if (this.hit(x, y, actions.home)) {
+        this.flashTap(actions.home);
+        this.showHome();
+      }
+      return;
+    }
 
     if (x >= 16 && x <= 62 && y >= hudTop + 6 && y <= hudTop + 54) {
       this.showHome();
@@ -785,8 +915,8 @@ export class DouyinSoloScene {
       ).then(result => {
         if (this.disposed || !result.synced || (result.discoveryAmount <= 0 && result.taskAmount <= 0)) return;
         const rewards: string[] = [];
-        if (result.discoveryAmount > 0) rewards.push(`发现奖励 +${result.discoveryAmount} S`);
-        if (result.taskAmount > 0) rewards.push(`今日 Solo +${result.taskAmount} S`);
+        if (result.discoveryAmount > 0) rewards.push(`发现奖励 +${result.discoveryAmount} S币`);
+        if (result.taskAmount > 0) rewards.push(`今日单机 +${result.taskAmount} S币`);
         const rewardText = rewards.join(' · ');
         if (this.notice && this.notice.until > this.visualTime && !this.notice.text.includes(rewardText)) {
           this.notice = { text: `${this.notice.text} · ${rewardText}`, until: Math.max(this.notice.until, this.visualTime + 1.8) };
@@ -923,6 +1053,10 @@ export class DouyinSoloScene {
     const distance = this.cameraHome.length() || 24;
     this.scene.fog = new THREE.Fog(presentation.fog, distance + 8, distance + 28);
     this.renderer.toneMappingExposure = presentation.exposure;
+    if (this.mode !== 'solo') {
+      this.stageGlow.intensity = 0;
+      this.dangerGlow.intensity = 0;
+    }
   }
 
   private configureLighting(): void {
@@ -950,6 +1084,10 @@ export class DouyinSoloScene {
     const boardFill = new THREE.PointLight(0xffc65a, 0.5, 18, 2);
     boardFill.position.set(0, 7.5, 2.5);
     this.scene.add(boardFill);
+
+    this.stageGlow.position.set(0, 6.4, 2.8);
+    this.dangerGlow.position.set(0, 4.2, 3.8);
+    this.scene.add(this.stageGlow, this.dangerGlow);
   }
 
   private refreshHud(): void {
@@ -971,7 +1109,7 @@ export class DouyinSoloScene {
     else this.drawOnlineHud(ctx, width, height);
 
     if (this.tapFlash) this.drawTapFlash(ctx, this.tapFlash.rect);
-    if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
+    if (this.notice && !this.soloResult) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
     if (this.settingsOpen) this.drawSettings(ctx, width, height);
@@ -980,69 +1118,45 @@ export class DouyinSoloScene {
   }
 
   private drawHomeHud(ctx: CanvasRenderingContext2D, width: number, height: number, safeBottomInset: number): void {
-    const info = this.platform.getSystemInfo();
     const titleTop = this.hudTop();
     const layout = this.homeLayout(width, height, safeBottomInset);
     const themeMeta = THEMES[this.currentTheme];
-    const best = Number(this.platform.storage.getItem(`doublefight-best-${this.currentTheme}`) ?? 0);
     const highest = Number(this.platform.storage.getItem(`doublefight-highest-${this.currentTheme}`) ?? 2);
+    const tier = Math.min(11, pieceTier(highest));
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
 
-    if (this.auth.current.status === 'authenticated') {
-      ctx.fillStyle = 'rgba(233,244,216,.78)';
-      const accountLabel = `● ${this.auth.current.player.displayName}`;
-      fitText(ctx, accountLabel, Math.max(120, width - 150), 10, 700, 8.5);
-      ctx.fillText(accountLabel, width / 2, titleTop + 68);
-    }
-
-    const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
+    const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 44);
     brandGradient.addColorStop(0, '#fff6d7');
     brandGradient.addColorStop(1, '#efc969');
     ctx.fillStyle = brandGradient;
-    ctx.shadowColor = 'rgba(13, 24, 31, .55)';
-    ctx.shadowBlur = 16;
-    ctx.font = '900 32px sans-serif';
+    ctx.shadowColor = 'rgba(13, 24, 31, .48)';
+    ctx.shadowBlur = 14;
+    ctx.font = '900 30px sans-serif';
     ctx.fillText('双数对决', width / 2, titleTop + 25);
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(236,244,242,.78)';
-    ctx.font = '750 10px sans-serif';
-    ctx.fillText('DOUBLE FIGHT · 3D 2048', width / 2, titleTop + 50);
 
     drawUiIcon(ctx, 'settings', 34, titleTop + 24, 18, '#ffe9ab');
-    ctx.textAlign = 'center';
 
-    const metaY = Math.max(titleTop + 72, height * 0.56);
-    ctx.fillStyle = 'rgba(12, 28, 36, .72)';
-    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 74, 22);
+    const metaY = Math.max(titleTop + 82, layout.theme.y - 76);
+    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 62, 20);
+    ctx.fillStyle = 'rgba(12, 28, 36, .70)';
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255,226,151,.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
 
     ctx.fillStyle = '#ffe6a1';
     ctx.font = '900 18px sans-serif';
-    ctx.fillText(themeMeta.label, width / 2, metaY + 22);
-    ctx.fillStyle = '#c9d9d8';
-    ctx.font = '700 9px sans-serif';
-    ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
-    ctx.fillStyle = '#f6e9c5';
-    ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 · ${pieceName(this.currentTheme, highest)}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
+    ctx.fillText(themeMeta.label, width / 2, metaY + 21);
+    ctx.fillStyle = '#d7e5df';
+    ctx.font = '750 10px sans-serif';
+    ctx.fillText(`已到达 · ${pieceName(this.currentTheme, highest)} · ${tier}/11`, width / 2, metaY + 44);
 
-    this.drawPillButton(ctx, layout.theme, '切换世界', 'secondary', 'world');
-    this.drawPillButton(ctx, layout.solo, '进入世界', 'primary', 'solo');
+    this.drawPillButton(ctx, layout.theme, '选择世界', 'secondary', 'world');
+    this.drawPillButton(ctx, layout.solo, '开始挑战', 'primary', 'solo');
     this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
-    this.drawPillButton(ctx, layout.rank, '排行榜', 'secondary', 'rank');
-    this.drawPillButton(
-      ctx,
-      layout.daily,
-      this.sidebarRewardReady() ? '领取福利' : '侧边栏福利',
-      this.sidebarRewardReady() ? 'primary' : 'secondary',
-      'gift',
-    );
-
-    ctx.fillStyle = 'rgba(255,255,255,.62)';
-    ctx.font = '650 10px sans-serif';
-    ctx.fillText('左右滑动切换世界', width / 2, layout.solo.y - 16);
   }
 
   private drawSoloHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1050,56 +1164,138 @@ export class DouyinSoloScene {
     const hudTop = this.hudTop();
     const safeBottom = Math.max(14, info.safeArea.bottom + 10);
     const edge = 16;
+    const tier = Math.min(11, pieceTier(this.highest));
+    const currentName = pieceName(this.currentTheme, this.highest);
 
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,.28)';
+    ctx.shadowColor = 'rgba(0,0,0,.24)';
     ctx.shadowBlur = 10;
-    this.roundedRect(ctx, edge, hudTop, width - edge * 2, 58, 18);
-    ctx.fillStyle = 'rgba(14, 34, 43, .80)';
+    this.roundedRect(ctx, edge, hudTop, width - edge * 2, 64, 18);
+    ctx.fillStyle = 'rgba(14, 34, 43, .82)';
     ctx.fill();
-
     ctx.shadowBlur = 0;
-    drawUiIcon(ctx, 'back', edge + 16, hudTop + 29, 18, '#ffe9ab');
-    ctx.textAlign = 'left';
 
-    ctx.fillStyle = '#fff1c9';
-    ctx.font = '900 18px sans-serif';
-    ctx.fillText('双数对决', edge + 44, hudTop + 22);
-    ctx.fillStyle = '#bcd0d1';
-    ctx.font = '700 9px sans-serif';
-    ctx.fillText('SOLO', edge + 44, hudTop + 42);
+    drawUiIcon(ctx, 'back', edge + 17, hudTop + 32, 18, '#ffe9ab');
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#a9c3c3';
+    ctx.font = '750 9px sans-serif';
+    ctx.fillText(THEMES[this.currentTheme].label, width / 2, hudTop + 18);
+    ctx.fillStyle = '#fff0bd';
+    fitText(ctx, `${currentName} · ${tier}/11`, Math.max(104, width - 188), 14, 900, 10);
+    ctx.fillText(`${currentName} · ${tier}/11`, width / 2, hudTop + 37);
+
+    const progressW = Math.min(118, width * .30);
+    const progressX = width / 2 - progressW / 2;
+    this.roundedRect(ctx, progressX, hudTop + 53, progressW, 4, 2);
+    ctx.fillStyle = 'rgba(255,255,255,.14)';
+    ctx.fill();
+    this.roundedRect(ctx, progressX, hudTop + 53, Math.max(4, progressW * tier / 11), 4, 2);
+    ctx.fillStyle = '#eacb70';
+    ctx.fill();
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#ffe58a';
-    ctx.font = '900 25px sans-serif';
-    ctx.fillText(this.score.toLocaleString('zh-CN'), width - edge - 16, hudTop + 22);
-    ctx.fillStyle = '#d7e7e8';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText(`最高 ${this.highest}`, width - edge - 16, hudTop + 43);
+    ctx.font = '900 20px sans-serif';
+    ctx.fillText(this.score.toLocaleString('zh-CN'), width - edge - 12, hudTop + 27);
+    ctx.fillStyle = '#a9c0c1';
+    ctx.font = '700 9px sans-serif';
+    ctx.fillText('得分', width - edge - 12, hudTop + 47);
 
     const skill = this.soloSkillRect(width, height, safeBottom);
     const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
-
     this.roundedRect(ctx, skill.x - 8, skill.y - 7, skill.width + 16, skill.height + 14, 22);
-    ctx.fillStyle = 'rgba(6,24,31,.78)';
+    ctx.fillStyle = 'rgba(6,24,31,.74)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,226,151,.18)';
+    ctx.strokeStyle = 'rgba(255,226,151,.16)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     this.drawSkillButton(
       ctx,
       skill,
-      canReward ? '补充清块' : '清块',
-      canReward ? '完整观看广告 · +1 次' : `剩余 ${this.skillCharges} 次 · 随机清除 2 格`,
+      canReward ? '补充清障' : '清障',
+      canReward ? '看完广告 · 补 1 次' : `清除 2 枚最低阶 · ${this.skillCharges} 次`,
       this.skillCharges > 0 || canReward,
       'skill-clear',
     );
 
-    ctx.fillStyle = 'rgba(255,255,255,.72)';
-    ctx.font = '700 11px sans-serif';
+    if (this.mergeBurst && this.mergeBurst.count > 1) this.drawMergeBurst(ctx, width, height, this.mergeBurst);
+    if (this.soloResult) this.drawSoloResult(ctx, width, height, this.soloResult);
+  }
+
+  private drawMergeBurst(ctx: CanvasRenderingContext2D, width: number, height: number, burst: MergeBurst): void {
+    const duration = Math.max(.01, burst.until - burst.startedAt);
+    const p = Math.max(0, Math.min(1, (this.visualTime - burst.startedAt) / duration));
+    const alpha = Math.sin(Math.PI * p);
+    const tierBoost = Math.min(1, Math.max(0, (pieceTier(burst.maxValue) - 1) / 10));
+    const y = height * .43 - Math.sin(Math.PI * p) * 12;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 18);
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = tierBoost > .65 ? '#ffd66e' : '#79e0d6';
+    ctx.shadowBlur = 16 + tierBoost * 14;
+    ctx.fillStyle = tierBoost > .65 ? '#ffe39a' : '#d9fff8';
+    ctx.font = `900 ${Math.round(24 + burst.count * 3 + tierBoost * 5)}px sans-serif`;
+    ctx.fillText(`×${burst.count}`, width / 2, y);
+    ctx.restore();
+  }
+
+  private drawSoloResult(ctx: CanvasRenderingContext2D, width: number, height: number, result: SoloResultState): void {
+    ctx.fillStyle = 'rgba(3,10,14,.72)';
+    ctx.fillRect(0, 0, width, height);
+
+    const panelW = Math.min(310, width - 30);
+    const panelH = 326;
+    const x = (width - panelW) / 2;
+    const y = Math.max(this.hudTop() + 86, Math.min(height * .29, height - panelH - 18));
+    this.roundedRect(ctx, x, y, panelW, panelH, 28);
+    ctx.fillStyle = 'rgba(12,31,39,.98)';
+    ctx.fill();
+    ctx.strokeStyle = result.kind === 'cleared' ? 'rgba(245,207,104,.72)' : 'rgba(190,205,205,.32)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    const tier = Math.min(11, pieceTier(result.highest));
+    const name = pieceName(this.currentTheme, result.highest);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = result.kind === 'cleared' ? '#ffe39a' : '#f2eee1';
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText(result.kind === 'cleared' ? '登顶成功' : '棋盘已满', width / 2, y + 43);
+
+    ctx.fillStyle = '#d8e6e2';
+    ctx.font = '850 13px sans-serif';
+    ctx.fillText(
+      result.kind === 'cleared' ? `${pieceName(this.currentTheme, MAX_PIECE_VALUE)} · 11/11` : `止步 · ${name} · ${tier}/11`,
+      width / 2,
+      y + 78,
+    );
+
+    ctx.fillStyle = '#9fb4b5';
+    ctx.font = '700 10px sans-serif';
+    ctx.fillText('得分', width / 2, y + 112);
+    ctx.fillStyle = '#fff0bd';
+    ctx.font = '900 28px sans-serif';
+    ctx.fillText(result.score.toLocaleString('zh-CN'), width / 2, y + 139);
+
+    if (result.elapsedMs > 0) {
+      ctx.fillStyle = '#a9bcbd';
+      ctx.font = '700 10px sans-serif';
+      ctx.fillText(`用时 ${this.formatSoloTime(result.elapsedMs)}`, width / 2, y + 168);
+    }
+
+    const actions = this.soloResultActionRects(width, height);
+    this.drawPillButton(ctx, actions.primary, '再来一局', 'primary', 'solo');
+    this.drawPillButton(ctx, actions.home, '返回首页', 'secondary', 'back');
+  }
+
+  private formatSoloTime(ms: number): string {
+    const total = Math.max(0, ms);
+    const minutes = Math.floor(total / 60_000);
+    const seconds = (total % 60_000) / 1000;
+    return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1384,7 +1580,7 @@ export class DouyinSoloScene {
     ctx.fillText('设置', width / 2, y + 38);
     ctx.fillStyle = '#aebfc1';
     ctx.font = '650 9px sans-serif';
-    ctx.fillText('DOUBLE FIGHT', width / 2, y + 58);
+    ctx.fillText('声音和震动', width / 2, y + 58);
 
     const sound = { x: x + 18, y: y + 72, width: panelWidth - 36, height: 44 };
     const haptics = { x: x + 18, y: y + 126, width: panelWidth - 36, height: 44 };
@@ -1393,7 +1589,7 @@ export class DouyinSoloScene {
 
     ctx.fillStyle = '#9db0b2';
     ctx.font = '650 9px sans-serif';
-    ctx.fillText('音效遵循系统静音设置', width / 2, y + 184);
+    ctx.fillText('可随时修改', width / 2, y + 184);
     this.drawPillButton(ctx, { x: x + 42, y: y + 196, width: panelWidth - 84, height: 42 }, '完成', 'primary');
   }
 
@@ -1431,15 +1627,15 @@ export class DouyinSoloScene {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffe7a0';
     ctx.font = '900 25px sans-serif';
-    ctx.fillText('欢迎来到双数对决', width / 2, y + 48);
+    ctx.fillText('怎么玩？', width / 2, y + 48);
     ctx.fillStyle = '#d5e1df';
     ctx.font = '700 11px sans-serif';
-    ctx.fillText('2048 × 技能 × 实时对决', width / 2, y + 76);
+    ctx.fillText(`目标：${pieceName(this.currentTheme, MAX_PIECE_VALUE)} · 11/11`, width / 2, y + 76);
 
     const steps = [
-      ['01', '滑动棋盘', '相同数字合成，冲击 2048'],
-      ['02', '释放技能', '清块、护盾、石化改变局势'],
-      ['03', '挑战好友', '快速匹配或创建 6 位好友房'],
+      ['01', '滑动合成', '相同棋子会合成更高阶'],
+      ['02', '一路晋升', '达到 11/11 就完成挑战'],
+      ['03', '卡住就清障', '清除两枚最低阶棋子'],
     ] as const;
     steps.forEach((step, index) => {
       const rowY = y + 112 + index * 58;
@@ -1458,7 +1654,7 @@ export class DouyinSoloScene {
     this.drawPillButton(
       ctx,
       { x: 46, y: y + 260, width: width - 92, height: 48 },
-      '开始游戏',
+      '开始挑战',
       'primary',
     );
   }
@@ -1647,17 +1843,18 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const metrics = uiMetrics(width, height, { ...info.safeArea, bottom: safeBottomInset }, info.menuButton?.bottom ?? 0);
     const primaryWidth = Math.min(metrics.compact ? 244 : 268, width - metrics.edge * 2);
-    const secondaryWidth = Math.min(metrics.compact ? 226 : 246, width - metrics.edge * 2 - 16);
-    const blockHeight = metrics.compact ? 196 : 218;
-    const soloY = height - metrics.bottom - blockHeight;
-    const utilityWidth = Math.min(118, (width - metrics.edge * 2 - 10) / 2);
+    const secondaryWidth = Math.min(metrics.compact ? 204 : 224, width - metrics.edge * 2 - 28);
+    const utilityY = height - metrics.bottom - 48;
+    const onlineY = utilityY - 54;
+    const soloY = onlineY - 62;
+    const utilityAnchorWidth = Math.min(90, Math.max(72, width * .23));
     return {
       settings: { x: metrics.edge - 2, y: metrics.top + 4, width: metrics.minTouch, height: metrics.minTouch },
-      theme: { x: width / 2 - 79, y: soloY - 56, width: 158, height: 38 },
+      theme: { x: width / 2 - 76, y: soloY - 50, width: 152, height: 36 },
       solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: metrics.compact ? 48 : 52 },
-      online: { x: width / 2 - secondaryWidth / 2, y: soloY + 61, width: secondaryWidth, height: 46 },
-      rank: { x: width / 2 - utilityWidth - 5, y: soloY + 118, width: utilityWidth, height: 42 },
-      daily: { x: width / 2 + 5, y: soloY + 118, width: utilityWidth, height: 42 },
+      online: { x: width / 2 - secondaryWidth / 2, y: onlineY, width: secondaryWidth, height: 40 },
+      rank: { x: metrics.edge + 18, y: utilityY, width: utilityAnchorWidth, height: 48 },
+      daily: { x: width - metrics.edge - 18 - utilityAnchorWidth, y: utilityY, width: utilityAnchorWidth, height: 48 },
     };
   }
 
@@ -1690,6 +1887,17 @@ export class DouyinSoloScene {
       y: height - safeBottom - 66,
       width: skillWidth,
       height: 54,
+    };
+  }
+
+  private soloResultActionRects(width: number, height: number): { primary: Rect; home: Rect } {
+    const panelW = Math.min(310, width - 30);
+    const panelH = 326;
+    const x = (width - panelW) / 2;
+    const y = Math.max(this.hudTop() + 86, Math.min(height * .29, height - panelH - 18));
+    return {
+      primary: { x: x + 28, y: y + 205, width: panelW - 56, height: 48 },
+      home: { x: x + 48, y: y + 263, width: panelW - 96, height: 40 },
     };
   }
 
