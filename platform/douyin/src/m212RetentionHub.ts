@@ -18,13 +18,17 @@ import { formatDuration, loadThemeMastery, loadWeeklySolo, recordWeeklySolo } fr
 import type { DouyinSocial } from './social';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import type { DouyinSoloScene } from './soloScene';
-import { drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
+import { drawDouyinAvatar, drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
-type HubScreen = 'themes' | 'collection' | 'daily' | 'rankings' | 'season' | null;
+type HubScreen = 'collection' | 'daily' | 'rankings' | 'season' | null;
 type SceneInternals = Record<string, any>;
 
-const TIER_LABELS = ['一阶', '二阶', '三阶', '四阶', '五阶', '六阶', '七阶', '八阶', '九阶', '十阶', '十一阶'] as const;
+const PAGE_BG = '#72BEDA';
+const PAGE_SURFACE = '#FFF0C9';
+const PAGE_SURFACE_ALT = '#E6E0C8';
+const PAGE_INK = '#17343C';
+const PAGE_MUTED = '#46636A';
 
 interface RetentionState {
   screen: HubScreen;
@@ -248,14 +252,7 @@ export function installM212RetentionHub(
 
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       const layout = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
-      if (layout?.theme && hit(x, y, layout.theme)) {
-        state.screen = 'themes';
-        state.collectionTheme = game.theme;
-        platform.haptics.trigger('light');
-        engagement.track('theme_center_open', { theme: game.theme });
-        scene.refreshHud();
-        return;
-      }
+
       const utility = homeUtilityLayout(info.width, layout);
       if (hit(x, y, utility.collection)) {
         state.screen = 'collection';
@@ -306,11 +303,10 @@ export function installM212RetentionHub(
       if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state, auth);
     }
 
-    if (state.screen === 'themes') drawThemeCenter(ctx, width, height, game, platform, state);
     if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
     if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
-    if (state.screen === 'season') drawSeasonLeaderboard(ctx, width, height, state, auth);
+    if (state.screen === 'season') drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
     if (state.coinBurst) drawCoinBurst(ctx, width, height, state.coinBurst, number(scene.visualTime));
 
     scene.uiTexture.needsUpdate = true;
@@ -378,37 +374,11 @@ function handleHubTap(
     return;
   }
 
-  if (state.screen === 'themes') {
-    const layout = themeCenterLayout(info.width, info.height);
-    if (hit(x, y, layout.close)) {
-      state.screen = null;
-      scene.refreshHud();
-      return;
-    }
-    const themes: ThemeId[] = ['kingdom', 'palace'];
-    for (let index = 0; index < themes.length; index += 1) {
-      if (!hit(x, y, layout.cards[index])) continue;
-      game.setTheme(themes[index]);
-      state.collectionTheme = themes[index];
-      platform.haptics.trigger('medium');
-      scene.refreshHud();
-      return;
-    }
-    if (hit(x, y, layout.collection)) {
-      state.screen = 'collection';
-      state.collectionTheme = game.theme;
-      engagement.track('collection_open', { theme: game.theme });
-      platform.haptics.trigger('light');
-      scene.refreshHud();
-      return;
-    }
-    return;
-  }
 
   if (state.screen === 'collection') {
     const layout = collectionLayout(info.width, info.height);
     if (hit(x, y, layout.close)) {
-      state.screen = 'themes';
+      state.screen = null;
       scene.refreshHud();
       return;
     }
@@ -693,10 +663,10 @@ function drawRankingCenter(
   const weekly = loadWeeklySolo(platform.storage);
   const rating = competitiveRating(auth);
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe5a0';
+  ctx.fillStyle = PAGE_INK;
   ctx.font = '900 24px sans-serif';
   ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
-  ctx.fillStyle = '#9db5b7';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText('你的记录与排行', width / 2, layout.panel.y + 62);
 
@@ -725,7 +695,7 @@ function drawRankingCenter(
     'pvp',
   );
 
-  ctx.fillStyle = '#73898b';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText('点击一项查看排行', width / 2, layout.panel.y + layout.panel.height - 22);
 }
@@ -736,6 +706,7 @@ function drawSeasonLeaderboard(
   height: number,
   state: RetentionState,
   auth: DouyinAuthClient,
+  platform: DouyinPlatform,
 ): void {
   const layout = seasonLeaderboardLayout(width, height);
   shade(ctx, width, height);
@@ -747,31 +718,31 @@ function drawSeasonLeaderboard(
     : 1000;
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe4a0';
+  ctx.fillStyle = PAGE_INK;
   ctx.font = '900 23px sans-serif';
   ctx.fillText('竞技赛季', width / 2, layout.panel.y + 36);
-  ctx.fillStyle = '#9fb6b8';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText(`${competitiveRankLabel(playerRating)} · 竞技分 ${playerRating}`, width / 2, layout.panel.y + 58);
 
   if (state.seasonLoading) {
-    ctx.fillStyle = '#d9e5e2';
+    ctx.fillStyle = PAGE_INK;
     ctx.font = '850 13px sans-serif';
     ctx.fillText('正在加载排行…', width / 2, layout.panel.y + 150);
   } else if (!state.seasonLeaderboard) {
-    ctx.fillStyle = '#9fb3b4';
+    ctx.fillStyle = PAGE_MUTED;
     ctx.font = '800 12px sans-serif';
     ctx.fillText('赛季榜暂时无法加载', width / 2, layout.panel.y + 145);
     drawPremiumButton(ctx, layout.refresh, '重试', { kind: 'secondary', icon: 'sync' });
   } else {
     const board = state.seasonLeaderboard;
     const end = formatShortDate(board.season.endsAt);
-    ctx.fillStyle = '#7fcfc8';
+    ctx.fillStyle = '#236B83';
     ctx.font = '800 10px sans-serif';
     ctx.fillText(`本赛季 ${end} 结束`, width / 2, layout.panel.y + 82);
 
     if (board.entries.length === 0) {
-      ctx.fillStyle = '#9fb3b4';
+      ctx.fillStyle = PAGE_MUTED;
       ctx.font = '800 12px sans-serif';
       ctx.fillText('本赛季还没有有效对局', width / 2, layout.panel.y + 150);
     } else {
@@ -792,87 +763,22 @@ function drawSeasonLeaderboard(
         ctx.fillStyle = index === 0 ? '#ffe083' : '#dce8e4';
         ctx.font = '900 11px sans-serif';
         ctx.fillText(index < 3 ? ['Ⅰ','Ⅱ','Ⅲ'][index] : String(entry.rank), row.x + 12, row.y + 17);
+        drawDouyinAvatar(ctx, platform, entry.avatarUrl, row.x + 43, row.y + 16.5, 24, entry.displayName, index < 3 ? '#8A5A13' : '#236B83');
         ctx.fillStyle = '#edf1eb';
         ctx.font = '800 10px sans-serif';
-        ctx.fillText(entry.displayName.slice(0, 10), row.x + 38, row.y + 17);
+        ctx.fillText(entry.displayName.slice(0, 10), row.x + 61, row.y + 17);
         ctx.textAlign = 'right';
         ctx.fillStyle = '#f0cf72';
         ctx.font = '900 10px sans-serif';
         ctx.fillText(String(entry.rating), row.x + row.width - 12, row.y + 15);
-        ctx.fillStyle = '#809a9b';
-        ctx.font = '700 8px sans-serif';
+        ctx.fillStyle = '#C8D8D7';
+        ctx.font = '800 8px sans-serif';
         ctx.fillText(`${entry.wins}胜 ${entry.losses}负 ${entry.draws}平`, row.x + row.width - 12, row.y + 27);
       });
     }
   }
 
   drawPremiumButton(ctx, layout.social, '抖音好友榜', { kind: 'secondary', icon: 'rank' });
-}
-
-function drawThemeCenter(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  game: DouyinSoloScene,
-  platform: DouyinPlatform,
-  state: RetentionState,
-): void {
-  const layout = themeCenterLayout(width, height);
-  shade(ctx, width, height);
-  panel(ctx, layout.panel);
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe5a0';
-  ctx.font = '900 24px sans-serif';
-  ctx.fillText('世界中心', width / 2, layout.panel.y + 38);
-  ctx.fillStyle = '#9db5b7';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText('选择一个世界', width / 2, layout.panel.y + 62);
-  closeGlyph(ctx, layout.close);
-
-  const themes: ThemeId[] = ['kingdom', 'palace'];
-  themes.forEach((theme, index) => {
-    const rect = layout.cards[index];
-    const active = theme === game.theme;
-    const mastery = loadThemeMastery(platform.storage, theme);
-    const best = Number(platform.storage.getItem(`doublefight-best-${theme}`) ?? 0);
-    round(ctx, rect.x, rect.y, rect.width, rect.height, 22);
-    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
-    gradient.addColorStop(0, active ? 'rgba(43,92,89,.98)' : 'rgba(20,48,58,.95)');
-    gradient.addColorStop(1, active ? 'rgba(66,65,39,.96)' : 'rgba(13,34,44,.95)');
-    ctx.fillStyle = gradient;
-    ctx.fill();
-    ctx.strokeStyle = active ? '#f2cf70' : 'rgba(225,237,233,.22)';
-    ctx.lineWidth = active ? 1.6 : 1;
-    ctx.stroke();
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff0bc';
-    ctx.font = '900 16px sans-serif';
-    ctx.fillText(THEMES[theme].label, rect.x + 18, rect.y + 25);
-    ctx.fillStyle = '#9fc3c0';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText(active ? '当前世界' : '点击切换', rect.x + 18, rect.y + 45);
-    ctx.fillStyle = '#d8e5df';
-    ctx.font = '800 11px sans-serif';
-    ctx.fillText(`图鉴 ${mastery.highestDiscoveredTier}/11`, rect.x + 18, rect.y + 73);
-    ctx.fillText(`最高分 ${best.toLocaleString('zh-CN')}`, rect.x + 18, rect.y + 94);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = mastery.bestAscensionMs ? '#f3d273' : '#809598';
-    ctx.font = '800 10px sans-serif';
-    ctx.fillText(
-      mastery.bestAscensionMs ? `最快 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶',
-      rect.x + rect.width - 16,
-      rect.y + 84,
-    );
-  });
-
-  pill(ctx, layout.collection, '打开棋子图鉴', true, 'collection');
-  ctx.fillStyle = '#758b8e';
-  ctx.font = '700 10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('左右滑动也可以切换世界', width / 2, layout.panel.y + layout.panel.height - 22);
-
 }
 
 function drawCollection(
@@ -888,10 +794,10 @@ function drawCollection(
   closeGlyph(ctx, layout.close);
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe5a0';
+  ctx.fillStyle = PAGE_INK;
   ctx.font = '900 23px sans-serif';
   ctx.fillText('棋子图鉴', width / 2, layout.panel.y + 36);
-  ctx.fillStyle = '#9cb4b6';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText('收集这个世界的 11 个阶位', width / 2, layout.panel.y + 58);
 
@@ -905,29 +811,29 @@ function drawCollection(
     const tier = index + 1;
     const unlocked = tier <= mastery.highestDiscoveredTier;
     round(ctx, rect.x, rect.y, rect.width, rect.height, 15);
-    ctx.fillStyle = unlocked ? 'rgba(24,61,67,.96)' : 'rgba(30,39,43,.76)';
+    ctx.fillStyle = unlocked ? '#DDECB8' : '#D8D2BF';
     ctx.fill();
-    ctx.strokeStyle = unlocked ? 'rgba(242,205,105,.42)' : 'rgba(140,155,157,.16)';
+    ctx.strokeStyle = PAGE_INK;
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.textAlign = 'left';
-    ctx.fillStyle = unlocked ? '#f3cf70' : '#66777a';
+    ctx.fillStyle = unlocked ? '#8A5A13' : PAGE_MUTED;
     ctx.font = '900 10px sans-serif';
     ctx.fillText(`${tier}/11`, rect.x + 11, rect.y + 15);
-    ctx.fillStyle = unlocked ? '#f2f0e7' : '#6c7b7e';
+    ctx.fillStyle = unlocked ? PAGE_INK : '#657076';
     ctx.font = '850 11px sans-serif';
     ctx.fillText(unlocked ? pieceName(state.collectionTheme, value) : '未发现', rect.x + 11, rect.y + 34);
     if (value === MAX_PIECE_VALUE) {
       ctx.textAlign = 'right';
-      ctx.fillStyle = unlocked ? '#ffe083' : '#59686a';
+      ctx.fillStyle = unlocked ? '#8A5A13' : PAGE_MUTED;
       ctx.font = '900 10px sans-serif';
       ctx.fillText('终阶', rect.x + rect.width - 10, rect.y + 16);
     }
   });
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#b7c8c8';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '750 10px sans-serif';
   ctx.fillText(
     `已发现 ${mastery.highestDiscoveredTier}/11 · ${THEMES[state.collectionTheme].label}`,
@@ -959,10 +865,10 @@ function drawDailyCenter(
   const sidebarReady = !sidebarClaimed && Boolean(scene.sidebarRewardReady?.());
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe4a0';
+  ctx.fillStyle = PAGE_INK;
   ctx.font = '900 23px sans-serif';
   ctx.fillText('今日福利', width / 2, layout.panel.y + 34);
-  ctx.fillStyle = '#9fb6b8';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText('登录和任务奖励', width / 2, layout.panel.y + 54);
 
@@ -972,8 +878,8 @@ function drawDailyCenter(
   ctx.fillStyle = '#ffe18a';
   ctx.font = '900 23px sans-serif';
   ctx.fillText(balance.toLocaleString('zh-CN'), layout.balance.x + 52, layout.balance.y + 25);
-  ctx.fillStyle = '#aebfc0';
-  ctx.font = '700 10px sans-serif';
+  ctx.fillStyle = '#D4E2E1';
+  ctx.font = '800 10px sans-serif';
   ctx.fillText(
     daily?.loginClaimed ? `连续 ${daily.streak} 天` : '登录后自动领取',
     layout.balance.x + 52,
@@ -982,16 +888,17 @@ function drawDailyCenter(
   ctx.textAlign = 'center';
 
   round(ctx, layout.progress.x, layout.progress.y, layout.progress.width, layout.progress.height, 17);
-  ctx.fillStyle = 'rgba(14,44,53,.94)';
+  ctx.fillStyle = PAGE_SURFACE_ALT;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(126,210,201,.28)';
+  ctx.strokeStyle = PAGE_INK;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#e9f0ed';
+  ctx.fillStyle = PAGE_INK;
   ctx.font = '900 12px sans-serif';
   ctx.fillText(`今日任务  ${taskCount}/3`, layout.progress.x + 14, layout.progress.y + 20);
-  ctx.fillStyle = '#9fc0be';
-  ctx.font = '750 10px sans-serif';
+  ctx.fillStyle = PAGE_MUTED;
+  ctx.font = '800 10px sans-serif';
   ctx.fillText(
     `单机 ${tasks.solo ? '✓' : '○'}   对战 ${tasks.pvp ? '✓' : '○'}   广告 ${tasks.ad ? '✓' : '○'}`,
     layout.progress.x + 14,
@@ -1047,7 +954,7 @@ function drawDailyCenter(
   }
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#748b8d';
+  ctx.fillStyle = PAGE_MUTED;
   ctx.font = '700 10px sans-serif';
   ctx.fillText('S币可用于解锁主题', width / 2, layout.panel.y + layout.panel.height - 16);
 }
@@ -1099,9 +1006,9 @@ function drawOnlinePolish(
     ctx.fillStyle = 'rgba(8,28,36,.82)';
     ctx.fill();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#b9d5d2';
-    ctx.font = '800 10px sans-serif';
-    ctx.fillText(`${competitiveRankLabel(rating)} · Rating ${rating}`, width / 2, scene.hudTop() + 80);
+    ctx.fillStyle = '#D8E8E5';
+    ctx.font = '850 10px sans-serif';
+    ctx.fillText(`${competitiveRankLabel(rating)} · 竞技分 ${rating}`, width / 2, scene.hudTop() + 80);
     snap.loadout.forEach((skillId: keyof typeof SKILL_DEFINITIONS, index: number) => {
       const rect = layout.skills[index] as Rect;
       const def = SKILL_DEFINITIONS[skillId];
@@ -1116,9 +1023,9 @@ function drawOnlinePolish(
       ctx.fillStyle = '#fff0b8';
       ctx.font = '900 10.5px sans-serif';
       ctx.fillText(def.shortLabel, rect.x + rect.width / 2 + 5, rect.y + 20);
-      ctx.fillStyle = '#94c9c4';
-      ctx.font = '750 9px sans-serif';
-      ctx.fillText(`${def.cost} 能量 · SLOT ${index + 1}`, rect.x + rect.width / 2, rect.y + 41);
+      ctx.fillStyle = '#C8DDDA';
+      ctx.font = '800 9px sans-serif';
+      ctx.fillText(`${def.cost} 能量 · 技能位 ${index + 1}`, rect.x + rect.width / 2, rect.y + 41);
     });
     return;
   }
@@ -1359,24 +1266,6 @@ function rankingCenterLayout(width: number, height: number) {
   };
 }
 
-function themeCenterLayout(width: number, height: number) {
-  const panelW = Math.min(330, width - 24);
-  const panelH = Math.min(540, height * 0.70);
-  const panel = { x: (width - panelW) / 2, y: height * 0.14, width: panelW, height: panelH };
-  const cardX = panel.x + 16;
-  const cardW = panel.width - 32;
-  const cardH = Math.min(116, (panel.height - 190) / 2);
-  return {
-    panel,
-    close: { x: panel.x + panel.width - 42, y: panel.y + 14, width: 28, height: 28 },
-    cards: [
-      { x: cardX, y: panel.y + 84, width: cardW, height: cardH },
-      { x: cardX, y: panel.y + 94 + cardH, width: cardW, height: cardH },
-    ] as Rect[],
-    collection: { x: panel.x + 46, y: panel.y + panel.height - 72, width: panel.width - 92, height: 44 },
-  };
-}
-
 function collectionLayout(width: number, height: number) {
   const panelW = Math.min(338, width - 18);
   const panelH = Math.min(610, height * 0.78);
@@ -1460,37 +1349,36 @@ function actionCard(
   emphasized: boolean,
   icon?: UiIcon,
 ): void {
-  drawPremiumPanel(ctx, rect, emphasized);
+  round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
+  ctx.fillStyle = emphasized ? '#FFD66F' : PAGE_SURFACE;
+  ctx.fill();
+  ctx.strokeStyle = PAGE_INK;
+  ctx.lineWidth = emphasized ? 2 : 1.5;
+  ctx.stroke();
   const iconSpace = icon ? 40 : 0;
   if (icon) {
-    drawUiIcon(
-      ctx,
-      icon,
-      rect.x + 21,
-      rect.y + rect.height / 2,
-      Math.min(21, rect.height * .38),
-      emphasized ? '#ffe08a' : '#b9d4d1',
-    );
+    drawUiIcon(ctx, icon, rect.x + 21, rect.y + rect.height / 2, Math.min(21, rect.height * .38), PAGE_INK);
   }
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = emphasized ? '#fff0b8' : '#e4ece9';
+  ctx.fillStyle = PAGE_INK;
   fitText(ctx, title, rect.width - 30 - iconSpace, 13, 900, 9.5);
   ctx.fillText(title, rect.x + 16 + iconSpace, rect.y + rect.height * .35);
-  ctx.fillStyle = '#9db3b5';
-  fitText(ctx, subtitle, rect.width - 30 - iconSpace, 10, 700, 8);
+  ctx.fillStyle = PAGE_MUTED;
+  fitText(ctx, subtitle, rect.width - 30 - iconSpace, 10, 800, 8);
   ctx.fillText(subtitle, rect.x + 16 + iconSpace, rect.y + rect.height * .69);
 }
 
 function tab(ctx: CanvasRenderingContext2D, rect: Rect, label: string, active: boolean): void {
   round(ctx, rect.x, rect.y, rect.width, rect.height, 16);
-  ctx.fillStyle = active ? 'rgba(43,91,88,.96)' : 'rgba(25,45,53,.86)';
+  ctx.fillStyle = active ? '#FFD66F' : '#E6E0C8';
   ctx.fill();
-  ctx.strokeStyle = active ? '#f0cc6a' : 'rgba(180,201,201,.22)';
+  ctx.strokeStyle = PAGE_INK;
+  ctx.lineWidth = active ? 2 : 1.4;
   ctx.stroke();
   ctx.textAlign = 'center';
-  ctx.fillStyle = active ? '#fff0b8' : '#9aabad';
-  ctx.font = '850 10px sans-serif';
+  ctx.fillStyle = PAGE_INK;
+  ctx.font = '900 10px sans-serif';
   ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2);
 }
 
@@ -1499,16 +1387,21 @@ function pill(ctx: CanvasRenderingContext2D, rect: Rect, label: string, primary:
 }
 
 function shade(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  ctx.fillStyle = 'rgba(2,8,12,.76)';
+  ctx.fillStyle = PAGE_BG;
   ctx.fillRect(0, 0, width, height);
 }
 
 function panel(ctx: CanvasRenderingContext2D, rect: Rect): void {
-  drawPremiumPanel(ctx, rect, true);
+  round(ctx, rect.x, rect.y, rect.width, rect.height, 26);
+  ctx.fillStyle = PAGE_SURFACE;
+  ctx.fill();
+  ctx.strokeStyle = PAGE_INK;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 }
 
 function closeGlyph(ctx: CanvasRenderingContext2D, rect: Rect): void {
-  drawUiIcon(ctx, 'close', rect.x + rect.width / 2, rect.y + rect.height / 2, 17, '#b9cbca');
+  drawUiIcon(ctx, 'close', rect.x + rect.width / 2, rect.y + rect.height / 2, 17, PAGE_INK);
 }
 
 function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {

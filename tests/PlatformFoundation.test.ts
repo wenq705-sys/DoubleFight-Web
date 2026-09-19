@@ -192,3 +192,38 @@ describe('platform storage, lifecycle, haptics, system, and account', () => {
     expect(await new DouyinAccountBootstrap({ login: () => { throw Error('crash'); } }).bootstrap()).toMatchObject({ status: 'failed' });
   });
 });
+
+describe('Douyin profile permission adapter', () => {
+  it('prefers the official mini-game getUserInfo path and returns the real nickname/avatar', async () => {
+    const getUserInfo = vi.fn((options: Parameters<NonNullable<DouyinApi['getUserInfo']>>[0]) => {
+      expect(options.withCredentials).toBe(false);
+      options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/avatar.png' } });
+    });
+    const getUserProfile = vi.fn();
+    const account = new DouyinAccountBootstrap({ getUserInfo, getUserProfile });
+    await expect(account.requestProfile()).resolves.toEqual({
+      status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/avatar.png',
+    });
+    expect(getUserInfo).toHaveBeenCalledOnce();
+    expect(getUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to getUserProfile on hosts where the mini-game API is unavailable', async () => {
+    const getUserProfile = vi.fn((options: Parameters<NonNullable<DouyinApi['getUserProfile']>>[0]) => {
+      options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/fallback.png' } });
+    });
+    const account = new DouyinAccountBootstrap({ getUserProfile });
+    await expect(account.requestProfile()).resolves.toMatchObject({
+      status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/fallback.png',
+    });
+    expect(getUserProfile).toHaveBeenCalledOnce();
+  });
+
+  it('maps user cancellation and unavailable hosts without throwing', async () => {
+    const cancelled = new DouyinAccountBootstrap({
+      getUserInfo: options => options.fail?.({ errMsg: 'getUserInfo:fail auth deny' }),
+    });
+    await expect(cancelled.requestProfile()).resolves.toMatchObject({ status: 'cancelled' });
+    await expect(new DouyinAccountBootstrap({}).requestProfile()).resolves.toMatchObject({ status: 'unavailable' });
+  });
+});

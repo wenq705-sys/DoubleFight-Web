@@ -23,6 +23,7 @@ export interface PublicPlayerSeason {
 export interface PublicPlayer {
   id: string;
   displayName: string;
+  avatarUrl?: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
   pvp: { wins: number; losses: number; draws: number; rating: number };
   rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
@@ -33,6 +34,7 @@ export interface PublicPlayer {
 export interface PvpLeaderboardEntry {
   rank: number;
   displayName: string;
+  avatarUrl?: string;
   rating: number;
   wins: number;
   losses: number;
@@ -173,6 +175,24 @@ export class DouyinAuthClient {
       // Transient failures keep the cached login result for one retry.
     }
     return this.state;
+  }
+
+  async bindDouyinProfile(): Promise<'updated' | 'cancelled' | 'failed' | 'unavailable'> {
+    if (!this.token || !this.platform.account.requestProfile) return 'unavailable';
+    const profile = await this.platform.account.requestProfile();
+    if (profile.status !== 'granted') return profile.status === 'cancelled' ? 'cancelled' : profile.status === 'unavailable' ? 'unavailable' : 'failed';
+    try {
+      const data = await this.call('POST', '/profile', {
+        displayName: profile.nickName,
+        ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+      });
+      if (!this.isPlayer(data.player)) return 'failed';
+      this.updatePlayer(data.player);
+      return 'updated';
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return 'failed';
+    }
   }
 
   async claimSidebar(): Promise<'granted' | 'duplicate' | 'unavailable'> {
@@ -321,6 +341,7 @@ export class DouyinAuthClient {
     return Boolean(value && typeof value === 'object'
       && typeof (value as PublicPlayer).id === 'string'
       && typeof (value as PublicPlayer).displayName === 'string'
+      && ((value as PublicPlayer).avatarUrl === undefined || typeof (value as PublicPlayer).avatarUrl === 'string')
       && typeof (value as PublicPlayer).solo?.bestKingdom === 'number'
       && typeof (value as PublicPlayer).solo?.highestKingdom === 'number'
       && typeof (value as PublicPlayer).solo?.bestPalace === 'number'
@@ -339,6 +360,7 @@ export class DouyinAuthClient {
       && candidate.entries.every(entry => entry
         && Number.isInteger(entry.rank)
         && typeof entry.displayName === 'string'
+        && (entry.avatarUrl === undefined || typeof entry.avatarUrl === 'string')
         && typeof entry.rating === 'number'
         && typeof entry.wins === 'number'
         && typeof entry.losses === 'number'

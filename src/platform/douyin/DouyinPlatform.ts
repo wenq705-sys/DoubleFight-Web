@@ -1,5 +1,5 @@
-import type { AccountBootstrap, AccountBootstrapResult, HapticsAdapter, LifecycleAdapter, Platform, StorageAdapter, SystemInfo } from '../types';
-import type { DouyinApi, DouyinCanvas } from '../../../platform/douyin/src/api';
+import type { AccountBootstrap, AccountBootstrapResult, AccountProfileResult, HapticsAdapter, LifecycleAdapter, Platform, StorageAdapter, SystemInfo } from '../types';
+import type { DouyinApi, DouyinCanvas, DouyinImage } from '../../../platform/douyin/src/api';
 import type { Direction } from '../../../shared/game/types';
 import { DouyinSwipeInput } from '../../../platform/douyin/src/touch';
 import { DouyinSocketTransport } from './DouyinSocketTransport';
@@ -49,8 +49,33 @@ export class DouyinLifecycleAdapter implements LifecycleAdapter {
 
 export class DouyinAccountBootstrap implements AccountBootstrap {
   private result: Promise<AccountBootstrapResult> | null = null;
-  constructor(private readonly api: Pick<DouyinApi, 'login'>) {}
+  constructor(private readonly api: Pick<DouyinApi, 'login' | 'getUserInfo' | 'getUserProfile'>) {}
   reset(): void { this.result = null; }
+  requestProfile(): Promise<AccountProfileResult> {
+    return new Promise(resolve => {
+      const success = (result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => {
+        const nickName = result.userInfo?.nickName?.trim();
+        const avatarUrl = result.userInfo?.avatarUrl?.trim();
+        if (!nickName) { resolve({ status: 'failed', error: 'profile missing nickname' }); return; }
+        resolve({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
+      };
+      const failure = (error: { errMsg?: string }) => {
+        const message = error.errMsg ?? 'Douyin user profile failed';
+        resolve({ status: /deny|cancel|auth deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+      };
+      try {
+        if (this.api.getUserInfo) {
+          this.api.getUserInfo({ withCredentials: false, success, fail: failure });
+          return;
+        }
+        if (this.api.getUserProfile) {
+          this.api.getUserProfile({ force: false, success, fail: failure });
+          return;
+        }
+        resolve({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
+      } catch (error) { resolve({ status: 'failed', error: String(error) }); }
+    });
+  }
   bootstrap(): Promise<AccountBootstrapResult> {
     if (this.result) return this.result;
     this.result = new Promise(resolve => {
@@ -114,6 +139,7 @@ export class DouyinPlatform implements Platform {
   }
 
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
+  createImage(): DouyinImage | null { try { return this.api.createImage?.() ?? null; } catch { return null; } }
   createSwipeInput(
     onDirection: (direction: Direction) => void,
     onTap?: (x: number, y: number) => void,

@@ -13,7 +13,7 @@ export interface AuthDependencies {
   log?: (event: Record<string, string | boolean>) => void;
 }
 
-const routes = new Set(['/auth/douyin', '/me', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/season/current', '/leaderboards/pvp']);
+const routes = new Set(['/auth/douyin', '/me', '/profile', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/season/current', '/leaderboards/pvp']);
 const audit = (event: Record<string, string | boolean>) => console.info(JSON.stringify({ area: 'account', ...event }));
 
 export function createAuthHandler(deps: AuthDependencies) {
@@ -66,6 +66,15 @@ export function createAuthHandler(deps: AuthDependencies) {
         json(response, 200, { player: publicPlayer(login.account, now()), dailyLogin: { granted: login.granted, amount: login.amount, streakAmount: login.streakAmount } }); return true;
       }
       if (path === '/themes') { json(response, 200, { themes: Object.entries(THEME_REGISTRY).map(([id, value]) => ({ id, ...value })), player: publicPlayer(account, now()) }); return true; }
+      if (path === '/profile') {
+        const body = await readBody(request);
+        const displayName = profileName(body.displayName);
+        const avatarUrl = profileAvatar(body.avatarUrl);
+        const updated = await deps.repository.updateProfile(account.id, displayName, avatarUrl, now());
+        log({ event: 'profile_updated', avatar: Boolean(updated.profile.avatarUrl) });
+        json(response, 200, { player: publicPlayer(updated, now()) });
+        return true;
+      }
 
       if (path === '/progress/solo') {
         const body = await readBody(request);
@@ -129,6 +138,24 @@ export function createAuthHandler(deps: AuthDependencies) {
 
 class RequestError extends Error {
   constructor(readonly status: number, readonly category: string) { super(category); }
+}
+
+function profileName(value: unknown): string {
+  if (typeof value !== 'string') throw new RequestError(400, 'invalid_profile');
+  const name = value.trim();
+  const length = Array.from(name).length;
+  if (length < 1 || length > 24 || /[\u0000-\u001f\u007f]/.test(name)) throw new RequestError(400, 'invalid_profile');
+  return name;
+}
+
+function profileAvatar(value: unknown): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || value.length > 2048) throw new RequestError(400, 'invalid_profile');
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') throw new Error('https required');
+    return url.toString();
+  } catch { throw new RequestError(400, 'invalid_profile'); }
 }
 
 function credential(value: unknown): string | undefined {

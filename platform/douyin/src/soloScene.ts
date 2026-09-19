@@ -104,6 +104,7 @@ export class DouyinSoloScene {
   private soloBaseStageGlow = 0;
   private stageMomentUntil = 0;
   private rescueMomentUntil = 0;
+  private homeSlide: { direction: -1 | 1; target: ThemeId; elapsed: number; switched: boolean } | null = null;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -216,7 +217,10 @@ export class DouyinSoloScene {
   get score(): number { return this.controller.board.score; }
   get highest(): number { return Math.max(2, ...this.controller.board.tiles().map(tile => tile.value)); }
 
-  refreshAccountState(): void { if (!this.disposed && this.mode === 'home') this.refreshHud(); }
+  refreshAccountState(): void {
+    this.online.setPlayerName(this.auth.current.status === 'authenticated' ? this.auth.current.player.displayName : undefined);
+    if (!this.disposed && this.mode === 'home') this.refreshHud();
+  }
 
   refreshSystemLayout(): void {
     if (this.disposed) return;
@@ -239,12 +243,7 @@ export class DouyinSoloScene {
 
   handleDirection(direction: Direction): void {
     if (this.mode === 'home') {
-      if (direction === 'left' || direction === 'right') {
-        this.setTheme(direction === 'left'
-          ? this.currentTheme === 'kingdom' ? 'palace' : 'kingdom'
-          : this.currentTheme === 'palace' ? 'kingdom' : 'palace');
-        this.platform.haptics.trigger('light');
-      }
+      if (direction === 'left' || direction === 'right') this.startHomeSlide(direction === 'left' ? -1 : 1);
       return;
     }
     if (this.mode === 'online') {
@@ -380,6 +379,7 @@ export class DouyinSoloScene {
     }
 
     this.updateHomeAmbient();
+    this.updateHomeSlide(delta);
     this.updateMomentLighting();
 
     if (duel) {
@@ -663,12 +663,6 @@ export class DouyinSoloScene {
       return;
     }
 
-    if (this.hit(x, y, layout.theme)) {
-      this.flashTap(layout.theme);
-      this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
-      this.platform.haptics.trigger('light');
-      return;
-    }
     if (this.hit(x, y, layout.solo)) { this.flashTap(layout.solo); this.startSolo(); return; }
     if (this.hit(x, y, layout.online)) { this.flashTap(layout.online); this.openOnline(); return; }
     if (this.hit(x, y, layout.rank)) {
@@ -1131,6 +1125,51 @@ export class DouyinSoloScene {
     });
   }
 
+  private startHomeSlide(direction: -1 | 1): void {
+    if (this.mode !== 'home' || this.homeSlide) return;
+    const target: ThemeId = this.currentTheme === 'kingdom' ? 'palace' : 'kingdom';
+    this.homeSlide = { direction, target, elapsed: 0, switched: false };
+    this.platform.haptics.trigger('light');
+  }
+
+  private updateHomeSlide(delta: number): void {
+    if (this.mode !== 'home') {
+      if (this.homeSlide) {
+        this.homeSlide = null;
+        this.boardView.root.position.x = 0;
+      }
+      return;
+    }
+    const slide = this.homeSlide;
+    if (!slide) return;
+
+    const half = 0.20;
+    const total = half * 2;
+    const travel = 5.8;
+    slide.elapsed += delta;
+    const ease = (t: number) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+
+    if (!slide.switched && slide.elapsed >= half) {
+      slide.switched = true;
+      this.setTheme(slide.target);
+      this.boardView.root.position.x = -slide.direction * travel;
+    }
+
+    if (!slide.switched) {
+      const p = ease(slide.elapsed / half);
+      this.boardView.root.position.x = slide.direction * travel * p;
+    } else {
+      const p = ease((slide.elapsed - half) / half);
+      this.boardView.root.position.x = -slide.direction * travel * (1 - p);
+    }
+
+    if (slide.elapsed >= total) {
+      this.boardView.root.position.x = 0;
+      this.homeSlide = null;
+      this.refreshHud();
+    }
+  }
+
   private updateHomeAmbient(): void {
     const visible = this.mode === 'home';
     this.homeAmbient.visible = visible;
@@ -1278,7 +1317,7 @@ export class DouyinSoloScene {
     ctx.fillText(themeMeta.label, width / 2 + 8, metaY + 18);
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = 'rgba(232,241,236,.86)';
+    ctx.fillStyle = '#F5F7F0';
     ctx.font = '800 10px sans-serif';
     ctx.fillText(`${pieceName(this.currentTheme, highest)} · ${tier}/11`, width / 2, metaY + 43);
 
@@ -1295,9 +1334,28 @@ export class DouyinSoloScene {
     ctx.stroke();
     ctx.restore();
 
-    this.drawPillButton(ctx, layout.theme, '选择世界', 'secondary', 'world');
+    this.drawWorldPager(ctx, width, metaY + 67);
     this.drawPillButton(ctx, layout.solo, '开始挑战', 'primary', 'solo');
     this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
+  }
+
+  private drawWorldPager(ctx: CanvasRenderingContext2D, width: number, y: number): void {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 20px sans-serif';
+    ctx.fillText('‹', width / 2 - 54, y);
+    ctx.fillText('›', width / 2 + 54, y);
+
+    const active = this.currentTheme === 'kingdom' ? 0 : 1;
+    for (let index = 0; index < 2; index += 1) {
+      ctx.beginPath();
+      ctx.arc(width / 2 + (index === 0 ? -8 : 8), y, index === active ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fillStyle = index === active ? '#17343C' : 'rgba(23,52,60,.32)';
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   private drawSoloHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1414,16 +1472,16 @@ export class DouyinSoloScene {
       y + 78,
     );
 
-    ctx.fillStyle = '#9fb4b5';
-    ctx.font = '700 10px sans-serif';
+    ctx.fillStyle = '#D6E4E3';
+    ctx.font = '800 10px sans-serif';
     ctx.fillText('得分', width / 2, y + 112);
     ctx.fillStyle = '#fff0bd';
     ctx.font = '900 28px sans-serif';
     ctx.fillText(result.score.toLocaleString('zh-CN'), width / 2, y + 139);
 
     if (result.elapsedMs > 0) {
-      ctx.fillStyle = '#a9bcbd';
-      ctx.font = '700 10px sans-serif';
+      ctx.fillStyle = '#D0DFDE';
+      ctx.font = '800 10px sans-serif';
       ctx.fillText(`用时 ${this.formatSoloTime(result.elapsedMs)}`, width / 2, y + 168);
     }
 
@@ -1630,14 +1688,14 @@ export class DouyinSoloScene {
     const resultOpponent = match.result?.players.find(player => player.playerId !== snap.state.playerId);
     const meScore = resultMe?.score ?? snap.me?.board.score ?? 0;
     const opponentScore = resultOpponent?.score ?? snap.opponent?.board.score ?? 0;
-    ctx.fillStyle = '#9fb6b8';
+    ctx.fillStyle = '#D6E4E3';
     ctx.font = '800 10px sans-serif';
     ctx.fillText(`${resultMe?.name ?? snap.me?.name ?? '我'}  VS  ${resultOpponent?.name ?? snap.opponent?.name ?? '对手'}`, width / 2, y + 69);
     ctx.fillStyle = '#f2f0e6';
     ctx.font = '900 24px sans-serif';
     ctx.fillText(`${meScore}   VS   ${opponentScore}`, width / 2, y + 92);
-    ctx.fillStyle = '#b9cacc';
-    ctx.font = '700 10px sans-serif';
+    ctx.fillStyle = '#D0DFDE';
+    ctx.font = '800 10px sans-serif';
     ctx.fillText(this.online.resultReason(), width / 2, y + 120);
     if (resultMe && resultOpponent) {
       const meHighest = pieceName(resultMe.theme, resultMe.highest);
@@ -1703,23 +1761,23 @@ export class DouyinSoloScene {
   }
 
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    ctx.fillStyle = 'rgba(4,10,15,.68)';
+    ctx.fillStyle = '#72BEDA';
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(300, width - 36);
     const x = (width - panelWidth) / 2;
     const y = height * 0.28;
     this.roundedRect(ctx, x, y, panelWidth, 256, 26);
-    ctx.fillStyle = 'rgba(14,31,39,.97)';
+    ctx.fillStyle = '#FFF0C9';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,226,151,.35)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff1ca';
+    ctx.fillStyle = '#17343C';
     ctx.font = '900 21px sans-serif';
     ctx.fillText('设置', width / 2, y + 38);
-    ctx.fillStyle = '#aebfc1';
+    ctx.fillStyle = '#46636A';
     ctx.font = '650 9px sans-serif';
     ctx.fillText('声音和震动', width / 2, y + 58);
 
@@ -1728,48 +1786,48 @@ export class DouyinSoloScene {
     this.drawSettingRow(ctx, sound, '声音', this.soundEnabled);
     this.drawSettingRow(ctx, haptics, '震动', this.hapticsEnabled);
 
-    ctx.fillStyle = '#9db0b2';
-    ctx.font = '650 9px sans-serif';
+    ctx.fillStyle = '#46636A';
+    ctx.font = '750 9px sans-serif';
     ctx.fillText('可随时修改', width / 2, y + 184);
     this.drawPillButton(ctx, { x: x + 42, y: y + 196, width: panelWidth - 84, height: 42 }, '完成', 'primary');
   }
 
   private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, enabled: boolean): void {
     this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 15);
-    ctx.fillStyle = 'rgba(27,52,61,.9)';
+    ctx.fillStyle = '#E6E0C8';
     ctx.fill();
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#eff3ec';
+    ctx.fillStyle = '#17343C';
     ctx.font = '800 13px sans-serif';
     ctx.fillText(label, rect.x + 16, rect.y + rect.height / 2);
     ctx.textAlign = 'right';
-    ctx.fillStyle = enabled ? '#8ff0c2' : '#97a7aa';
+    ctx.fillStyle = enabled ? '#176E55' : '#5E6C70';
     ctx.font = '850 11px sans-serif';
     ctx.fillText(enabled ? '开启' : '关闭', rect.x + rect.width - 16, rect.y + rect.height / 2);
   }
 
   private drawOnboarding(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    ctx.fillStyle = 'rgba(3,10,15,.60)';
+    ctx.fillStyle = '#72BEDA';
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(314, width - 30);
     const x = (width - panelWidth) / 2;
     const y = height * 0.34;
     const panelHeight = 330;
     this.roundedRect(ctx, x, y, panelWidth, panelHeight, 28);
-    const gradient = ctx.createLinearGradient(x, y, x + panelWidth, y + panelHeight);
-    gradient.addColorStop(0, 'rgba(14,42,50,.98)');
-    gradient.addColorStop(1, 'rgba(20,31,44,.98)');
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = '#FFF0C9';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(243,205,105,.5)';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffe7a0';
+    ctx.fillStyle = '#17343C';
     ctx.font = '900 25px sans-serif';
     ctx.fillText('怎么玩？', width / 2, y + 48);
-    ctx.fillStyle = '#d5e1df';
+    ctx.fillStyle = '#46636A';
     ctx.font = '700 11px sans-serif';
     ctx.fillText(`目标：${pieceName(this.currentTheme, MAX_PIECE_VALUE)} · 11/11`, width / 2, y + 76);
 
@@ -1781,13 +1839,13 @@ export class DouyinSoloScene {
     steps.forEach((step, index) => {
       const rowY = y + 112 + index * 58;
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#efc968';
+      ctx.fillStyle = '#9A6516';
       ctx.font = '900 10px sans-serif';
       ctx.fillText(step[0], x + 24, rowY);
-      ctx.fillStyle = '#f3f2e9';
+      ctx.fillStyle = '#17343C';
       ctx.font = '850 12px sans-serif';
       ctx.fillText(step[1], x + 54, rowY - 6);
-      ctx.fillStyle = '#9fb3b5';
+      ctx.fillStyle = '#46636A';
       ctx.font = '650 9px sans-serif';
       ctx.fillText(step[2], x + 54, rowY + 12);
     });
@@ -1873,7 +1931,7 @@ export class DouyinSoloScene {
     ctx.fillStyle = ready ? '#fff0b6' : '#aeb9ba';
     ctx.font = '900 10.5px sans-serif';
     ctx.fillText(label, rect.x + rect.width / 2 + (icon ? 6 : 0), rect.y + rect.height * .34);
-    ctx.fillStyle = ready ? '#8ee4db' : '#7f9093';
+    ctx.fillStyle = ready ? '#8ee4db' : '#B8C6C7';
     ctx.font = '750 8.8px sans-serif';
     ctx.fillText(meta, rect.x + rect.width / 2, rect.y + rect.height * .72);
   }
