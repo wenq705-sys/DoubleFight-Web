@@ -695,15 +695,10 @@ export class DouyinSoloScene {
 
   private handleSettingsTap(x: number, y: number): void {
     const info = this.platform.getSystemInfo();
-    const width = Math.min(300, info.width - 36);
-    const x0 = (info.width - width) / 2;
-    const y0 = info.height * 0.28;
-    const sound = { x: x0 + 18, y: y0 + 72, width: width - 36, height: 44 };
-    const haptics = { x: x0 + 18, y: y0 + 126, width: width - 36, height: 44 };
-    const close = { x: x0 + 42, y: y0 + 196, width: width - 84, height: 42 };
+    const layout = this.settingsLayout(info.width, info.height);
 
-    if (this.hit(x, y, sound)) {
-      this.flashTap(sound);
+    if (this.hit(x, y, layout.sound)) {
+      this.flashTap(layout.sound);
       this.soundEnabled = !this.soundEnabled;
       this.platform.storage.setItem('doublefight-sound-enabled', this.soundEnabled ? '1' : '0');
       this.audio.setEnabled(this.soundEnabled);
@@ -711,8 +706,8 @@ export class DouyinSoloScene {
       this.refreshHud();
       return;
     }
-    if (this.hit(x, y, haptics)) {
-      this.flashTap(haptics);
+    if (this.hit(x, y, layout.haptics)) {
+      this.flashTap(layout.haptics);
       this.hapticsEnabled = !this.hapticsEnabled;
       this.platform.storage.setItem('doublefight-haptics-enabled', this.hapticsEnabled ? '1' : '0');
       this.platform.haptics.setEnabled(this.hapticsEnabled);
@@ -720,8 +715,8 @@ export class DouyinSoloScene {
       this.refreshHud();
       return;
     }
-    if (this.hit(x, y, close)) {
-      this.flashTap(close);
+    if (this.hit(x, y, layout.back) || this.hit(x, y, layout.done)) {
+      this.flashTap(this.hit(x, y, layout.back) ? layout.back : layout.done);
       this.settingsOpen = false;
       this.refreshHud();
     }
@@ -1563,19 +1558,27 @@ export class DouyinSoloScene {
     }
 
     const layout = this.onlineLobbyLayout(width, height);
+    ctx.save();
+    ctx.shadowColor = 'rgba(28,49,53,.16)';
+    ctx.shadowOffsetY = 3;
+    this.roundedRect(ctx, layout.theme.x, layout.theme.y, layout.theme.width, layout.theme.height - 3, 18);
+    ctx.fillStyle = '#FFF0C9';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 2;
+    ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff1c9';
-    ctx.font = '900 24px sans-serif';
-    ctx.fillText('配置你的对决', width / 2, this.hudTop() + 30);
-    ctx.fillStyle = '#b7c9cc';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText(snap.state.status === 'connected' ? '服务器已连接' : '正在连接服务器…', width / 2, this.hudTop() + 54);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 13px sans-serif';
+    ctx.fillText(`‹   ${THEMES[snap.selectedTheme].label}   ›`, width / 2, layout.theme.y + (layout.theme.height - 3) / 2);
+    ctx.restore();
 
-    this.drawPillButton(ctx, layout.theme, `‹  ${THEMES[snap.selectedTheme].label}  ›`, 'secondary');
-
-    ctx.fillStyle = '#d9e3e2';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText('点击技能卡可轮换', width / 2, layout.skills[0].y - 14);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 10px sans-serif';
+    ctx.fillText('出战技能 · 点击卡片轮换', width / 2, layout.skills[0].y - 12);
     snap.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
       this.drawSkillButton(ctx, layout.skills[index], def.shortLabel, `${def.cost} 能量`, true, skillUiIcon(skillId));
@@ -1761,52 +1764,82 @@ export class DouyinSoloScene {
   }
 
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    const layout = this.settingsLayout(width, height);
     ctx.fillStyle = '#72BEDA';
     ctx.fillRect(0, 0, width, height);
-    const panelWidth = Math.min(300, width - 36);
-    const x = (width - panelWidth) / 2;
-    const y = height * 0.28;
-    this.roundedRect(ctx, x, y, panelWidth, 256, 26);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(28,49,53,.18)';
+    ctx.shadowOffsetY = 3;
+    this.roundedRect(ctx, layout.back.x, layout.back.y, layout.back.width, layout.back.height, 20);
     ctx.fillStyle = '#FFF0C9';
     ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawUiIcon(ctx, 'back', layout.back.x + layout.back.width / 2, layout.back.y + layout.back.height / 2, 29, '#17343C');
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText('设置', width / 2, layout.back.y + 22);
+    ctx.fillStyle = '#46636A';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText('声音与游戏反馈', width / 2, layout.back.y + 47);
+
+    this.drawSettingRow(ctx, layout.sound, '声音', this.soundEnabled);
+    this.drawSettingRow(ctx, layout.haptics, '震动', this.hapticsEnabled);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#46636A';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText('随时可以回来修改', layout.sound.x + 4, layout.haptics.y + layout.haptics.height + 28);
+
+    this.drawPillButton(ctx, layout.done, '完成', 'primary');
+  }
+
+  private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, enabled: boolean): void {
+    ctx.save();
+    ctx.shadowColor = 'rgba(28,49,53,.15)';
+    ctx.shadowOffsetY = 3;
+    this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height - 3, 20);
+    ctx.fillStyle = '#FFF0C9';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
     ctx.strokeStyle = '#17343C';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = '#17343C';
-    ctx.font = '900 21px sans-serif';
-    ctx.fillText('设置', width / 2, y + 38);
+    ctx.font = '900 15px sans-serif';
+    ctx.fillText(label, rect.x + 18, rect.y + rect.height * .38);
     ctx.fillStyle = '#46636A';
-    ctx.font = '650 9px sans-serif';
-    ctx.fillText('声音和震动', width / 2, y + 58);
+    ctx.font = '800 9.5px sans-serif';
+    ctx.fillText(enabled ? '已开启' : '已关闭', rect.x + 18, rect.y + rect.height * .68);
 
-    const sound = { x: x + 18, y: y + 72, width: panelWidth - 36, height: 44 };
-    const haptics = { x: x + 18, y: y + 126, width: panelWidth - 36, height: 44 };
-    this.drawSettingRow(ctx, sound, '声音', this.soundEnabled);
-    this.drawSettingRow(ctx, haptics, '震动', this.hapticsEnabled);
-
-    ctx.fillStyle = '#46636A';
-    ctx.font = '750 9px sans-serif';
-    ctx.fillText('可随时修改', width / 2, y + 184);
-    this.drawPillButton(ctx, { x: x + 42, y: y + 196, width: panelWidth - 84, height: 42 }, '完成', 'primary');
-  }
-
-  private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, enabled: boolean): void {
-    this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 15);
-    ctx.fillStyle = '#E6E0C8';
+    const switchW = 52;
+    const switchH = 28;
+    const sx = rect.x + rect.width - switchW - 18;
+    const sy = rect.y + (rect.height - switchH) / 2 - 1;
+    this.roundedRect(ctx, sx, sy, switchW, switchH, switchH / 2);
+    ctx.fillStyle = enabled ? '#3FA977' : '#A9B2AE';
     ctx.fill();
     ctx.strokeStyle = '#17343C';
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#17343C';
-    ctx.font = '800 13px sans-serif';
-    ctx.fillText(label, rect.x + 16, rect.y + rect.height / 2);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = enabled ? '#176E55' : '#5E6C70';
-    ctx.font = '850 11px sans-serif';
-    ctx.fillText(enabled ? '开启' : '关闭', rect.x + rect.width - 16, rect.y + rect.height / 2);
+    ctx.beginPath();
+    ctx.arc(enabled ? sx + switchW - 14 : sx + 14, sy + switchH / 2, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFF8E8';
+    ctx.fill();
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawOnboarding(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1884,7 +1917,19 @@ export class DouyinSoloScene {
 
   private drawBack(ctx: CanvasRenderingContext2D): void {
     const top = this.hudTop();
-    drawUiIcon(ctx, 'back', 39, top + 31, 30, '#ffe9ab');
+    const rect = { x: 10, y: top + 2, width: 58, height: 58 };
+    ctx.save();
+    ctx.shadowColor = 'rgba(28,49,53,.18)';
+    ctx.shadowOffsetY = 3;
+    this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, 20);
+    ctx.fillStyle = '#FFF0C9';
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#17343C';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawUiIcon(ctx, 'back', rect.x + rect.width / 2, rect.y + rect.height / 2, 29, '#17343C');
+    ctx.restore();
   }
 
   private drawEnergyBar(ctx: CanvasRenderingContext2D, rect: Rect, ratio: number, color: string): void {
@@ -2038,6 +2083,20 @@ export class DouyinSoloScene {
     return uiMetrics(info.width, info.height, info.safeArea, info.menuButton?.bottom ?? 0).top;
   }
 
+  private settingsLayout(width: number, height: number) {
+    const info = this.platform.getSystemInfo();
+    const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
+    const edge = Math.max(22, metrics.edge + 4);
+    const cardW = width - edge * 2;
+    const firstY = Math.max(metrics.top + 96, 176);
+    return {
+      back: { x: 12, y: Math.max(72, metrics.top + 2), width: 58, height: 58 },
+      sound: { x: edge, y: firstY, width: cardW, height: 72 },
+      haptics: { x: edge, y: firstY + 86, width: cardW, height: 72 },
+      done: { x: width / 2 - Math.min(132, width * .34), y: firstY + 202, width: Math.min(264, width * .68), height: 56 },
+    };
+  }
+
   private homeLayout(width: number, height: number, safeBottomInset: number) {
     const info = this.platform.getSystemInfo();
     const metrics = uiMetrics(width, height, { ...info.safeArea, bottom: safeBottomInset }, info.menuButton?.bottom ?? 0);
@@ -2062,16 +2121,16 @@ export class DouyinSoloScene {
     const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
     const top = metrics.top;
     const gap = metrics.compact ? 8 : 10;
-    const edge = metrics.edge;
+    const edge = Math.max(metrics.edge, 16);
+    const quickY = height - metrics.bottom - (metrics.compact ? 154 : 166);
     const skillWidth = (width - edge * 2 - gap * 2) / 3;
-    const skillY = top + (metrics.compact ? 168 : 190);
-    const quickY = height - metrics.bottom - (metrics.compact ? 166 : 184);
+    const skillY = quickY - (metrics.compact ? 76 : 84);
     return {
-      theme: { x: width / 2 - 96, y: top + 92, width: 192, height: 42 },
-      skills: [0, 1, 2].map(index => ({ x: edge + index * (skillWidth + gap), y: skillY, width: skillWidth, height: metrics.compact ? 54 : 60 })),
-      quick: { x: edge + 14, y: quickY, width: width - (edge + 14) * 2, height: 52 },
-      create: { x: edge + 14, y: quickY + 64, width: (width - (edge + 14) * 2 - 10) / 2, height: 46 },
-      join: { x: width / 2 + 5, y: quickY + 64, width: (width - (edge + 14) * 2 - 10) / 2, height: 46 },
+      theme: { x: width / 2 - 108, y: top + 96, width: 216, height: 46 },
+      skills: [0, 1, 2].map(index => ({ x: edge + index * (skillWidth + gap), y: skillY, width: skillWidth, height: metrics.compact ? 60 : 66 })),
+      quick: { x: edge + 12, y: quickY, width: width - (edge + 12) * 2, height: 56 },
+      create: { x: edge + 12, y: quickY + 68, width: (width - (edge + 12) * 2 - 10) / 2, height: 46 },
+      join: { x: width / 2 + 5, y: quickY + 68, width: (width - (edge + 12) * 2 - 10) / 2, height: 46 },
     };
   }
 

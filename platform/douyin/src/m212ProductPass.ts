@@ -303,18 +303,14 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
   const snap = scene.online.snapshot();
   const top = scene.hudTop();
   if (snap.mode === 'lobby') {
-    round(ctx, width / 2 - 120, top + 7, 240, 62, 20);
-    ctx.fillStyle = 'rgba(10,26,34,.94)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(242,205,105,.42)';
-    ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff0bd';
-    ctx.font = '900 21px sans-serif';
-    ctx.fillText('准备出战', width / 2, top + 29);
-    ctx.fillStyle = '#a8c4c5';
-    ctx.font = '750 10px sans-serif';
-    ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 51);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText('准备出战', width / 2, top + 24);
+    ctx.fillStyle = '#38565D';
+    ctx.font = '850 10px sans-serif';
+    ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 49);
     return;
   }
   if (snap.mode === 'matching') {
