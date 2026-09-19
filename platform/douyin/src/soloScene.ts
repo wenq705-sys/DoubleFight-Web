@@ -14,6 +14,7 @@ import {
   type MatchPlayerState,
   type SkillId,
 } from '../../../shared/index';
+import { PvpPrototypeLab } from './pvpPrototypeLab';
 import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
@@ -23,7 +24,7 @@ import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
 
-type ProductMode = 'home' | 'solo' | 'online';
+type ProductMode = 'home' | 'solo' | 'online' | 'lab';
 type Rect = { x: number; y: number; width: number; height: number };
 type SoloResultState = {
   kind: 'cleared' | 'stuck';
@@ -65,6 +66,7 @@ export class DouyinSoloScene {
   private readonly uiMaterial: THREE.MeshBasicMaterial;
   private readonly uiPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
+  private readonly lab = new PvpPrototypeLab(() => this.showHome(), () => this.openLegacyOnline());
   private readonly online: DouyinOnlineFlow;
   private readonly unsubscribeOnline: () => void;
 
@@ -242,6 +244,7 @@ export class DouyinSoloScene {
   }
 
   handleDirection(direction: Direction): void {
+    if (this.mode === 'lab') return;
     if (this.mode === 'home') {
       if (direction === 'left' || direction === 'right') this.startHomeSlide(direction === 'left' ? -1 : 1);
       return;
@@ -324,6 +327,11 @@ export class DouyinSoloScene {
 
   handleTap(x: number, y: number): void {
     if (this.disposed) return;
+    if (this.mode === 'lab') {
+      this.lab.handleTap(x, y);
+      this.refreshHud();
+      return;
+    }
     if (this.inputLocked) {
       this.platform.haptics.trigger('light');
       if (!this.notice) this.notice = { text: '正在处理，请稍候…', until: this.visualTime + .8 };
@@ -370,6 +378,16 @@ export class DouyinSoloScene {
     const delta = Math.min(0.033, this.clock.getDelta());
     this.visualTime += delta;
     this.samplePerformance(delta);
+    if (this.mode === 'lab') {
+      this.lab.update();
+      this.refreshHud();
+      const frame = this.platform.getSystemInfo();
+      this.renderer.setScissorTest(false);
+      this.renderer.setViewport(0, 0, frame.width, frame.height);
+      this.renderer.clear();
+      this.renderer.render(this.uiScene, this.uiCamera);
+      return;
+    }
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
@@ -584,6 +602,14 @@ export class DouyinSoloScene {
   }
 
   private openOnline(): void {
+    this.mode = 'lab';
+    this.notice = null;
+    this.tapFlash = null;
+    this.lab.open();
+    this.refreshHud();
+  }
+
+  private openLegacyOnline(): void {
     void this.auth.start().then(() => {
       if (!this.disposed) this.enterOnline();
     });
@@ -1266,6 +1292,11 @@ export class DouyinSoloScene {
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
+    if (this.mode === 'lab') {
+      this.lab.draw(ctx, width, height, this.hudTop(), Math.max(12, info.safeArea.bottom));
+      this.uiTexture.needsUpdate = true;
+      return;
+    }
     if (this.mode === 'home') this.drawHomeHud(ctx, width, height, info.safeArea.bottom);
     else if (this.mode === 'solo') this.drawSoloHud(ctx, width, height);
     else this.drawOnlineHud(ctx, width, height);
@@ -1330,7 +1361,7 @@ export class DouyinSoloScene {
 
     this.drawWorldPager(ctx, width, metaY + 67);
     this.drawPillButton(ctx, layout.solo, '开始挑战', 'primary', 'solo');
-    this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
+    this.drawPillButton(ctx, layout.online, 'PvP 实验室', 'secondary', 'pvp');
   }
 
   private drawWorldPager(ctx: CanvasRenderingContext2D, width: number, y: number): void {
