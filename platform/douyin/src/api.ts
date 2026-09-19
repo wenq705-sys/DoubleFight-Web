@@ -13,6 +13,14 @@ export interface DouyinSocketTask {
   onError(listener: (error: { errMsg?: string }) => void): void;
 }
 
+export interface DouyinImage {
+  src: string;
+  width: number;
+  height: number;
+  addEventListener(type: 'load' | 'error', listener: (event: { type?: string; target?: unknown }) => void): void;
+  removeEventListener?(type: 'load' | 'error', listener: (event: { type?: string; target?: unknown }) => void): void;
+}
+
 export interface DouyinCanvas {
   width: number;
   height: number;
@@ -82,6 +90,7 @@ export interface DouyinLaunchOptions extends DouyinShowOptions {
 
 export interface DouyinApi {
   createCanvas(): DouyinCanvas;
+  createImage?(): DouyinImage;
   getSystemInfoSync(): {
     screenWidth: number;
     screenHeight: number;
@@ -106,6 +115,32 @@ export interface DouyinApi {
     fail: (error: { errMsg?: string }) => void;
   }): void;
   checkSession?(options: { success?: () => void; fail?: (error: { errMsg?: string }) => void }): void;
+  getUserInfo?(options: {
+    withCredentials?: boolean;
+    success?: (result: {
+      errMsg?: string;
+      userInfo?: { nickName?: string; avatarUrl?: string; gender?: number };
+      rawData?: string;
+      signature?: string;
+      encryptedData?: string;
+      iv?: string;
+    }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
+  getUserProfile?(options: {
+    force?: boolean;
+    success?: (result: {
+      errMsg?: string;
+      userInfo?: { nickName?: string; avatarUrl?: string; gender?: number };
+      rawData?: string;
+      signature?: string;
+      encryptedData?: string;
+      iv?: string;
+    }) => void;
+    fail?: (error: { errMsg?: string; errorCode?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
   request?(options: {
     url: string;
     method: 'GET' | 'POST';

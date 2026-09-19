@@ -1,3 +1,9 @@
+import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
+import type { DouyinImage } from './api';
+
+type AvatarCacheEntry = { image: DouyinImage; state: 'loading' | 'ready' | 'error' };
+const avatarCache = new Map<string, AvatarCacheEntry>();
+
 export type UiRect = { x: number; y: number; width: number; height: number };
 export type UiIcon =
   | 'coin' | 'world' | 'collection' | 'rank' | 'gift' | 'solo' | 'pvp'
@@ -78,6 +84,62 @@ export function hitTarget(x: number, y: number, rect: UiRect, minTouch = 44): bo
   const target = ensureTouchRect(rect, minTouch);
   return x >= target.x && x <= target.x + target.width
     && y >= target.y && y <= target.y + target.height;
+}
+
+export function drawDouyinAvatar(
+  ctx: CanvasRenderingContext2D,
+  platform: DouyinPlatform,
+  avatarUrl: string | undefined,
+  centerX: number,
+  centerY: number,
+  diameter: number,
+  fallbackLabel: string,
+  fallbackFill = '#236B83',
+  fallbackText = '#FFF7E7',
+): void {
+  const radius = Math.max(8, diameter / 2);
+  let entry: AvatarCacheEntry | undefined;
+  if (avatarUrl) {
+    entry = avatarCache.get(avatarUrl);
+    if (!entry) {
+      const image = platform.createImage();
+      if (image) {
+        entry = { image, state: 'loading' };
+        avatarCache.set(avatarUrl, entry);
+        image.addEventListener('load', () => { if (entry) entry.state = 'ready'; });
+        image.addEventListener('error', () => { if (entry) entry.state = 'error'; });
+        image.src = avatarUrl;
+      }
+    }
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.clip();
+  if (entry?.state === 'ready' && entry.image.width > 0 && entry.image.height > 0) {
+    const sourceW = entry.image.width;
+    const sourceH = entry.image.height;
+    const side = Math.min(sourceW, sourceH);
+    const sx = (sourceW - side) / 2;
+    const sy = (sourceH - side) / 2;
+    ctx.drawImage(entry.image as unknown as CanvasImageSource, sx, sy, side, side, centerX - radius, centerY - radius, diameter, diameter);
+  } else {
+    ctx.fillStyle = fallbackFill;
+    ctx.fillRect(centerX - radius, centerY - radius, diameter, diameter);
+    ctx.fillStyle = fallbackText;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${Math.max(11, Math.round(diameter * .38))}px sans-serif`;
+    ctx.fillText((fallbackLabel.trim().slice(0, 1) || '游'), centerX, centerY + .5);
+  }
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = '#17343C';
+  ctx.lineWidth = Math.max(1.5, diameter * .045);
+  ctx.stroke();
 }
 
 export function roundPath(

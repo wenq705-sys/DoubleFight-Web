@@ -6,14 +6,14 @@ import {
 } from '../../../shared/index';
 import { MAX_PIECE_VALUE, THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
-import { competitiveRankLabel, competitiveRankProgress } from '../../../src/meta/productMeta';
+import { competitiveRankLabel } from '../../../src/meta/productMeta';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { OnlineClient } from '../../../src/network/OnlineClient';
 import type { DouyinAuthClient } from './auth';
 import type { DouyinCommercial } from './commercial';
 import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } from './metaProgress';
 import type { DouyinSoloScene } from './soloScene';
-import { drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
+import { drawDouyinAvatar, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type SceneInternals = Record<string, any>;
@@ -24,6 +24,8 @@ type PassState = {
   ascended: boolean;
   flight: { value: number; startedAt: number; duration: number } | null;
   profileOpen: boolean;
+  profileBusy: boolean;
+  profileMessage: string | null;
   perfTime: number;
   perfFrames: number;
   goodWindows: number;
@@ -46,6 +48,8 @@ export function installM212ProductPass(
     ascended: false,
     flight: null,
     profileOpen: false,
+    profileBusy: false,
+    profileMessage: null,
     perfTime: 0,
     perfFrames: 0,
     goodWindows: 0,
@@ -66,6 +70,9 @@ export function installM212ProductPass(
     state.ascended = false;
     state.flight = null;
     state.profileOpen = false;
+    scene.profilePageOpen = false;
+    state.profileBusy = false;
+    state.profileMessage = null;
     originalStartSolo();
     state.runHighest = game.highest;
     recordDiscovery(platform.storage, game.theme, state.runHighest);
@@ -98,11 +105,46 @@ export function installM212ProductPass(
   const originalTap = game.handleTap.bind(game);
   game.handleTap = (x: number, y: number) => {
     const info = platform.getSystemInfo();
-    if (state.profileOpen) { state.profileOpen = false; scene.refreshHud(); return; }
+    if (state.profileOpen) {
+      const close = profileCloseRect(info.width, scene.hudTop());
+      const sync = profileSyncRect(info.width, info.height);
+      if (hit(x, y, close)) {
+        state.profileOpen = false;
+        scene.profilePageOpen = false;
+        state.profileMessage = null;
+        platform.haptics.trigger('light');
+        scene.refreshHud();
+        return;
+      }
+      if (!state.profileBusy && auth.current.status === 'authenticated' && hit(x, y, sync)) {
+        state.profileBusy = true;
+        state.profileMessage = null;
+        platform.haptics.trigger('light');
+        scene.refreshHud();
+        void auth.bindDouyinProfile().then(result => {
+          state.profileMessage = result === 'updated' ? '已更新抖音资料' : result === 'cancelled' ? '已取消授权' : result === 'unavailable' ? '当前环境暂不支持' : '更新失败，请稍后重试';
+          if (result === 'updated') {
+            platform.haptics.trigger('success');
+            scene.refreshAccountState();
+            const socket = client.snapshot();
+            if (!socket.room && socket.matchmaking.status === 'idle' && socket.match?.phase !== 'playing') {
+              client.close();
+              client.connect();
+            }
+          }
+        }).finally(() => {
+          state.profileBusy = false;
+          if (!scene.disposed) scene.refreshHud();
+        });
+        return;
+      }
+      return;
+    }
 
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       if (hit(x, y, profileRect(info.width, scene.hudTop()))) {
         state.profileOpen = true;
+        scene.profilePageOpen = true;
         platform.haptics.trigger('light');
         scene.refreshHud();
         return;
@@ -126,7 +168,7 @@ export function installM212ProductPass(
       if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
       if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, state, number(scene.visualTime));
       if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene);
-      if (state.profileOpen) drawProfile(ctx, width, height, auth, platform);
+      if (state.profileOpen) drawProfile(ctx, width, height, auth, platform, game.theme, scene.hudTop(), state);
     }
     scene.uiTexture.needsUpdate = true;
   };
@@ -179,6 +221,7 @@ export function installM212ProductPass(
     object.shadow.map?.dispose?.();
     object.shadow.map = null;
   });
+  scene.profilePageOpen = false;
   scene.applyQuality('medium', 1.2);
   scene.refreshHud();
   void client;
@@ -202,13 +245,15 @@ function drawHomeMeta(
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,225,145,.35)';
   ctx.stroke();
+  drawDouyinAvatar(ctx, platform, player?.avatarUrl, profile.x + 22, profile.y + profile.height / 2, 30, player?.displayName ?? '游客', '#236B83');
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff0bf';
-  ctx.font = '850 11px sans-serif';
-  ctx.fillText(player?.displayName ?? '游客玩家', profile.x + 12, profile.y + 15);
-  ctx.fillStyle = '#a9c1c2';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText(competitiveRankLabel(rating), profile.x + 12, profile.y + 31);
+  ctx.font = '900 11px sans-serif';
+  fitText(ctx, player?.displayName ?? '游客玩家', profile.width - 52, 11, 900, 8.5);
+  ctx.fillText(player?.displayName ?? '游客玩家', profile.x + 43, profile.y + 15);
+  ctx.fillStyle = '#D4E2E1';
+  ctx.font = '800 9.5px sans-serif';
+  ctx.fillText(competitiveRankLabel(rating), profile.x + 43, profile.y + 31);
 
   const metrics = uiMetrics(width, platform.getSystemInfo().height, platform.getSystemInfo().safeArea, platform.getSystemInfo().menuButton?.bottom ?? 0);
   const coinW = metrics.compact ? 82 : 88;
@@ -258,18 +303,14 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
   const snap = scene.online.snapshot();
   const top = scene.hudTop();
   if (snap.mode === 'lobby') {
-    round(ctx, width / 2 - 120, top + 7, 240, 62, 20);
-    ctx.fillStyle = 'rgba(10,26,34,.94)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(242,205,105,.42)';
-    ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff0bd';
-    ctx.font = '900 21px sans-serif';
-    ctx.fillText('准备出战', width / 2, top + 29);
-    ctx.fillStyle = '#a8c4c5';
-    ctx.font = '750 10px sans-serif';
-    ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 51);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#17343C';
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText('准备出战', width / 2, top + 24);
+    ctx.fillStyle = '#38565D';
+    ctx.font = '850 10px sans-serif';
+    ctx.fillText(MATCH_FORMAT_LABEL, width / 2, top + 49);
     return;
   }
   if (snap.mode === 'matching') {
@@ -294,7 +335,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     const elapsed = snap.state.matchmaking.joinedAt
       ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000)
       : 0;
-    ctx.fillStyle = '#9fbabc';
+    ctx.fillStyle = '#D6E5E4';
     ctx.font = '700 10px sans-serif';
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, cy + 49);
     ctx.fillStyle = '#c8d7d6';
@@ -327,154 +368,110 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
   }
 }
 
-function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number, auth: DouyinAuthClient, platform: DouyinPlatform): void {
-  ctx.fillStyle = 'rgba(3,10,15,.78)';
+function drawProfile(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  auth: DouyinAuthClient,
+  platform: DouyinPlatform,
+  theme: ThemeId,
+  hudTop: number,
+  state: PassState,
+): void {
+  const bg = theme === 'palace' ? '#D88F6E' : '#72BEDA';
+  const ink = '#17343C';
+  const paper = '#FFF0C9';
+  const accent = theme === 'palace' ? '#A94D55' : '#236B83';
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
-  const panelW = Math.min(326, width - 24);
-  const x = (width - panelW) / 2;
-  const y = height * 0.18;
-  const panelH = Math.min(470, height * 0.66);
-  round(ctx, x, y, panelW, panelH, 28);
-  ctx.fillStyle = 'rgba(9,28,36,.98)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.5)';
-  ctx.stroke();
 
+  const close = profileCloseRect(width, hudTop);
+  drawUiIcon(ctx, 'back', close.x + close.width / 2, close.y + close.height / 2, 30, ink);
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const rating = player?.pvp.rating ?? 1000;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe5a0';
-  ctx.font = '900 23px sans-serif';
-  ctx.fillText(player?.displayName ?? '游客玩家', width / 2, y + 42);
-  ctx.fillStyle = '#9fd5d1';
-  ctx.font = '850 12px sans-serif';
-  ctx.fillText(`${competitiveRankLabel(rating)} · 竞技分 ${rating}`, width / 2, y + 70);
+  const cardX = 24;
+  const cardW = width - 48;
+  const headerY = Math.max(hudTop + 54, 84);
 
-  const rankProgress = competitiveRankProgress(rating);
-  const rankBarX = x + 52;
-  const rankBarW = panelW - 104;
-  round(ctx, rankBarX, y + 82, rankBarW, 5, 2.5);
-  ctx.fillStyle = 'rgba(255,255,255,.13)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = ink;
+  ctx.font = '900 24px sans-serif';
+  ctx.fillText('我的资料', width / 2, headerY);
+
+  round(ctx, cardX, headerY + 30, cardW, 118, 22);
+  ctx.fillStyle = paper;
   ctx.fill();
-  if (rankProgress > 0) {
-    round(ctx, rankBarX, y + 82, Math.max(3, rankBarW * rankProgress), 5, 2.5);
-    ctx.fillStyle = '#6fd3c8';
-    ctx.fill();
-  }
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
-  drawSCoinIcon(ctx, width / 2 - 35, y + 106, 24, true);
+  drawDouyinAvatar(ctx, platform, player?.avatarUrl, cardX + 42, headerY + 72, 48, player?.displayName ?? '游客', accent);
+
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#f8d979';
-  ctx.font = '900 16px sans-serif';
-  ctx.fillText(String(player?.rewards.currency ?? 0), width / 2 - 18, y + 106);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#d8e5e3';
+  ctx.fillStyle = ink;
+  fitText(ctx, player?.displayName ?? '游客玩家', cardW - 118, 18, 900, 12);
+  ctx.fillText(player?.displayName ?? '游客玩家', cardX + 78, headerY + 60);
   ctx.font = '800 11px sans-serif';
-  ctx.fillText(`赛季  ${player?.season?.wins ?? player?.pvp.wins ?? 0}胜  ${player?.season?.losses ?? player?.pvp.losses ?? 0}负  ${player?.season?.draws ?? player?.pvp.draws ?? 0}平`, width / 2, y + 132);
+  ctx.fillStyle = '#38565D';
+  ctx.fillText(`${competitiveRankLabel(rating)} · 竞技分 ${rating}`, cardX + 78, headerY + 84);
+  ctx.fillText(player?.avatarUrl ? '已绑定抖音资料' : '可绑定抖音昵称头像', cardX + 78, headerY + 106);
 
-  (['kingdom', 'palace'] as ThemeId[]).forEach((theme, index) => {
-    const rowY = y + 174 + index * 88;
-    const highest = Number(platform.storage.getItem(`doublefight-highest-${theme}`) ?? 2);
-    const best = Number(platform.storage.getItem(`doublefight-best-${theme}`) ?? 0);
-    const mastery = loadThemeMastery(platform.storage, theme);
+  drawSCoinIcon(ctx, cardX + cardW - 68, headerY + 73, 24, true);
+  ctx.fillStyle = ink;
+  ctx.font = '900 16px sans-serif';
+  ctx.fillText(String(player?.rewards.currency ?? 0), cardX + cardW - 50, headerY + 73);
+
+  (['kingdom', 'palace'] as ThemeId[]).forEach((world, index) => {
+    const rowY = headerY + 166 + index * 82;
+    const highest = Number(platform.storage.getItem(`doublefight-highest-${world}`) ?? 2);
+    const best = Number(platform.storage.getItem(`doublefight-best-${world}`) ?? 0);
+    const mastery = loadThemeMastery(platform.storage, world);
+    round(ctx, cardX, rowY, cardW, 66, 18);
+    ctx.fillStyle = world === 'palace' ? '#F7D3C1' : '#D9F0E1';
+    ctx.fill();
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#fff0bc';
+    ctx.fillStyle = ink;
     ctx.font = '900 13px sans-serif';
-    ctx.fillText(THEMES[theme].label, x + 24, rowY);
-    ctx.fillStyle = '#b9cdce';
-    ctx.font = '700 10px sans-serif';
-    ctx.fillText(`已到达 · ${pieceName(theme, highest)}`, x + 24, rowY + 24);
-    ctx.fillText(`最高分 ${best.toLocaleString('zh-CN')}`, x + 24, rowY + 43);
+    ctx.fillText(THEMES[world].label, cardX + 16, rowY + 19);
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`已到达 ${pieceName(world, highest)} · 最高分 ${best.toLocaleString('zh-CN')}`, cardX + 16, rowY + 40);
     ctx.textAlign = 'right';
-    ctx.fillStyle = mastery.bestAscensionMs ? '#f1ce70' : '#758b8e';
-    ctx.fillText(mastery.bestAscensionMs ? `最快 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶', x + panelW - 24, rowY + 33);
+    ctx.fillText(mastery.bestAscensionMs ? `最快 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶', cardX + cardW - 16, rowY + 19);
   });
 
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#82999b';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText('点击任意位置返回', width / 2, y + panelH - 24);
-}
-
-function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: number, theme: ThemeId, auth: DouyinAuthClient, platform: DouyinPlatform): void {
-  ctx.fillStyle = 'rgba(3,10,15,.78)';
-  ctx.fillRect(0, 0, width, height);
-  const layout = rankingLayout(width, height);
-  round(ctx, layout.panel.x, layout.panel.y, layout.panel.width, layout.panel.height, 28);
-  ctx.fillStyle = 'rgba(9,28,36,.98)';
+  const sync = profileSyncRect(width, height);
+  round(ctx, sync.x, sync.y, sync.width, sync.height, 22);
+  ctx.fillStyle = state.profileBusy || !player ? '#9AA8A7' : '#145E70';
   ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.5)';
+  ctx.strokeStyle = '#17343C';
+  ctx.lineWidth = 2;
   ctx.stroke();
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffe4a0';
-  ctx.font = '900 23px sans-serif';
-  ctx.fillText('排行榜', width / 2, layout.panel.y + 38);
-  ctx.fillStyle = '#9eb4b6';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText('你的记录与排行', width / 2, layout.panel.y + 60);
+  ctx.fillStyle = '#FFF8E8';
+  ctx.font = '900 15px sans-serif';
+  ctx.fillText(state.profileBusy ? '正在更新…' : player?.avatarUrl ? '更新抖音资料' : '使用抖音昵称头像', width / 2, sync.y + sync.height / 2);
 
-  const mastery = loadThemeMastery(platform.storage, theme);
-  drawRankCard(ctx, layout.ascension, '最快登顶', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '尚未登顶'}`, 'energy');
-  drawRankCard(ctx, layout.solo, '最高分', '本周成绩 · 好友排行', 'rank');
-  const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-  drawRankCard(ctx, layout.pvp, '竞技排行', `${competitiveRankLabel(rating)} · ${rating}`, 'pvp');
-  ctx.fillStyle = '#819799';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
+  if (state.profileMessage) {
+    ctx.fillStyle = ink;
+    ctx.font = '800 11px sans-serif';
+    ctx.fillText(state.profileMessage, width / 2, sync.y + sync.height + 24);
+  }
 }
 
-function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-  const y = height * 0.34;
-  ctx.fillStyle = 'rgba(14,42,50,.98)';
-  ctx.fillRect(width / 2 - 125, y + 66, 250, 116);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#d5e1df';
-  ctx.font = '700 11px sans-serif';
-  ctx.fillText('角色进阶 × 技能 × 实时对决', width / 2, y + 76);
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#efc968';
-  ctx.font = '900 10px sans-serif';
-  ctx.fillText('01', width / 2 - 133, y + 112);
-  ctx.fillStyle = '#f3f2e9';
-  ctx.font = '850 12px sans-serif';
-  ctx.fillText('滑动棋盘', width / 2 - 103, y + 106);
-  ctx.fillStyle = '#9fb3b5';
-  ctx.font = '650 10px sans-serif';
-  ctx.fillText('相同棋子合成，解锁更高阶角色', width / 2 - 103, y + 124);
+function profileCloseRect(width: number, hudTop: number): Rect {
+  return { x: 10, y: Math.max(10, hudTop - 2), width: 58, height: 58 };
 }
 
-function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string, icon: UiIcon): void {
-  round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
-  ctx.fillStyle = 'rgba(21,54,64,.9)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.28)';
-  ctx.stroke();
-  drawUiIcon(ctx, icon, rect.x + 24, rect.y + rect.height / 2, 20, '#f4d67e');
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#fff0bd';
-  fitText(ctx, title, rect.width - 58, 13, 850, 10);
-  ctx.fillText(title, rect.x + 44, rect.y + 23);
-  ctx.fillStyle = '#a9bec0';
-  fitText(ctx, subtitle, rect.width - 58, 10, 700, 8);
-  ctx.fillText(subtitle, rect.x + 44, rect.y + 43);
+function profileSyncRect(width: number, height: number): Rect {
+  return { x: 40, y: height - 136, width: width - 80, height: 54 };
 }
 
 function profileRect(width: number, top: number): Rect {
-  return { x: 16, y: top + 76, width: Math.min(126, width * 0.34), height: 40 };
-}
-
-function rankingLayout(width: number, height: number) {
-  const panelW = Math.min(320, width - 28);
-  const panelH = Math.min(390, height * 0.58);
-  const panel = { x: (width - panelW) / 2, y: height * 0.20, width: panelW, height: panelH };
-  const cardX = panel.x + 18;
-  const cardW = panel.width - 36;
-  return {
-    panel,
-    ascension: { x: cardX, y: panel.y + 84, width: cardW, height: 62 },
-    solo: { x: cardX, y: panel.y + 156, width: cardW, height: 62 },
-    pvp: { x: cardX, y: panel.y + 228, width: cardW, height: 62 },
-  };
+  return { x: 16, y: top + 76, width: Math.min(146, width * 0.38), height: 44 };
 }
 
 function number(value: unknown): number {

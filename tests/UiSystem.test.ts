@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
-import { ensureTouchRect, hitTarget, skillUiIcon, uiMetrics } from '../platform/douyin/src/uiSystem';
+import { describe, expect, it, vi } from 'vitest';
+import { drawDouyinAvatar, ensureTouchRect, hitTarget, skillUiIcon, uiMetrics } from '../platform/douyin/src/uiSystem';
 
 describe('M2.13 adaptive mobile UI metrics', () => {
   it.each([
@@ -48,5 +48,29 @@ describe('M2.13 adaptive mobile UI metrics', () => {
       const source = readFileSync(new URL(`../platform/douyin/src/${file}`, import.meta.url), 'utf8');
       expect(source, `${file} contains placeholder emoji UI art`).not.toMatch(banned);
     }
+  });
+});
+
+describe('Douyin avatar rendering', () => {
+  it('loads one native image per avatar URL, caches it, and draws it after load', () => {
+    const listeners: Partial<Record<'load' | 'error', (event: unknown) => void>> = {};
+    const image = {
+      src: '', width: 80, height: 64,
+      addEventListener: (type: 'load' | 'error', listener: (event: unknown) => void) => { listeners[type] = listener; },
+    };
+    const platform = { createImage: vi.fn(() => image) } as any;
+    const ctx = {
+      save: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), clip: vi.fn(), fillRect: vi.fn(),
+      restore: vi.fn(), stroke: vi.fn(), drawImage: vi.fn(), fillText: vi.fn(),
+      fillStyle: '', strokeStyle: '', lineWidth: 0, textAlign: 'left', textBaseline: 'alphabetic', font: '',
+    } as any;
+    const url = 'https://example.com/avatar-m216.png';
+    drawDouyinAvatar(ctx, platform, url, 20, 20, 30, '强');
+    drawDouyinAvatar(ctx, platform, url, 20, 20, 30, '强');
+    expect(platform.createImage).toHaveBeenCalledOnce();
+    expect(ctx.drawImage).not.toHaveBeenCalled();
+    listeners.load?.({ type: 'load' });
+    drawDouyinAvatar(ctx, platform, url, 20, 20, 30, '强');
+    expect(ctx.drawImage).toHaveBeenCalledOnce();
   });
 });
