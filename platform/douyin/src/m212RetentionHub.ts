@@ -668,13 +668,12 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
   const info = scene.platform.getSystemInfo();
   const layout = scene.homeLayout(width, height, info.safeArea.bottom);
   const utility = homeUtilityLayout(width, layout);
-  scene.drawPillButton(ctx, layout.theme, '选择世界', 'secondary', 'world');
-
-  miniHomeButton(ctx, utility.collection, 'collection', '图鉴', false);
-  miniHomeButton(ctx, utility.rank, 'rank', '排行', false);
+  const theme = (scene.currentTheme ?? scene.boardView?.theme ?? 'kingdom') as ThemeId;
+  miniHomeButton(ctx, utility.collection, 'collection', '图鉴', false, theme);
+  miniHomeButton(ctx, utility.rank, 'rank', '排行', false, theme);
   const daily = auth.current.status === 'authenticated' ? auth.current.player.rewards.daily : undefined;
   const benefitReady = Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
-  miniHomeButton(ctx, utility.daily, 'gift', '福利', benefitReady);
+  miniHomeButton(ctx, utility.daily, 'gift', '福利', benefitReady, theme);
 }
 
 function drawRankingCenter(
@@ -828,7 +827,7 @@ function drawThemeCenter(
   ctx.fillText('世界中心', width / 2, layout.panel.y + 38);
   ctx.fillStyle = '#9db5b7';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText('选择世界 · 查看收集进度 · 继续登顶', width / 2, layout.panel.y + 62);
+  ctx.fillText('选择一个世界', width / 2, layout.panel.y + 62);
   closeGlyph(ctx, layout.close);
 
   const themes: ThemeId[] = ['kingdom', 'palace'];
@@ -872,7 +871,7 @@ function drawThemeCenter(
   ctx.fillStyle = '#758b8e';
   ctx.font = '700 10px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('更多主题世界将在后续版本加入', width / 2, layout.panel.y + layout.panel.height - 22);
+  ctx.fillText('左右滑动也可以切换世界', width / 2, layout.panel.y + layout.panel.height - 22);
 
 }
 
@@ -894,7 +893,7 @@ function drawCollection(
   ctx.fillText('棋子图鉴', width / 2, layout.panel.y + 36);
   ctx.fillStyle = '#9cb4b6';
   ctx.font = '700 10px sans-serif';
-  ctx.fillText('只展示名称与阶位 · 数字继续留在规则层', width / 2, layout.panel.y + 58);
+  ctx.fillText('收集这个世界的 11 个阶位', width / 2, layout.panel.y + 58);
 
   tab(ctx, layout.kingdom, '微缩王国', state.collectionTheme === 'kingdom');
   tab(ctx, layout.palace, '后宫晋升', state.collectionTheme === 'palace');
@@ -915,7 +914,7 @@ function drawCollection(
     ctx.textAlign = 'left';
     ctx.fillStyle = unlocked ? '#f3cf70' : '#66777a';
     ctx.font = '900 10px sans-serif';
-    ctx.fillText(`T${String(tier).padStart(2, '0')}`, rect.x + 11, rect.y + 15);
+    ctx.fillText(`${tier}/11`, rect.x + 11, rect.y + 15);
     ctx.fillStyle = unlocked ? '#f2f0e7' : '#6c7b7e';
     ctx.font = '850 11px sans-serif';
     ctx.fillText(unlocked ? pieceName(state.collectionTheme, value) : '未发现', rect.x + 11, rect.y + 34);
@@ -923,7 +922,7 @@ function drawCollection(
       ctx.textAlign = 'right';
       ctx.fillStyle = unlocked ? '#ffe083' : '#59686a';
       ctx.font = '900 10px sans-serif';
-      ctx.fillText('FINAL', rect.x + rect.width - 10, rect.y + 16);
+      ctx.fillText('终阶', rect.x + rect.width - 10, rect.y + 16);
     }
   });
 
@@ -1211,24 +1210,22 @@ function drawOnlinePolish(
 }
 
 function homeUtilityLayout(width: number, base: any) {
-  const left = Math.max(22, base.rank?.x ?? 22);
-  const right = Math.min(width - 22, (base.daily?.x ?? width - 22) + (base.daily?.width ?? 0));
   const y = Math.min(base.rank?.y ?? base.daily?.y ?? 0, base.daily?.y ?? base.rank?.y ?? 0);
-  const height = Math.max(base.rank?.height ?? 36, base.daily?.height ?? 36);
-  const gap = 7;
-  const totalWidth = Math.max(180, right - left);
+  const totalWidth = Math.min(width - 44, 286);
+  const left = (width - totalWidth) / 2;
+  const gap = 10;
   const buttonWidth = (totalWidth - gap * 2) / 3;
-  const make = (index: number): Rect => ({
+  const make = (index: number, yOffset: number): Rect => ({
     x: left + index * (buttonWidth + gap),
-    y,
+    y: y + yOffset,
     width: buttonWidth,
-    height,
+    height: 50,
   });
   return {
-    cover: { x: left - 5, y: y - 5, width: totalWidth + 10, height: height + 10 },
-    collection: make(0),
-    rank: make(1),
-    daily: make(2),
+    cover: { x: left - 8, y: y - 12, width: totalWidth + 16, height: 68 },
+    collection: make(0, 3),
+    rank: make(1, -4),
+    daily: make(2, 2),
   };
 }
 
@@ -1238,30 +1235,107 @@ function miniHomeButton(
   icon: UiIcon,
   label: string,
   emphasized: boolean,
+  theme: ThemeId,
 ): void {
   const cx = rect.x + rect.width / 2;
-  const cy = rect.y + 16;
-  ctx.beginPath();
-  ctx.arc(cx, cy, 15, 0, Math.PI * 2);
-  ctx.fillStyle = emphasized ? 'rgba(88,69,25,.88)' : 'rgba(9,31,39,.78)';
-  ctx.fill();
-  ctx.strokeStyle = emphasized ? 'rgba(247,210,105,.72)' : 'rgba(205,226,222,.20)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  const cy = rect.y + 18;
+  const outline = '#1f2426';
+  const primary = theme === 'palace' ? '#cc6b72' : '#4d82b4';
+  const secondary = theme === 'palace' ? '#f0b384' : '#e1b45d';
 
-  drawUiIcon(ctx, icon, cx, cy, 16, emphasized ? '#ffe089' : '#dce9e5');
-  if (emphasized) {
-    ctx.beginPath();
-    ctx.arc(cx + 12, cy - 11, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd969';
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.38)';
+  ctx.shadowBlur = 7;
+  ctx.shadowOffsetY = 3;
+
+  if (icon === 'collection') {
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.08);
+    round(ctx, -18, -12, 36, 25, 5);
+    ctx.fillStyle = primary;
     ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(0, 11);
+    ctx.strokeStyle = 'rgba(255,244,207,.72)';
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-13, -5);
+    ctx.lineTo(-5, -5);
+    ctx.moveTo(5, -5);
+    ctx.lineTo(13, -5);
+    ctx.strokeStyle = '#ffe4a0';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  } else if (icon === 'rank') {
+    ctx.translate(cx, cy + 2);
+    const blocks = [
+      { x: -19, y: -2, w: 12, h: 14, c: '#d07d4b' },
+      { x: -6, y: -10, w: 12, h: 22, c: '#efc55f' },
+      { x: 7, y: 3, w: 12, h: 9, c: '#7eb48d' },
+    ];
+    blocks.forEach(block => {
+      round(ctx, block.x, block.y, block.w, block.h, 2);
+      ctx.fillStyle = block.c;
+      ctx.fill();
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    });
+    ctx.fillStyle = '#49331f';
+    ctx.font = '900 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('1', 0, -1);
+  } else {
+    ctx.translate(cx, cy);
+    round(ctx, -17, -9, 34, 22, 5);
+    ctx.fillStyle = primary;
+    ctx.fill();
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+    ctx.fillStyle = secondary;
+    ctx.fillRect(-3, -10, 6, 23);
+    ctx.fillRect(-18, -3, 36, 6);
+    ctx.beginPath();
+    ctx.moveTo(-3, -9);
+    ctx.quadraticCurveTo(-13, -18, -16, -8);
+    ctx.quadraticCurveTo(-10, -3, -3, -6);
+    ctx.moveTo(3, -9);
+    ctx.quadraticCurveTo(13, -18, 16, -8);
+    ctx.quadraticCurveTo(10, -3, 3, -6);
+    ctx.strokeStyle = secondary;
+    ctx.lineWidth = 3.5;
+    ctx.stroke();
   }
 
+  ctx.restore();
+
+  if (emphasized) {
+    ctx.save();
+    ctx.shadowColor = '#ffd76a';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.arc(cx + 18, rect.y + 5, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd76a';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#d4dfdc';
-  fitText(ctx, label, rect.width - 8, 9.5, 800, 8.5);
-  ctx.fillText(label, cx, rect.y + 39);
+  ctx.shadowColor = 'rgba(0,0,0,.68)';
+  ctx.shadowBlur = 4;
+  ctx.fillStyle = '#f3efe3';
+  fitText(ctx, label, rect.width - 6, 10, 900, 8.5);
+  ctx.fillText(label, cx, rect.y + 43);
+  ctx.restore();
 }
 
 function rankingCenterLayout(width: number, height: number) {
