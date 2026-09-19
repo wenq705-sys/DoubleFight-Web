@@ -32,6 +32,7 @@ type SoloResultState = {
   elapsedMs: number;
 };
 type MergeBurst = { count: number; maxValue: number; startedAt: number; until: number };
+type HomeMote = { mesh: THREE.Mesh; baseX: number; baseY: number; baseZ: number; phase: number; speed: number };
 
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
@@ -96,6 +97,13 @@ export class DouyinSoloScene {
   private mergeBurst: MergeBurst | null = null;
   private readonly stageGlow = new THREE.PointLight(0xffd36f, 0, 24, 2);
   private readonly dangerGlow = new THREE.PointLight(0xff5c64, 0, 18, 2);
+  private readonly homeAmbient = new THREE.Group();
+  private readonly homeMotes: HomeMote[] = [];
+  private soloStage = 1;
+  private soloDangerBand = 0;
+  private soloBaseStageGlow = 0;
+  private stageMomentUntil = 0;
+  private rescueMomentUntil = 0;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -148,6 +156,7 @@ export class DouyinSoloScene {
     this.online.remote.root.visible = false;
 
     this.configureLighting();
+    this.createHomeAmbient();
     this.resize();
     this.applyThemeLook();
     this.boardView.prewarmTheme(theme);
@@ -349,6 +358,7 @@ export class DouyinSoloScene {
     this.platform.storage.setItem('doublefight-theme', theme);
     this.boardView.setTheme(theme);
     this.boardView.prewarmTheme(theme);
+    this.applyHomeAmbientTheme();
     if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
       this.boardView.reset(HOME_TILES);
     }
@@ -368,6 +378,9 @@ export class DouyinSoloScene {
       this.nextHomeHudAt = this.visualTime + 0.75;
       this.refreshHud();
     }
+
+    this.updateHomeAmbient();
+    this.updateMomentLighting();
 
     if (duel) {
       this.online.local.update(delta);
@@ -438,6 +451,13 @@ export class DouyinSoloScene {
     this.unsubscribeOnline();
     this.online.dispose();
     this.boardView.dispose();
+    for (const mote of this.homeMotes) {
+      mote.mesh.geometry.dispose();
+      const material = mote.mesh.material;
+      if (Array.isArray(material)) material.forEach(entry => entry.dispose());
+      else material.dispose();
+    }
+    this.homeMotes.length = 0;
     this.uiTexture.dispose();
     this.uiMaterial.dispose();
     this.uiPlane.geometry.dispose();
@@ -463,6 +483,10 @@ export class DouyinSoloScene {
     this.soloResult = null;
     this.soloStartedAt = null;
     this.mergeBurst = null;
+    this.soloStage = 1;
+    this.soloDangerBand = 0;
+    this.stageMomentUntil = 0;
+    this.rescueMomentUntil = 0;
     this.commercial.hideBanner();
     this.inputLocked = false;
     this.notice = null;
@@ -498,6 +522,7 @@ export class DouyinSoloScene {
       this.audio.victory();
       this.platform.haptics.trigger('success');
     } else {
+      this.audio.defeat();
       this.platform.haptics.trigger('medium');
     }
     this.refreshHud();
@@ -514,7 +539,22 @@ export class DouyinSoloScene {
     const tier = pieceTier(this.highest);
     const progress = Math.max(0, Math.min(1, (tier - 1) / 10));
     const empty = this.controller.board.emptyCells().length;
-    const danger = empty <= 1 ? 1 : empty <= 3 ? 0.55 : 0;
+    const dangerBand = empty <= 1 ? 2 : empty <= 3 ? 1 : 0;
+    const danger = dangerBand === 2 ? 1 : dangerBand === 1 ? 0.55 : 0;
+    const stage = tier >= 10 ? 4 : tier >= 7 ? 3 : tier >= 4 ? 2 : 1;
+
+    if (!this.soloResult && stage > this.soloStage) {
+      this.stageMomentUntil = this.visualTime + (stage >= 4 ? 1.05 : 0.78);
+      this.boardView.cameraPunch = Math.max(this.boardView.cameraPunch, stage >= 4 ? 0.16 : 0.10);
+      this.boardView.cameraShake = Math.max(this.boardView.cameraShake, stage >= 4 ? 0.055 : 0.032);
+      this.platform.haptics.trigger(stage >= 4 ? 'success' : 'medium');
+    }
+    if (!this.soloResult && this.soloDangerBand > 0 && dangerBand === 0) {
+      this.rescueMomentUntil = this.visualTime + 0.62;
+      this.platform.haptics.trigger('light');
+    }
+    this.soloStage = stage;
+    this.soloDangerBand = dangerBand;
     const sky = new THREE.Color(presentation.sky);
     const fog = new THREE.Color(presentation.fog);
     const stageTint = new THREE.Color(this.currentTheme === 'palace' ? 0xe8a29d : 0x8fb6c8);
@@ -537,8 +577,9 @@ export class DouyinSoloScene {
     this.scene.background = sky;
     this.scene.fog = new THREE.Fog(fog, distance + 7 - danger * 1.5, distance + 28 - danger * 4.5);
     this.renderer.toneMappingExposure = presentation.exposure + progress * 0.07 - danger * 0.035;
+    this.soloBaseStageGlow = 0.14 + progress * 0.82;
     this.stageGlow.color.set(this.currentTheme === 'palace' ? 0xffc16c : 0x78d7ff);
-    this.stageGlow.intensity = 0.14 + progress * 0.82;
+    this.stageGlow.intensity = this.soloBaseStageGlow;
     this.dangerGlow.intensity = danger * 0.82;
   }
 
@@ -1047,9 +1088,97 @@ export class DouyinSoloScene {
     this.renderer.render(this.scene, this.duelCamera);
   }
 
+  private createHomeAmbient(): void {
+    this.scene.add(this.homeAmbient);
+    const layout = [
+      [-4.35, 0.55, 1.15, .2, .72],
+      [4.15, 1.05, 1.35, 1.4, .60],
+      [-3.65, 3.05, 1.65, 2.6, .54],
+      [3.55, 3.55, 1.45, 3.7, .68],
+      [-2.55, 4.55, 1.20, 4.6, .50],
+      [2.35, 4.85, 1.55, 5.8, .58],
+      [-4.05, 5.65, 1.35, 1.9, .47],
+      [4.25, 5.95, 1.10, 3.1, .52],
+    ] as const;
+
+    layout.forEach(([baseX, baseY, baseZ, phase, speed], index) => {
+      const geometry = index % 2 === 0
+        ? new THREE.OctahedronGeometry(index % 4 === 0 ? .085 : .065, 0)
+        : new THREE.SphereGeometry(index % 3 === 0 ? .075 : .055, 7, 5);
+      const material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: .58,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(baseX, baseY, baseZ);
+      mesh.renderOrder = 1;
+      this.homeAmbient.add(mesh);
+      this.homeMotes.push({ mesh, baseX, baseY, baseZ, phase, speed });
+    });
+    this.applyHomeAmbientTheme();
+  }
+
+  private applyHomeAmbientTheme(): void {
+    const kingdom = [0x7adff2, 0xf3c969, 0x91d46d, 0xffdda0] as const;
+    const palace = [0xf2a3ae, 0xffd089, 0x86cfc2, 0xf6b6cb] as const;
+    const palette = this.currentTheme === 'palace' ? palace : kingdom;
+    this.homeMotes.forEach((mote, index) => {
+      const material = mote.mesh.material as THREE.MeshBasicMaterial;
+      material.color.setHex(palette[index % palette.length]);
+      material.opacity = index % 3 === 0 ? .68 : .48;
+    });
+  }
+
+  private updateHomeAmbient(): void {
+    const visible = this.mode === 'home';
+    this.homeAmbient.visible = visible;
+    if (!visible) return;
+
+    for (const mote of this.homeMotes) {
+      const t = this.visualTime * mote.speed + mote.phase;
+      mote.mesh.position.x = mote.baseX + Math.sin(t * .83) * .14;
+      mote.mesh.position.y = mote.baseY + Math.sin(t) * .18;
+      mote.mesh.position.z = mote.baseZ + Math.cos(t * .71) * .10;
+      mote.mesh.rotation.x = t * .34;
+      mote.mesh.rotation.y = t * .28;
+      mote.mesh.rotation.z = Math.sin(t * .64) * .35;
+    }
+  }
+
+  private updateMomentLighting(): void {
+    if (this.mode !== 'solo') return;
+
+    const normalColor = this.currentTheme === 'palace' ? 0xffc16c : 0x78d7ff;
+    let intensity = this.soloBaseStageGlow;
+    this.stageGlow.color.setHex(normalColor);
+
+    if (this.visualTime < this.stageMomentUntil) {
+      const remaining = Math.max(0, this.stageMomentUntil - this.visualTime);
+      const duration = this.soloStage >= 4 ? 1.05 : .78;
+      const p = 1 - Math.min(1, remaining / duration);
+      const pulse = Math.sin(Math.PI * p);
+      intensity += pulse * (this.soloStage >= 4 ? 1.15 : .72);
+      this.stageGlow.color.lerp(new THREE.Color(0xfff2bd), pulse * .46);
+    } else if (this.visualTime < this.rescueMomentUntil) {
+      const remaining = Math.max(0, this.rescueMomentUntil - this.visualTime);
+      const p = 1 - Math.min(1, remaining / .62);
+      const pulse = Math.sin(Math.PI * p);
+      intensity += pulse * .55;
+      this.stageGlow.color.lerp(new THREE.Color(0x7fe0af), pulse * .72);
+    }
+
+    this.stageGlow.intensity = intensity;
+    const dangerBase = this.soloDangerBand === 2 ? .82 : this.soloDangerBand === 1 ? .45 : 0;
+    const dangerPulse = this.soloDangerBand === 2 ? .88 + Math.sin(this.visualTime * 7.2) * .12 : 1;
+    this.dangerGlow.intensity = Math.max(0, dangerBase * dangerPulse);
+  }
+
   private applyThemeLook(): void {
     const presentation = this.boardView.presentation;
     this.scene.background = new THREE.Color(presentation.sky);
+    this.applyHomeAmbientTheme();
     const distance = this.cameraHome.length() || 24;
     this.scene.fog = new THREE.Fog(presentation.fog, distance + 8, distance + 28);
     this.renderer.toneMappingExposure = presentation.exposure;
@@ -1139,20 +1268,32 @@ export class DouyinSoloScene {
 
     drawUiIcon(ctx, 'settings', 34, titleTop + 24, 18, '#ffe9ab');
 
-    const metaY = Math.max(titleTop + 82, layout.theme.y - 76);
-    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 62, 20);
-    ctx.fillStyle = 'rgba(12, 28, 36, .70)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,226,151,.18)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    const metaY = Math.max(titleTop + 88, layout.theme.y - 72);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.52)';
+    ctx.shadowBlur = 10;
+    drawUiIcon(ctx, 'world', width / 2 - 62, metaY + 19, 18, '#f1ce70');
+    ctx.fillStyle = '#ffe7a6';
+    ctx.font = '900 19px sans-serif';
+    ctx.fillText(themeMeta.label, width / 2 + 8, metaY + 18);
+    ctx.shadowBlur = 0;
 
-    ctx.fillStyle = '#ffe6a1';
-    ctx.font = '900 18px sans-serif';
-    ctx.fillText(themeMeta.label, width / 2, metaY + 21);
-    ctx.fillStyle = '#d7e5df';
-    ctx.font = '750 10px sans-serif';
-    ctx.fillText(`已到达 · ${pieceName(this.currentTheme, highest)} · ${tier}/11`, width / 2, metaY + 44);
+    ctx.fillStyle = 'rgba(232,241,236,.86)';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText(`${pieceName(this.currentTheme, highest)} · ${tier}/11`, width / 2, metaY + 43);
+
+    const lineW = 82;
+    const line = ctx.createLinearGradient(width / 2 - lineW, 0, width / 2 + lineW, 0);
+    line.addColorStop(0, 'rgba(243,207,112,0)');
+    line.addColorStop(.5, 'rgba(243,207,112,.72)');
+    line.addColorStop(1, 'rgba(243,207,112,0)');
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(width / 2 - lineW, metaY + 56);
+    ctx.lineTo(width / 2 + lineW, metaY + 56);
+    ctx.stroke();
+    ctx.restore();
 
     this.drawPillButton(ctx, layout.theme, '选择世界', 'secondary', 'world');
     this.drawPillButton(ctx, layout.solo, '开始挑战', 'primary', 'solo');
