@@ -836,18 +836,17 @@ export class DouyinSoloScene {
     if (snap.mode === 'room') {
       const room = snap.state.room;
       const me = room?.players.find(player => player.id === snap.state.playerId);
-      const share = this.roomShareRect(info.width, info.height);
-      const ready = { x: 48, y: info.height - Math.max(18, info.safeArea.bottom + 14) - 62, width: info.width - 96, height: 48 };
-      if (this.hit(x, y, share) && room?.code) {
-        this.flashTap(share);
+      const layout = this.roomLobbyLayout(info.width, info.height);
+      if (this.hit(x, y, layout.share) && room?.code) {
+        this.flashTap(layout.share);
         this.notice = { text: '正在打开好友邀请…', until: this.visualTime + 2 };
         this.refreshHud();
         void this.social.shareRoom(room.code).then(ok => {
           this.notice = { text: ok ? '已打开好友邀请' : '分享暂不可用', until: this.visualTime + 1.2 };
           this.refreshHud();
         });
-      } else if (this.hit(x, y, ready) && me) {
-        this.flashTap(ready);
+      } else if (this.hit(x, y, layout.ready) && me) {
+        this.flashTap(layout.ready);
         this.online.toggleReady();
       }
       return;
@@ -1520,40 +1519,70 @@ export class DouyinSoloScene {
 
     if (snap.mode === 'room') {
       const room = snap.state.room;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff1c9';
-      ctx.font = '900 22px sans-serif';
-      ctx.fillText('好友房间', width / 2, this.hudTop() + 30);
-      ctx.fillStyle = '#f0cf72';
-      ctx.font = '900 30px monospace';
-      ctx.fillText(room?.code ?? '------', width / 2, height * 0.36);
-
       const players = room?.players ?? [];
-      players.forEach((player, index) => {
-        const y = height * 0.44 + index * 58;
-        const me = player.id === snap.state.playerId;
-        ctx.fillStyle = me ? 'rgba(28,80,84,.82)' : 'rgba(20,42,52,.76)';
-        this.roundedRect(ctx, 34, y, width - 68, 48, 16);
+      const layout = this.roomLobbyLayout(width, height);
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#17343C';
+      ctx.font = '900 25px sans-serif';
+      ctx.fillText('好友房间', width / 2, this.hudTop() + 28);
+      ctx.fillStyle = '#38565D';
+      ctx.font = '800 10px sans-serif';
+      ctx.fillText('邀请好友加入后，一起准备开局', width / 2, this.hudTop() + 52);
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(28,49,53,.16)';
+      ctx.shadowOffsetY = 3;
+      this.roundedRect(ctx, layout.code.x, layout.code.y, layout.code.width, layout.code.height - 3, 18);
+      ctx.fillStyle = '#FFF0C9';
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = '#17343C';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#46636A';
+      ctx.font = '900 9px sans-serif';
+      ctx.fillText('房号', layout.code.x + 28, layout.code.y + layout.code.height / 2);
+      ctx.fillStyle = '#8A5A13';
+      ctx.font = '900 18px monospace';
+      ctx.fillText(room?.code ?? '------', layout.code.x + layout.code.width / 2 + 22, layout.code.y + layout.code.height / 2);
+      ctx.restore();
+
+      layout.players.forEach((rect, index) => {
+        const player = players[index];
+        const isMe = player?.id === snap.state.playerId;
+        ctx.save();
+        ctx.shadowColor = 'rgba(28,49,53,.13)';
+        ctx.shadowOffsetY = 2;
+        this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height - 2, 16);
+        ctx.fillStyle = player ? (isMe ? '#FFDFA0' : '#FFF0C9') : '#D9E3DD';
         ctx.fill();
+        ctx.shadowColor = 'transparent';
+        ctx.strokeStyle = '#17343C';
+        ctx.lineWidth = player ? 1.8 : 1.2;
+        ctx.stroke();
         ctx.textAlign = 'left';
-        ctx.fillStyle = '#fff1c9';
-        ctx.font = '800 13px sans-serif';
-        const roomName = `${player.name}${me ? ' · 我' : ''}`;
-        fitText(ctx, roomName, Math.max(90, width - 150), 13, 800, 9);
-        ctx.fillText(roomName, 50, y + 18);
-        ctx.fillStyle = '#bcd0d1';
-        ctx.font = '650 10px sans-serif';
-        ctx.fillText(THEMES[player.theme].label, 50, y + 34);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = player.ready ? '#8ff0c2' : '#d6dde0';
-        ctx.fillText(player.ready ? '已准备' : '未准备', width - 50, y + 24);
+        ctx.fillStyle = '#17343C';
+        ctx.font = '900 10px sans-serif';
+        const label = player ? `${player.name}${isMe ? ' · 我' : ''}` : '等待好友';
+        fitText(ctx, label, rect.width - 18, 10, 900, 8);
+        ctx.fillText(label, rect.x + 10, rect.y + 15);
+        ctx.fillStyle = '#46636A';
+        ctx.font = '800 8.5px sans-serif';
+        ctx.fillText(player ? THEMES[player.theme].label : '空位', rect.x + 10, rect.y + 30);
+        if (player) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = player.ready ? '#176E55' : '#8A5A13';
+          ctx.font = '900 8.5px sans-serif';
+          ctx.fillText(player.ready ? '已准备' : '未准备', rect.x + rect.width - 10, rect.y + 30);
+        }
+        ctx.restore();
       });
 
       const me = players.find(player => player.id === snap.state.playerId);
-      const share = this.roomShareRect(width, height);
-      const ready = { x: 48, y: height - Math.max(18, this.platform.getSystemInfo().safeArea.bottom + 14) - 62, width: width - 96, height: 48 };
-      this.drawPillButton(ctx, share, '邀请抖音好友', 'secondary', 'share');
-      this.drawPillButton(ctx, ready, me?.ready ? '取消准备' : '准备', 'primary');
+      this.drawPillButton(ctx, layout.share, '邀请抖音好友', 'secondary', 'share');
+      this.drawPillButton(ctx, layout.ready, me?.ready ? '取消准备' : '准备', 'primary');
       return;
     }
 
@@ -1732,35 +1761,75 @@ export class DouyinSoloScene {
 
   private drawJoinPad(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     const pad = this.joinPadLayout(width, height);
-    ctx.fillStyle = 'rgba(5,14,20,.94)';
+    const bg = this.currentTheme === 'palace' ? '#D88F6E' : '#72BEDA';
+    const ink = '#17343C';
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
 
-    const panel = { x: 24, y: pad.close.y - 34, width: width - 48, height: pad.join.y + pad.join.height - (pad.close.y - 34) + 18 };
-    ctx.fillStyle = 'rgba(19,38,47,.96)';
-    this.roundedRect(ctx, panel.x, panel.y, panel.width, panel.height, 26);
+    ctx.save();
+    ctx.shadowColor = 'rgba(28,49,53,.18)';
+    ctx.shadowOffsetY = 3;
+    this.roundedRect(ctx, pad.close.x, pad.close.y, pad.close.width, pad.close.height, 20);
+    ctx.fillStyle = '#FFF0C9';
     ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawUiIcon(ctx, 'back', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2, 29, ink);
+    ctx.restore();
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff1c9';
-    ctx.font = '900 20px sans-serif';
-    ctx.fillText('加入好友房', width / 2, panel.y + 34);
-    ctx.fillStyle = '#f2d77e';
-    ctx.font = '900 30px monospace';
-    ctx.fillText((this.joinCode + '······').slice(0, 6).split('').join(' '), width / 2, panel.y + 78);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    ctx.font = '900 25px sans-serif';
+    ctx.fillText('加入好友房', width / 2, pad.close.y + 22);
+    ctx.fillStyle = '#38565D';
+    ctx.font = '800 10px sans-serif';
+    ctx.fillText('输入好友分享的 6 位房号', width / 2, pad.close.y + 48);
 
-    for (const entry of pad.keys) this.drawPillButton(ctx, entry.rect, entry.key, 'secondary');
+    pad.codeSlots.forEach((slot, index) => {
+      ctx.save();
+      ctx.shadowColor = 'rgba(28,49,53,.12)';
+      ctx.shadowOffsetY = 2;
+      this.roundedRect(ctx, slot.x, slot.y, slot.width, slot.height, 14);
+      ctx.fillStyle = '#FFF0C9';
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = index < this.joinCode.length ? '#8A5A13' : ink;
+      ctx.lineWidth = index < this.joinCode.length ? 2.2 : 1.5;
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.font = '900 20px monospace';
+      ctx.fillText(this.joinCode[index] ?? '·', slot.x + slot.width / 2, slot.y + slot.height / 2 + 1);
+      ctx.restore();
+    });
+
+    for (const entry of pad.keys) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(28,49,53,.13)';
+      ctx.shadowOffsetY = 3;
+      this.roundedRect(ctx, entry.rect.x, entry.rect.y, entry.rect.width, entry.rect.height - 3, 17);
+      ctx.fillStyle = entry.key === '⌫' ? '#D9E3DD' : '#FFF0C9';
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = ink;
+      ctx.font = entry.key === '⌫' ? '900 17px sans-serif' : '900 18px sans-serif';
+      ctx.fillText(entry.key, entry.rect.x + entry.rect.width / 2, entry.rect.y + (entry.rect.height - 3) / 2);
+      ctx.restore();
+    }
+
     this.drawPillButton(
       ctx,
       pad.join,
-      this.joinCode.length === 6 ? '加入房间' : '输入 6 位房号',
-      this.joinCode.length === 6 ? 'primary' : 'secondary',
+      this.joinCode.length === 6 ? '加入房间' : '输入完整房号',
+      'primary',
       'room',
       this.joinCode.length !== 6,
     );
-
-    ctx.fillStyle = '#b9c9cb';
-    ctx.font = '700 11px sans-serif';
-    ctx.fillText('取消', pad.close.x + pad.close.width / 2, pad.close.y + pad.close.height / 2);
   }
 
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -2134,8 +2203,25 @@ export class DouyinSoloScene {
     };
   }
 
-  private roomShareRect(width: number, height: number): Rect {
-    return { x: width / 2 - 78, y: height * 0.39, width: 156, height: 34 };
+  private roomLobbyLayout(width: number, height: number) {
+    const info = this.platform.getSystemInfo();
+    const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
+    const bottom = Math.max(16, metrics.bottom);
+    const edge = Math.max(18, metrics.edge);
+    const ready = { x: edge + 16, y: height - bottom - 62, width: width - (edge + 16) * 2, height: 52 };
+    const share = { x: width / 2 - 104, y: ready.y - 54, width: 208, height: 42 };
+    const playerGap = 10;
+    const playerW = (width - edge * 2 - playerGap) / 2;
+    const playerY = share.y - 50;
+    return {
+      code: { x: width / 2 - 88, y: this.hudTop() + 72, width: 176, height: 42 },
+      players: [
+        { x: edge, y: playerY, width: playerW, height: 42 },
+        { x: edge + playerW + playerGap, y: playerY, width: playerW, height: 42 },
+      ],
+      share,
+      ready,
+    };
   }
 
   private soloSkillRect(width: number, height: number, safeBottom: number): Rect {
@@ -2186,20 +2272,35 @@ export class DouyinSoloScene {
   private joinPadLayout(width: number, height: number) {
     const info = this.platform.getSystemInfo();
     const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
-    const keySize = Math.max(metrics.minTouch, Math.min(64, (width - metrics.edge * 2 - 48) / 3));
-    const gap = metrics.compact ? 9 : 12;
-    const startX = (width - (keySize * 3 + gap * 2)) / 2;
-    const startY = Math.max(metrics.top + 108, height * (metrics.compact ? 0.29 : 0.36));
+    const edge = Math.max(20, metrics.edge);
+    const close = { x: 12, y: Math.max(72, metrics.top + 2), width: 58, height: 58 };
+    const codeGap = 6;
+    const codeW = Math.min(40, (width - edge * 2 - codeGap * 5) / 6);
+    const codeH = 48;
+    const codeStartX = (width - (codeW * 6 + codeGap * 5)) / 2;
+    const codeY = close.y + 82;
+    const codeSlots = Array.from({ length: 6 }, (_, index) => ({
+      x: codeStartX + index * (codeW + codeGap),
+      y: codeY,
+      width: codeW,
+      height: codeH,
+    }));
+
+    const keyGap = metrics.compact ? 10 : 12;
+    const keySize = Math.min(metrics.compact ? 54 : 60, Math.max(48, (width - edge * 2 - keyGap * 2) / 3));
+    const startX = (width - (keySize * 3 + keyGap * 2)) / 2;
+    const startY = codeY + codeH + 34;
     const labels = ['1','2','3','4','5','6','7','8','9','⌫','0'];
     const keys = labels.map((key, index) => {
       const row = Math.floor(index / 3);
       const col = index % 3;
-      return { key, rect: { x: startX + col * (keySize + gap), y: startY + row * (keySize + 10), width: keySize, height: keySize } };
+      return { key, rect: { x: startX + col * (keySize + keyGap), y: startY + row * (keySize + 10), width: keySize, height: keySize } };
     });
     return {
       keys,
-      close: { x: width / 2 - 50, y: startY - 48, width: 100, height: 30 },
-      join: { x: width / 2 - 110, y: startY + 4 * (keySize + 10) + 4, width: 220, height: 46 },
+      codeSlots,
+      close,
+      join: { x: edge + 18, y: Math.min(height - metrics.bottom - 72, startY + 4 * (keySize + 10) + 4), width: width - (edge + 18) * 2, height: 54 },
     };
   }
 
