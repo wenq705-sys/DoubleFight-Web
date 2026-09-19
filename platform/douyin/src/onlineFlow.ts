@@ -111,6 +111,12 @@ export class DouyinOnlineFlow {
     };
   }
 
+  setPlayerName(displayName: string | undefined): void {
+    const next = displayName?.trim();
+    this.playerName = next || '玩家';
+    this.emit();
+  }
+
   setTheme(theme: ThemeId): void {
     const state = this.client.snapshot();
     if (state.matchmaking.status === 'searching' || state.match?.phase === 'playing') return;
