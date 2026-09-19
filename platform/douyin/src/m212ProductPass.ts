@@ -70,6 +70,7 @@ export function installM212ProductPass(
     state.ascended = false;
     state.flight = null;
     state.profileOpen = false;
+    scene.profilePageOpen = false;
     state.profileBusy = false;
     state.profileMessage = null;
     originalStartSolo();
@@ -109,6 +110,7 @@ export function installM212ProductPass(
       const sync = profileSyncRect(info.width, info.height);
       if (hit(x, y, close)) {
         state.profileOpen = false;
+        scene.profilePageOpen = false;
         state.profileMessage = null;
         platform.haptics.trigger('light');
         scene.refreshHud();
@@ -142,6 +144,7 @@ export function installM212ProductPass(
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       if (hit(x, y, profileRect(info.width, scene.hudTop()))) {
         state.profileOpen = true;
+        scene.profilePageOpen = true;
         platform.haptics.trigger('light');
         scene.refreshHud();
         return;
@@ -218,6 +221,7 @@ export function installM212ProductPass(
     object.shadow.map?.dispose?.();
     object.shadow.map = null;
   });
+  scene.profilePageOpen = false;
   scene.applyQuality('medium', 1.2);
   scene.refreshHud();
   void client;
@@ -386,7 +390,7 @@ function drawProfile(
   ctx.fillRect(0, 0, width, height);
 
   const close = profileCloseRect(width, hudTop);
-  drawUiIcon(ctx, 'back', close.x + close.width / 2, close.y + close.height / 2, 20, ink);
+  drawUiIcon(ctx, 'back', close.x + close.width / 2, close.y + close.height / 2, 30, ink);
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const rating = player?.pvp.rating ?? 1000;
   const cardX = 24;
@@ -463,11 +467,11 @@ function drawProfile(
 }
 
 function profileCloseRect(width: number, hudTop: number): Rect {
-  return { x: 16, y: Math.max(16, hudTop), width: 46, height: 46 };
+  return { x: 10, y: Math.max(10, hudTop - 2), width: 58, height: 58 };
 }
 
 function profileSyncRect(width: number, height: number): Rect {
-  return { x: 40, y: height - 112, width: width - 80, height: 52 };
+  return { x: 40, y: height - 136, width: width - 80, height: 54 };
 }
 
 function profileRect(width: number, top: number): Rect {

@@ -746,7 +746,7 @@ export class DouyinSoloScene {
       return;
     }
 
-    if (x >= 16 && x <= 62 && y >= hudTop + 6 && y <= hudTop + 54) {
+    if (x >= 10 && x <= 70 && y >= hudTop + 2 && y <= hudTop + 62) {
       this.showHome();
       return;
     }
@@ -784,7 +784,7 @@ export class DouyinSoloScene {
       return;
     }
 
-    const back = { x: 16, y: this.hudTop() + 5, width: 46, height: 46 };
+    const back = { x: 10, y: this.hudTop() + 2, width: 58, height: 58 };
     if (this.hit(x, y, back)) {
       this.flashTap(back);
       if (snap.mode === 'playing') {
@@ -1374,7 +1374,7 @@ export class DouyinSoloScene {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    drawUiIcon(ctx, 'back', edge + 17, hudTop + 32, 18, '#ffe9ab');
+    drawUiIcon(ctx, 'back', edge + 22, hudTop + 32, 28, '#ffe9ab');
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#a9c3c3';
@@ -1884,7 +1884,7 @@ export class DouyinSoloScene {
 
   private drawBack(ctx: CanvasRenderingContext2D): void {
     const top = this.hudTop();
-    drawUiIcon(ctx, 'back', 36, top + 28, 22, '#ffe9ab');
+    drawUiIcon(ctx, 'back', 39, top + 31, 30, '#ffe9ab');
   }
 
   private drawEnergyBar(ctx: CanvasRenderingContext2D, rect: Rect, ratio: number, color: string): void {

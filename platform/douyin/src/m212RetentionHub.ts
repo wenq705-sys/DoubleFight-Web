@@ -250,6 +250,11 @@ export function installM212RetentionHub(
       return;
     }
 
+    if (scene.profilePageOpen) {
+      originalTap(x, y);
+      return;
+    }
+
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       const layout = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
 
@@ -297,7 +302,7 @@ export function installM212RetentionHub(
     const scale = Math.min(2, Math.max(1, info.pixelRatio));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen);
+    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen);
     if (!nativeModal && !state.screen) {
       if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene, auth);
       if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state, auth);
