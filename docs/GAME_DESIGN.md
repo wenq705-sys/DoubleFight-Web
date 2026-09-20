@@ -1,43 +1,32 @@
 # Game Design
 
-## Product thesis
+## Current release thesis
 
-`双数对决 / Double Fight` is a **3D 2048 online skill-duel game** designed for portrait mobile play, short sessions and continuously expandable visual themes.
+The first Douyin release of `双数对决 / Double Fight` is a **portrait 3D 2048 Solo collection-and-ascent game** built around tactile merges, short repeatable runs and visually distinct theme worlds.
 
-Long-term signature:
+First-release signature:
 
-> **2048 clarity + real-time two-device competition + spectacular skill interaction + independent 3D themes.**
+> **2048 clarity + 11-tier collectible ascent + swipe-to-world discovery + high-impact tactile feedback + five launch-quality themes.**
 
-## Modes
+Online Duel remains a long-term product pillar and its authoritative implementation is retained, but it is deferred from the first release and must not appear in launch-facing navigation/rank/task surfaces while the M2.17 launch policy is disabled.
 
-### Solo / Theme Islands
+## First-release mode — Solo / Theme Islands
 
-The default product shell is the Theme Islands home. The player selects a world and plays a full-screen premium 3D 2048 session.
+The player swipes between worlds on Home and enters a full-screen 3D 2048 run.
 
-Solo mode carries:
-- theme discovery
-- high score / highest tier
-- visual progression
-- future unlocks / collections / challenges
+Each world carries:
+- 11 readable, numberless tiers from 2 → 2048;
+- explicit collection/discovery progress;
+- high score and fastest 11/11 ascent records;
+- stage moments at meaningful progression thresholds;
+- danger/recovery feedback as the board fills or opens;
+- a terminal 11/11 success celebration and explicit locked-board failure state.
 
-### Online Duel
+Solo is not a stripped-down fallback for PvP. In M2.17 it is the complete launch product and all Home/meta/reward presentation should reinforce that loop.
 
-Two players use **two separate devices** and connect through the authoritative game server.
+## Deferred mode — Online Duel
 
-Entry paths:
-- **快速匹配** — server FIFO queue finds another live player and starts immediately
-- **私人房** — create/share a 6-digit room code, then both players ready manually
-
-Both paths enter the exact same competitive RoomSession after pairing.
-
-Each player:
-- chooses their own visual theme independently,
-- controls only their own 4×4 board,
-- sees both their own board and the opponent state,
-- earns combat resources from strong 2048 play,
-- sends skills across the duel.
-
-A Palace player can fight a Kingdom player. Themes are visual/content presentation; they must not create balance differences.
+Online Duel uses two separate devices and the authoritative game server. Its existing matchmaking, rooms, energy, skills, timer, results and reconnect architecture remain preserved for a later release. Do not expand or re-expose it during M2.17 unless the milestone changes.
 
 ## Network gameplay principle
 
