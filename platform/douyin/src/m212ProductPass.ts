@@ -168,7 +168,7 @@ export function installM212ProductPass(
     const scale = Math.min(2, Math.max(1, info.pixelRatio));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen);
+    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
     if (!nativeModal && !scene.onboardingOpen) {
       if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
       if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, state, number(scene.visualTime));
@@ -345,7 +345,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.fillText(MATCH_FORMAT_LABEL, width / 2, cy + 49);
     ctx.fillStyle = '#c8d7d6';
     ctx.font = '800 10px sans-serif';
-    ctx.fillText(`已搜索 ${elapsed.toFixed(1)}s · 队列 ${Math.max(1, snap.state.matchmaking.queueSize)}`, width / 2, cy + 69);
+    ctx.fillText(`已搜索 ${elapsed.toFixed(1)} 秒 · 队列 ${Math.max(1, snap.state.matchmaking.queueSize)}`, width / 2, cy + 69);
     return;
   }
   if (snap.mode !== 'playing' && snap.mode !== 'result') return;

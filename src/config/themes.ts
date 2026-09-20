@@ -23,7 +23,7 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
   kingdom: {
     id: 'kingdom',
     label: '微缩王国',
-    subtitle: 'MINIATURE KINGDOM · 2048',
+    subtitle: '微缩王国 · 2048',
     highestLabel: '王国地标',
     ui: {
       background: '#72BEDA', accent: '#236B83', secondary: '#E1B45D',
@@ -45,7 +45,7 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
   zodiac: {
     id: 'zodiac',
     label: '生肖战神',
-    subtitle: 'ZODIAC ASCENSION · 2048',
+    subtitle: '生肖登顶 · 2048',
     highestLabel: '东方神龙',
     ui: {
       background: '#C95F47', accent: '#8D3028', secondary: '#E5B94E',
@@ -56,7 +56,7 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
   candy: {
     id: 'candy',
     label: '甜蜜星球',
-    subtitle: 'CANDY PLANET · 2048',
+    subtitle: '甜蜜星球 · 2048',
     highestLabel: '糖果奇迹',
     ui: {
       background: '#E9A8D8', accent: '#A54D91', secondary: '#60C7C0',
@@ -67,7 +67,7 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
   dreamhouse: {
     id: 'dreamhouse',
     label: '梦想家园',
-    subtitle: 'DREAM HOME · 2048',
+    subtitle: '梦想家园 · 2048',
     highestLabel: '梦想城堡',
     ui: {
       background: '#83B98C', accent: '#3C7459', secondary: '#E5A85C',

@@ -115,7 +115,7 @@ describe('DouyinAuthClient authoritative refresh', () => {
         matches: 3,
         endsAt: Date.parse('2026-09-24T00:00:00Z'),
       },
-      themes: { owned: ['kingdom', 'palace'] },
+      themes: { owned: ['kingdom', 'palace'], adUnlockProgress: { zodiac: 1 }, adViewsToday: 1, adDailyRemaining: 1 },
     };
     const requests: any[] = [];
     const request = vi.fn((options: any) => {
@@ -165,7 +165,7 @@ describe('DouyinAuthClient authoritative refresh', () => {
         options.success({
           statusCode: 200,
           data: {
-            themes: [{ id: 'kingdom', free: true, cost: 0 }, { id: 'palace', free: true, cost: 0 }],
+            themes: [{ id: 'kingdom', free: true, cost: 0, adViews: 0 }, { id: 'palace', free: false, cost: 100, adViews: 2 }],
             player: additivePlayer,
           },
         });

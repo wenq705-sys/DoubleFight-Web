@@ -37,6 +37,28 @@ describe('M2.12 authoritative economy migration',()=>{
     expect((await repo.unlockTheme(a.id,'future_theme','unlock-0001',day(36))).amount).toBe(0);
     expect((await repo.findById(a.id))?.themes.owned).toContain('future_theme');
   });
+  it('supports permanent theme unlock by coin or cumulative rewarded ads with a global daily cap',async()=>{
+    const {repo}=await fixture(),a=(await repo.findOrCreate('theme-economy',undefined,undefined,day(1))).account;
+    expect(publicPlayer(a,day(1)).themes.owned).toEqual(['kingdom']);
+
+    for(let i=0;i<7;i++)await repo.claimDailyLogin(a.id,day(i+1));
+    const palace=await repo.unlockTheme(a.id,'palace','palace-coin-0001',day(8));
+    expect(palace.unlocked).toBe(true);
+    expect(palace.amount).toBe(-100);
+
+    const first=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0001',day(8));
+    expect(first).toMatchObject({granted:true,unlocked:false,limited:false,progress:1,required:3,dailyRemaining:1});
+    const duplicate=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0001',day(8));
+    expect(duplicate).toMatchObject({granted:false,unlocked:false,progress:1,required:3,dailyRemaining:1});
+    const second=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0002',day(8));
+    expect(second).toMatchObject({granted:true,unlocked:false,progress:2,required:3,dailyRemaining:0});
+    const limited=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0003',day(8));
+    expect(limited).toMatchObject({granted:false,unlocked:false,limited:true,progress:2,dailyRemaining:0});
+    const third=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0003',day(9));
+    expect(third).toMatchObject({granted:true,unlocked:true,progress:3,required:3,dailyRemaining:1});
+    expect(publicPlayer(third.account,day(9)).themes.owned).toEqual(expect.arrayContaining(['kingdom','palace','zodiac']));
+  });
+
   it('persists all five Solo launch themes without resetting legacy fields',async()=>{
     const {repo}=await fixture(),a=(await repo.findOrCreate('launch-five',undefined,undefined,day(1))).account;
     const zodiac=await repo.mergeSoloProgress(a.id,'zodiac',888,128,day(1));

@@ -33,6 +33,7 @@ const musicSource = (theme: ThemeId): string => `audio/music-${theme}.wav`;
 
 export class DouyinAudio {
   private readonly contexts = new Map<Cue, DouyinInnerAudioContext>();
+  private readonly musicContexts = new Map<ThemeId, DouyinInnerAudioContext>();
   private music: DouyinInnerAudioContext | null = null;
   private musicTheme: ThemeId | null = null;
   private musicScene: MusicScene = 'home';
@@ -65,11 +66,14 @@ export class DouyinAudio {
     const themeChanged = theme !== this.musicTheme;
     this.musicScene = scene;
     if (themeChanged) {
-      this.destroyMusic();
+      this.stopMusic();
       this.musicTheme = theme;
+      this.music = this.ensureMusic(theme);
     }
     this.syncMusic();
   }
+
+  preloadTheme(theme: ThemeId): void { void this.ensureMusic(theme); }
 
   suspend(): void {
     this.suspended = true;
@@ -102,7 +106,12 @@ export class DouyinAudio {
   defeat(): void { this.play('defeat', 0.52); }
 
   dispose(): void {
-    this.destroyMusic();
+    this.stopMusic();
+    for (const context of this.musicContexts.values()) {
+      try { context.destroy(); } catch { /* ignore */ }
+    }
+    this.musicContexts.clear();
+    this.music = null;
     for (const context of this.contexts.values()) {
       try { context.destroy(); } catch { /* ignore */ }
     }
@@ -111,19 +120,8 @@ export class DouyinAudio {
 
   private syncMusic(): void {
     if (!this.musicEnabled || this.suspended || !this.musicTheme || !this.api.createInnerAudioContext) return;
-    if (!this.music) {
-      try {
-        const context = this.api.createInnerAudioContext();
-        context.src = musicSource(this.musicTheme);
-        context.autoplay = false;
-        context.loop = true;
-        context.obeyMuteSwitch = true;
-        context.onError?.(() => { this.musicPlaying = false; });
-        this.music = context;
-      } catch {
-        return;
-      }
-    }
+    if (!this.music) this.music = this.ensureMusic(this.musicTheme);
+    if (!this.music) return;
     this.music.volume = this.musicScene === 'solo' ? 0.25 : 0.17;
     if (this.musicPlaying) return;
     try {
@@ -141,12 +139,22 @@ export class DouyinAudio {
     this.musicPlaying = false;
   }
 
-  private destroyMusic(): void {
-    if (!this.music) return;
-    try { this.music.stop(); } catch { /* ignore */ }
-    try { this.music.destroy(); } catch { /* ignore */ }
-    this.music = null;
-    this.musicPlaying = false;
+  private ensureMusic(theme: ThemeId): DouyinInnerAudioContext | null {
+    const cached = this.musicContexts.get(theme);
+    if (cached) return cached;
+    if (!this.api.createInnerAudioContext) return null;
+    try {
+      const context = this.api.createInnerAudioContext();
+      context.src = musicSource(theme);
+      context.autoplay = false;
+      context.loop = true;
+      context.obeyMuteSwitch = true;
+      context.onError?.(() => { if (this.music === context) this.musicPlaying = false; });
+      this.musicContexts.set(theme, context);
+      return context;
+    } catch {
+      return null;
+    }
   }
 
   private play(cue: Cue, volume: number): void {

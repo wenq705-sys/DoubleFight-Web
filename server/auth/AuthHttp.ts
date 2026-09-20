@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { RELEASE_THEME_IDS, type ReleaseThemeId } from '../../shared/index';
 import type { AccountRepository } from './AccountRepository';
-import { currentSeason, publicPlayer, RELEASE_THEME_IDS, THEME_REGISTRY, type ReleaseThemeId } from './AccountRepository';
+import { currentSeason, ownedThemes, publicPlayer, THEME_REGISTRY } from './AccountRepository';
 import type { DouyinProvider } from './DouyinProvider';
 import { ProviderError } from './DouyinProvider';
 import { SessionToken } from './SessionToken';
@@ -13,7 +14,7 @@ export interface AuthDependencies {
   log?: (event: Record<string, string | boolean>) => void;
 }
 
-const routes = new Set(['/auth/douyin', '/me', '/profile', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/season/current', '/leaderboards/pvp']);
+const routes = new Set(['/auth/douyin', '/me', '/profile', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/themes/unlock/ad', '/season/current', '/leaderboards/pvp']);
 const audit = (event: Record<string, string | boolean>) => console.info(JSON.stringify({ area: 'account', ...event }));
 
 export function createAuthHandler(deps: AuthDependencies) {
@@ -80,6 +81,7 @@ export function createAuthHandler(deps: AuthDependencies) {
         const body = await readBody(request);
         if (typeof body.theme !== 'string' || !(RELEASE_THEME_IDS as readonly string[]).includes(body.theme)) throw new RequestError(400, 'invalid_progress');
         const theme = body.theme as ReleaseThemeId;
+        if (!ownedThemes(account).includes(theme)) throw new RequestError(403, 'theme_locked');
         if (typeof body.best !== 'number' || !Number.isSafeInteger(body.best) || body.best < 0 || body.best > 100_000_000) {
           throw new RequestError(400, 'invalid_progress');
         }
@@ -110,6 +112,15 @@ export function createAuthHandler(deps: AuthDependencies) {
         }
         const result = await deps.repository.unlockTheme(account.id, body.themeId, body.requestId, now());
         json(response, result.unlocked ? 200 : 409, { unlocked: result.unlocked, amount: result.amount, player: publicPlayer(result.account, now()) });
+        return true;
+      }
+      if (path === '/themes/unlock/ad') {
+        if (typeof body.themeId !== 'string' || !(body.themeId in THEME_REGISTRY)
+          || typeof body.claimId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.claimId)) {
+          throw new RequestError(400, 'invalid_theme_ad_request');
+        }
+        const result = await deps.repository.unlockThemeByAd(account.id, body.themeId, body.claimId, now());
+        json(response, 200, { granted: result.granted, unlocked: result.unlocked, limited: result.limited, progress: result.progress, required: result.required, dailyRemaining: result.dailyRemaining, player: publicPlayer(result.account, now()) });
         return true;
       }
       if (body.kind !== 'solo_skill_refill' && body.kind !== 'daily_s_coin') {

@@ -1,3 +1,4 @@
+import { THEME_UNLOCK_ECONOMY } from '../../../shared/index';
 import type { Platform } from '../../../src/platform/types';
 import { THEME_IDS, type ThemeId } from '../../../src/config/themes';
 import type { DouyinApi } from './api';
@@ -30,7 +31,7 @@ export interface PublicPlayer {
   pvp: { wins: number; losses: number; draws: number; rating: number };
   rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
   season?: PublicPlayerSeason;
-  themes?: { owned: string[] };
+  themes?: { owned: string[]; adUnlockProgress?: Record<string, number>; adViewsToday?: number; adDailyRemaining?: number };
 }
 
 export interface PvpLeaderboardEntry {
@@ -53,6 +54,15 @@ export interface ThemeCatalogueEntry {
   id: string;
   free: boolean;
   cost: number;
+  adViews?: number;
+}
+
+export interface ThemeAdUnlockResult {
+  status: 'granted' | 'duplicate' | 'limited' | 'unavailable';
+  unlocked: boolean;
+  progress: number;
+  required: number;
+  dailyRemaining: number;
 }
 
 export interface AuthoritativeRewardResult {
@@ -267,6 +277,64 @@ export class DouyinAuthClient {
     }
   }
 
+  isThemeOwned(theme: ThemeId): boolean {
+    if (THEME_UNLOCK_ECONOMY[theme].free) return true;
+    if (this.state.status === 'authenticated' && this.state.player.themes?.owned.includes(theme)) return true;
+    try {
+      const cached = JSON.parse(this.platform.storage.getItem('doublefight-owned-themes') ?? '[]') as unknown;
+      return Array.isArray(cached) && cached.includes(theme);
+    } catch {
+      return false;
+    }
+  }
+
+  themeUnlockProgress(theme: ThemeId): { progress: number; required: number; dailyRemaining: number } {
+    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    const themes = this.state.status === 'authenticated' ? this.state.player.themes : undefined;
+    return {
+      progress: Math.min(required, Math.max(0, Math.floor(themes?.adUnlockProgress?.[theme] ?? 0))),
+      required,
+      dailyRemaining: Math.max(0, Math.floor(themes?.adDailyRemaining ?? 0)),
+    };
+  }
+
+  async purchaseTheme(theme: ThemeId): Promise<'unlocked' | 'owned' | 'insufficient' | 'unavailable'> {
+    await this.start();
+    if (!this.token || this.state.status !== 'authenticated') return 'unavailable';
+    if (this.isThemeOwned(theme)) return 'owned';
+    if (this.state.player.rewards.currency < THEME_UNLOCK_ECONOMY[theme].coinCost) return 'insufficient';
+    const requestId = `theme_${theme}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      const data = await this.call('POST', '/themes/unlock', { themeId: theme, requestId });
+      this.updatePlayer(data.player);
+      return data.unlocked === true ? 'unlocked' : 'insufficient';
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 409) return 'insufficient';
+      this.handleSessionFailure(error);
+      return 'unavailable';
+    }
+  }
+
+  async claimThemeUnlockAd(theme: ThemeId, claimId: string): Promise<ThemeAdUnlockResult> {
+    await this.start();
+    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    if (!this.token) return { status: 'unavailable', unlocked: false, progress: 0, required, dailyRemaining: 0 };
+    try {
+      const data = await this.call('POST', '/themes/unlock/ad', { themeId: theme, claimId });
+      this.updatePlayer(data.player);
+      return {
+        status: data.limited === true ? 'limited' : data.granted === true ? 'granted' : 'duplicate',
+        unlocked: data.unlocked === true,
+        progress: safeCount(data.progress, required),
+        required: safeCount(data.required, required) || required,
+        dailyRemaining: safeCount(data.dailyRemaining, 2),
+      };
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return { status: 'unavailable', unlocked: false, progress: 0, required, dailyRemaining: 0 };
+    }
+  }
+
   async syncSoloProgressDetailed(
     theme: ThemeId,
     best: number,
@@ -333,6 +401,8 @@ export class DouyinAuthClient {
         this.platform.storage.setItem(highestKey, String(highest));
       }
     }
+    const ownedThemes = (player.themes?.owned ?? []).filter((theme): theme is ThemeId => THEME_IDS.includes(theme as ThemeId));
+    this.platform.storage.setItem('doublefight-owned-themes', JSON.stringify(ownedThemes));
   }
 
   private updatePlayer(value: unknown): void {
@@ -377,7 +447,8 @@ export class DouyinAuthClient {
     return Boolean(value && typeof value === 'object'
       && typeof (value as ThemeCatalogueEntry).id === 'string'
       && typeof (value as ThemeCatalogueEntry).free === 'boolean'
-      && typeof (value as ThemeCatalogueEntry).cost === 'number');
+      && typeof (value as ThemeCatalogueEntry).cost === 'number'
+      && ((value as ThemeCatalogueEntry).adViews === undefined || typeof (value as ThemeCatalogueEntry).adViews === 'number'));
   }
 
   private call(method: 'GET' | 'POST', path: string, data?: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -419,4 +490,10 @@ function safeJson(raw: string): unknown {
 
 function safeAmount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function safeCount(value: unknown, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(max, Math.floor(value)))
+    : 0;
 }

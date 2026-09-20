@@ -29,6 +29,17 @@ export class Board2048 {
     return this._score;
   }
 
+  get highest(): number {
+    let highest = 2;
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const value = this.grid[row][col]?.value;
+        if (value !== undefined && value > highest) highest = value;
+      }
+    }
+    return highest;
+  }
+
   reset(): BoardTile[] {
     this.grid = this.emptyGrid();
     this.blocked.clear();
@@ -50,7 +61,7 @@ export class Board2048 {
       tiles: tiles.map((tile) => ({ ...tile })),
       blockedCells: this.blockedCells(),
       score: this._score,
-      highest: Math.max(2, ...tiles.map((tile) => tile.value)),
+      highest: this.highest,
       canMove: this.canMove(),
     };
   }
@@ -298,7 +309,7 @@ export class Board2048 {
   }
 
   canMove(): boolean {
-    if (this.emptyCells().length > 0) return true;
+    if (this.hasEmptyCell()) return true;
 
     for (let row = 0; row < SIZE; row += 1) {
       for (let col = 0; col < SIZE; col += 1) {
@@ -340,6 +351,16 @@ export class Board2048 {
           : null,
       ),
     );
+  }
+
+  private hasEmptyCell(): boolean {
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const position = { row, col };
+        if (!this.grid[row][col] && !this.isBlocked(position)) return true;
+      }
+    }
+    return false;
   }
 
   private spawnRandom(): BoardTile | null {

@@ -313,11 +313,21 @@ export function drawSCoinIcon(
   ctx.strokeStyle = 'rgba(115,68,27,.50)';
   ctx.lineWidth = Math.max(1, size * .045);
   ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  // Currency icon must remain language-neutral for review: use a five-point star, never a Latin letter.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const angle = -Math.PI / 2 + i * Math.PI / 5;
+    const radius = i % 2 === 0 ? r * .42 : r * .19;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
   ctx.fillStyle = '#5a371d';
-  ctx.font = `950 ${Math.max(9, Math.round(size * .52))}px sans-serif`;
-  ctx.fillText('S', cx, cy + size * .025);
+  ctx.fill();
+  ctx.restore();
   ctx.restore();
 }
 

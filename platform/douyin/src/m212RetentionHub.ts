@@ -88,10 +88,10 @@ export function installM212RetentionHub(
 
   const unsubscribeDailyLogin = auth.subscribeDailyLoginGrant(grant => {
     const total = grant.amount + grant.streakAmount;
-    const streakCopy = grant.streakAmount > 0 ? ` · 7日宝箱 +${grant.streakAmount} S` : '';
+    const streakCopy = grant.streakAmount > 0 ? ` · 7日宝箱 +${grant.streakAmount} 星币` : '';
     state.coinBurst = { amount: total, startedAt: number(scene.visualTime) };
     scene.notice = {
-      text: `每日登录 +${grant.amount} S${streakCopy}`,
+      text: `每日登录 +${grant.amount} 星币${streakCopy}`,
       until: number(scene.visualTime) + 2.1,
     };
     platform.haptics.trigger('success');
@@ -304,7 +304,7 @@ export function installM212RetentionHub(
     const scale = Math.min(2, Math.max(1, info.pixelRatio));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen);
+    const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
     if (!nativeModal && !state.screen) {
       if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene, auth);
       if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled && game.currentMode === 'online') {
@@ -498,7 +498,7 @@ function handleHubTap(
         scene.refreshHud();
         void auth.refresh().then(current => {
           scene.notice = {
-            text: current.status === 'authenticated' ? '账号已连接 · 可领取今日 S 币' : '奖励账号暂不可用',
+            text: current.status === 'authenticated' ? '账号已连接 · 可领取今日星币' : '奖励账号暂不可用',
             until: number(scene.visualTime) + 1.6,
           };
           if (!scene.disposed) scene.refreshHud();
@@ -507,7 +507,7 @@ function handleHubTap(
       }
       const alreadyClaimed = auth.current.player.rewards.daily?.adClaimed === true;
       if (alreadyClaimed) {
-        scene.notice = { text: '今日广告 S 币已领取', until: number(scene.visualTime) + 1.4 };
+        scene.notice = { text: '今日广告星币已领取', until: number(scene.visualTime) + 1.4 };
         scene.refreshHud();
         return;
       }
@@ -615,13 +615,13 @@ async function claimDailyCoinReward(
 ): Promise<void> {
   if (scene.inputLocked) return;
   scene.inputLocked = true;
-  scene.notice = { text: '正在准备今日 S 币奖励…', until: number(scene.visualTime) + 8 };
+  scene.notice = { text: '正在准备今日星币奖励…', until: number(scene.visualTime) + 8 };
   scene.refreshHud();
   const ad = await commercial.showRewarded();
   if (ad !== 'rewarded') {
     scene.inputLocked = false;
     scene.notice = {
-      text: ad === 'skipped' ? '完整观看后才能领取 S 币' : '暂时没有可用广告',
+      text: ad === 'skipped' ? '完整观看后才能领取星币' : '暂时没有可用广告',
       until: number(scene.visualTime) + 1.5,
     };
     scene.refreshHud();
@@ -637,10 +637,10 @@ async function claimDailyCoinReward(
   if (result.status === 'granted') {
     platform.haptics.trigger('success');
     const total = result.amount + result.taskAmount;
-    const taskCopy = result.taskAmount > 0 ? ` · 广告任务 +${result.taskAmount} S` : '';
+    const taskCopy = result.taskAmount > 0 ? ` · 广告任务 +${result.taskAmount} 星币` : '';
     state.coinBurst = { amount: total, startedAt: number(scene.visualTime) };
     scene.notice = {
-      text: `今日广告奖励 +${result.amount || 30} S${taskCopy}`,
+      text: `今日广告奖励 +${result.amount || 30} 星币${taskCopy}`,
       until: number(scene.visualTime) + 1.8,
     };
     engagement.track('daily_coin_reward', {
@@ -959,7 +959,7 @@ function drawDailyCenter(
   ctx.textAlign = 'right';
   ctx.fillStyle = PAGE_INK;
   ctx.font = '900 10px sans-serif';
-  ctx.fillText('S币余额', layout.balance.x + layout.balance.width - 16, layout.balance.y + layout.balance.height / 2);
+  ctx.fillText('星币余额', layout.balance.x + layout.balance.width - 16, layout.balance.y + layout.balance.height / 2);
   ctx.restore();
 
   round(ctx, layout.progress.x, layout.progress.y, layout.progress.width, layout.progress.height, 17);
@@ -985,7 +985,7 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.dailyAd,
-    rewardBusy ? '正在领取…' : adClaimed ? '今日已领取' : '看广告领 30 S币',
+    rewardBusy ? '正在领取…' : adClaimed ? '今日已领取' : '看广告领 30 星币',
     rewardBusy ? '请稍候' : adClaimed ? '明天再来' : '完整看完即可领取',
     !rewardBusy && !adClaimed && Boolean(player),
     rewardBusy ? 'sync' : adClaimed ? 'check' : 'video',
@@ -994,7 +994,7 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.sidebar,
-    state.busyAction === 'sidebar' ? '正在打开…' : sidebarClaimed ? '今日已领取' : sidebarReady ? '领取 10 S币' : '侧边栏奖励',
+    state.busyAction === 'sidebar' ? '正在打开…' : sidebarClaimed ? '今日已领取' : sidebarReady ? '领取 10 星币' : '侧边栏奖励',
     sidebarClaimed ? '明天再来' : sidebarReady ? '同时获得下局清障 +1' : '从侧边栏返回即可领取',
     sidebarReady,
     sidebarClaimed ? 'check' : 'gift',
@@ -1031,7 +1031,7 @@ function drawDailyCenter(
   ctx.textAlign = 'center';
   ctx.fillStyle = PAGE_MUTED;
   ctx.font = '800 9.5px sans-serif';
-  ctx.fillText('S币可用于解锁新世界与主题内容', width / 2, height - 24);
+  ctx.fillText('星币可用于解锁新世界与主题内容', width / 2, height - 24);
 }
 
 function drawCoinBurst(

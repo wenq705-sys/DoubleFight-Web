@@ -20,8 +20,15 @@ describe('Douyin startup health reminder', () => {
     expect(source).toContain(line);
   });
 
-  it('requires an explicit enter-game tap instead of silently dismissing', () => {
-    expect(source).toContain("ctx.fillText('进入游戏'");
+  it('preloads resources behind an isolated startup layer and only enables entry when ready', () => {
+    expect(source).toContain("progress >= 1 ? '进入游戏' : '加载中…'");
+    expect(source).toContain('正在加载游戏资源');
+    expect(source).toContain('this.startupPreloadTasks.length === 0 && this.hit(x, y, button)');
+    expect(source).toContain('this.prepareStartupPreload()');
+    expect(source).toContain('this.prewarmThemeGpu(theme)');
+    expect(source).toContain('if (this.healthNoticeOpen) {');
+    expect(source).toContain('this.drawHealthNotice(ctx, width, height);');
+    expect(source).toContain('this.uiTexture.needsUpdate = true;');
     expect(source).toContain('this.healthNoticeButton(info.width, info.height)');
   });
 });
