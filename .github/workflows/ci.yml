@@ -24,6 +24,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
+      - name: Release compliance audit
+        run: npm run audit:release-compliance
       - name: Test
         run: npm test
       - name: Auth HTTP smoke (mock provider)
