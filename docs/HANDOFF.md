@@ -2,7 +2,7 @@
 
 ## M2.17 Solo-first launch RC — CURRENT
 
-Branch: `feat/m2-17-solo-launch-rc` (stacked on `feat/m2-16-ui-architecture-profile`, Draft PR #44).
+Branch: `feat/m2-17-solo-launch-rc`. PR #44 is the consolidated M2.13–M2.17 release candidate targeting `main`.
 
 The launch decision is now explicit: the first Douyin release ships as a polished **Solo / Theme Islands** product. Online Duel/PvP remains implemented for a later release, but M2.17 hides and disables its launch surfaces rather than deleting the architecture.
 
