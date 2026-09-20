@@ -1,4 +1,5 @@
-export type ThemeId = 'kingdom' | 'palace';
+export const THEME_IDS = ['kingdom', 'palace'] as const;
+export type ThemeId = typeof THEME_IDS[number];
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -102,4 +103,22 @@ export function pieceMeta(theme: ThemeId, value: number): PieceMeta {
 
 export function pieceCatalogue(theme: ThemeId): PieceMeta[] {
   return PIECE_VALUES.map(value => pieceMeta(theme, value));
+}
+
+
+export function isThemeId(value: unknown): value is ThemeId {
+  return typeof value === 'string' && (THEME_IDS as readonly string[]).includes(value);
+}
+
+export function themeIndex(theme: ThemeId): number {
+  return Math.max(0, THEME_IDS.indexOf(theme));
+}
+
+/** Returns an adjacent registered world. Positive step moves forward, negative backward. */
+export function adjacentTheme(theme: ThemeId, step: number): ThemeId {
+  const count = THEME_IDS.length;
+  if (count <= 1) return THEME_IDS[0] ?? theme;
+  const index = themeIndex(theme);
+  const offset = ((Math.trunc(step) % count) + count) % count;
+  return THEME_IDS[(index + offset) % count] ?? theme;
 }
