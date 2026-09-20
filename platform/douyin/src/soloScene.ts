@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
-import { MAX_PIECE_VALUE, THEMES, pieceName, pieceTier, type ThemeId } from '../../../src/config/themes';
+import {
+  MAX_PIECE_VALUE,
+  THEME_IDS,
+  THEMES,
+  adjacentTheme,
+  pieceName,
+  pieceTier,
+  themeIndex,
+  type ThemeId,
+} from '../../../src/config/themes';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -252,7 +261,7 @@ export class DouyinSoloScene {
       if (state.mode === 'playing') {
         if (this.online.move(direction)) this.refreshHud();
       } else if (state.mode === 'lobby' && (direction === 'left' || direction === 'right')) {
-        this.online.setTheme(state.selectedTheme === 'kingdom' ? 'palace' : 'kingdom');
+        this.online.setTheme(adjacentTheme(state.selectedTheme, direction === 'left' ? 1 : -1));
       }
       return;
     }
@@ -1127,7 +1136,7 @@ export class DouyinSoloScene {
 
   private startHomeSlide(direction: -1 | 1): void {
     if (this.mode !== 'home' || this.homeSlide) return;
-    const target: ThemeId = this.currentTheme === 'kingdom' ? 'palace' : 'kingdom';
+    const target = adjacentTheme(this.currentTheme, direction === -1 ? 1 : -1);
     this.homeSlide = { direction, target, elapsed: 0, switched: false };
     this.platform.haptics.trigger('light');
   }
@@ -1350,10 +1359,12 @@ export class DouyinSoloScene {
     ctx.fillText('‹', width / 2 - 54, y);
     ctx.fillText('›', width / 2 + 54, y);
 
-    const active = this.currentTheme === 'kingdom' ? 0 : 1;
-    for (let index = 0; index < 2; index += 1) {
+    const active = themeIndex(this.currentTheme);
+    const gap = 16;
+    const startX = width / 2 - ((THEME_IDS.length - 1) * gap) / 2;
+    for (let index = 0; index < THEME_IDS.length; index += 1) {
       ctx.beginPath();
-      ctx.arc(width / 2 + (index === 0 ? -8 : 8), y, index === active ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.arc(startX + index * gap, y, index === active ? 4.5 : 3, 0, Math.PI * 2);
       ctx.fillStyle = index === active ? '#17343C' : 'rgba(23,52,60,.32)';
       ctx.fill();
     }
