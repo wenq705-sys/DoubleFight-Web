@@ -10,6 +10,14 @@ export const DOUYIN_PRODUCT_CONFIG = {
     rewarded: 'kah48dcjfih55jh1ga',
     interstitial: '4dkwv7i3rr7q6dq71n',
   },
+  launch: {
+    // M2.17 ships as a Solo-first release. Keep the server/PvP implementation
+    // intact behind one policy switch so it can return in a later product pass
+    // without leaking unfinished competitive surfaces into the first release.
+    onlineEnabled: false,
+    sharedRoomInvitesEnabled: false,
+    pvpRankingsEnabled: false,
+  },
   share: {
     templateId: '',
   },
