@@ -97,6 +97,7 @@ export class DouyinSoloScene {
   private settingsOpen = false;
   private onboardingOpen = false;
   private soundEnabled = true;
+  private musicEnabled = true;
   private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
@@ -153,8 +154,11 @@ export class DouyinSoloScene {
 
     this.onboardingOpen = this.platform.storage.getItem('doublefight-onboarding-complete') !== '1';
     this.soundEnabled = this.platform.storage.getItem('doublefight-sound-enabled') !== '0';
+    this.musicEnabled = this.platform.storage.getItem('doublefight-music-enabled') !== '0';
     this.hapticsEnabled = this.platform.storage.getItem('doublefight-haptics-enabled') !== '0';
-    this.audio.setEnabled(this.soundEnabled);
+    this.audio.setSfxEnabled(this.soundEnabled);
+    this.audio.setMusicEnabled(this.musicEnabled);
+    this.audio.setScene('home', theme);
     this.platform.haptics.setEnabled(this.hapticsEnabled);
 
     const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
@@ -372,6 +376,7 @@ export class DouyinSoloScene {
       this.boardView.reset(HOME_TILES);
     }
     this.applyThemeLook();
+    this.audio.setScene(this.mode === 'solo' ? 'solo' : 'home', theme);
     this.refreshHud();
   }
 
@@ -486,6 +491,7 @@ export class DouyinSoloScene {
 
   private startSolo(): void {
     this.mode = 'solo';
+    this.audio.setScene('solo', this.currentTheme);
     const bonus = Math.min(1, Math.max(0, Number(this.platform.storage.getItem('doublefight-next-solo-bonus') ?? 0)));
     this.platform.storage.removeItem('doublefight-next-solo-bonus');
     this.skillCharges = 3 + bonus;
@@ -555,12 +561,14 @@ export class DouyinSoloScene {
 
     if (!this.soloResult && stage > this.soloStage) {
       this.stageMomentUntil = this.visualTime + (stage >= 4 ? 1.05 : 0.78);
+      this.audio.milestone(stage >= 4);
       this.boardView.cameraPunch = Math.max(this.boardView.cameraPunch, stage >= 4 ? 0.16 : 0.10);
       this.boardView.cameraShake = Math.max(this.boardView.cameraShake, stage >= 4 ? 0.055 : 0.032);
       this.platform.haptics.trigger(stage >= 4 ? 'success' : 'medium');
     }
     if (!this.soloResult && this.soloDangerBand > 0 && dangerBand === 0) {
       this.rescueMomentUntil = this.visualTime + 0.62;
+      this.audio.rescue();
       this.platform.haptics.trigger('light');
     }
     this.soloStage = stage;
@@ -626,6 +634,7 @@ export class DouyinSoloScene {
     this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
+    this.audio.setScene('home', this.currentTheme);
     this.soloResult = null;
     this.soloStartedAt = null;
     this.mergeBurst = null;
@@ -712,12 +721,20 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const layout = this.settingsLayout(info.width, info.height);
 
+    if (this.hit(x, y, layout.music)) {
+      this.flashTap(layout.music);
+      this.musicEnabled = !this.musicEnabled;
+      this.platform.storage.setItem('doublefight-music-enabled', this.musicEnabled ? '1' : '0');
+      this.audio.setMusicEnabled(this.musicEnabled);
+      this.refreshHud();
+      return;
+    }
     if (this.hit(x, y, layout.sound)) {
       this.flashTap(layout.sound);
       this.soundEnabled = !this.soundEnabled;
       this.platform.storage.setItem('doublefight-sound-enabled', this.soundEnabled ? '1' : '0');
-      this.audio.setEnabled(this.soundEnabled);
-      if (this.soundEnabled) this.audio.victory();
+      this.audio.setSfxEnabled(this.soundEnabled);
+      if (this.soundEnabled) this.audio.milestone(false);
       this.refreshHud();
       return;
     }
@@ -1878,13 +1895,14 @@ export class DouyinSoloScene {
     ctx.font = '800 10px sans-serif';
     ctx.fillText('声音与游戏反馈', width / 2, layout.back.y + 47);
 
-    this.drawSettingRow(ctx, layout.sound, '声音', this.soundEnabled);
+    this.drawSettingRow(ctx, layout.music, '背景音乐', this.musicEnabled);
+    this.drawSettingRow(ctx, layout.sound, '音效', this.soundEnabled);
     this.drawSettingRow(ctx, layout.haptics, '震动', this.hapticsEnabled);
 
     ctx.textAlign = 'left';
     ctx.fillStyle = '#46636A';
     ctx.font = '800 10px sans-serif';
-    ctx.fillText('随时可以回来修改', layout.sound.x + 4, layout.haptics.y + layout.haptics.height + 28);
+    ctx.fillText('随时可以回来修改', layout.music.x + 4, layout.haptics.y + layout.haptics.height + 26);
 
     this.drawPillButton(ctx, layout.done, '完成', 'primary');
   }
@@ -2179,9 +2197,10 @@ export class DouyinSoloScene {
     const firstY = Math.max(metrics.top + 96, 176);
     return {
       back: { x: 12, y: Math.max(72, metrics.top + 2), width: 58, height: 58 },
-      sound: { x: edge, y: firstY, width: cardW, height: 72 },
-      haptics: { x: edge, y: firstY + 86, width: cardW, height: 72 },
-      done: { x: width / 2 - Math.min(132, width * .34), y: firstY + 202, width: Math.min(264, width * .68), height: 56 },
+      music: { x: edge, y: firstY, width: cardW, height: 68 },
+      sound: { x: edge, y: firstY + 78, width: cardW, height: 68 },
+      haptics: { x: edge, y: firstY + 156, width: cardW, height: 68 },
+      done: { x: width / 2 - Math.min(132, width * .34), y: firstY + 254, width: Math.min(264, width * .68), height: 54 },
     };
   }
 
