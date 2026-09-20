@@ -26,6 +26,7 @@ export class CollectibleThemeEnvironment {
   private readonly world = new THREE.Group();
   private readonly accentLight: THREE.PointLight;
   private readonly pulseRing: THREE.Mesh;
+  private readonly flameMeshes: THREE.Mesh[] = [];
   private pulse = 0;
   private gestureX = 0;
   private gestureY = 0;
@@ -125,12 +126,11 @@ export class CollectibleThemeEnvironment {
     this.pulseRing.scale.setScalar(scale);
     this.pulseRing.rotation.z += dt * 0.16;
     this.accentLight.intensity = 0.24 + this.pulse * 2.2 + Math.sin(time * 1.8) * 0.04;
-    this.world.traverse(node => {
-      if (!(node instanceof THREE.Mesh) || !node.userData.environmentFlame) return;
-      const breathe = 1 + Math.sin(time * 7 + node.position.x) * .08;
-      node.scale.set(1 / breathe, breathe, 1 / breathe);
-      node.rotation.y += dt * .7;
-    });
+    for (const flame of this.flameMeshes) {
+      const breathe = 1 + Math.sin(time * 7 + flame.position.x) * .08;
+      flame.scale.set(1 / breathe, breathe, 1 / breathe);
+      flame.rotation.y += dt * .7;
+    }
   }
 
   private addHeroSetpiece(detail: EnvironmentDetail): void {
@@ -165,7 +165,7 @@ export class CollectibleThemeEnvironment {
         for (const zOffset of [-3.65, 3.65]) {
           add(new THREE.CylinderGeometry(.28, .40, .58, 10), standard(0x4d3029), x, .92, centerZ + zOffset);
           const flame = add(new THREE.ConeGeometry(.22, .62, 9), standard(0xff9a32, 0xff6a24), x, 1.48, centerZ + zOffset);
-          flame.userData.environmentFlame = true;
+          this.flameMeshes.push(flame);
         }
       }
       for (const x of [-4.75, 4.75]) {
