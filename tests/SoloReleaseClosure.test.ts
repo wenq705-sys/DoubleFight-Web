@@ -28,10 +28,12 @@ describe('Solo 1.0 release closure', () => {
 
   it('keeps the Solo terminal order explicit: 2048 success wins over a simultaneous lock', () => {
     const source = readFileSync(new URL('../platform/douyin/src/soloScene.ts', import.meta.url), 'utf8');
-    const success = source.indexOf("if (cleared) this.finishSolo('cleared')");
-    const stuck = source.indexOf('else if (result.gameOver) this.resolveStuckBoard()', success);
-    expect(success).toBeGreaterThan(-1);
-    expect(stuck).toBeGreaterThan(success);
+    const successBranch = source.indexOf('if (cleared) {');
+    const successFinish = source.indexOf("this.finishSolo('cleared');", successBranch);
+    const stuck = source.indexOf('if (result.gameOver) this.resolveStuckBoard()', successFinish);
+    expect(successBranch).toBeGreaterThan(-1);
+    expect(successFinish).toBeGreaterThan(successBranch);
+    expect(stuck).toBeGreaterThan(successFinish);
   });
 
   it('offers remaining paid/rewarded clear rescue before declaring a stuck loss', () => {
