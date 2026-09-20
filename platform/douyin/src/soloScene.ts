@@ -280,7 +280,7 @@ export class DouyinSoloScene {
     if (this.mode !== 'solo' || this.disposed || this.inputLocked || this.soloResult) return false;
     const result = this.controller.move(direction);
     if (!result.changed) {
-      if (result.gameOver) this.finishSolo('stuck');
+      if (result.gameOver) this.resolveStuckBoard();
       else this.platform.haptics.trigger('light');
       return false;
     }
@@ -306,8 +306,9 @@ export class DouyinSoloScene {
     this.persistRecord();
 
     const cleared = result.merges.some((merge) => merge.value >= MAX_PIECE_VALUE);
+    // Reaching 2048 is the terminal 11/11 success even if the spawned tile also locks the board.
     if (cleared) this.finishSolo('cleared');
-    else if (result.gameOver) this.finishSolo('stuck');
+    else if (result.gameOver) this.resolveStuckBoard();
     else {
       if (result.merges.length > 1) this.platform.haptics.trigger('success');
       this.applySoloAtmosphere();
@@ -321,12 +322,17 @@ export class DouyinSoloScene {
       this.platform.haptics.trigger('light');
       return false;
     }
+
+    // Lock before mutating the board so taps/swipes cannot overlap the skill presentation.
+    this.inputLocked = true;
     const result = this.controller.clearObstacles(2);
     if (result.removed.length === 0) {
+      this.inputLocked = false;
       this.platform.haptics.trigger('light');
+      this.refreshHud();
       return false;
     }
-    this.inputLocked = true;
+
     this.skillCharges -= 1;
     this.platform.haptics.trigger('success');
     this.refreshHud();
@@ -334,8 +340,11 @@ export class DouyinSoloScene {
     if (!this.disposed) {
       this.inputLocked = false;
       this.persistRecord();
-      this.applySoloAtmosphere();
-      this.refreshHud();
+      if (result.gameOver) this.resolveStuckBoard();
+      else {
+        this.applySoloAtmosphere();
+        this.refreshHud();
+      }
     }
     return true;
   }
@@ -532,6 +541,23 @@ export class DouyinSoloScene {
     this.applySoloAtmosphere();
     this.platform.haptics.trigger('medium');
     this.refreshHud();
+  }
+
+  private resolveStuckBoard(): void {
+    const canRewardRescue = this.rewardedSkillClaims < 3;
+    if (this.skillCharges > 0 || canRewardRescue) {
+      this.notice = {
+        text: this.skillCharges > 0
+          ? '棋盘已满 · 使用清障可继续'
+          : '棋盘已满 · 看视频可获得清障继续',
+        until: this.visualTime + 2.6,
+      };
+      this.applySoloAtmosphere();
+      this.platform.haptics.trigger('medium');
+      this.refreshHud();
+      return;
+    }
+    this.finishSolo('stuck');
   }
 
   private finishSolo(kind: SoloResultState['kind']): void {
@@ -790,7 +816,10 @@ export class DouyinSoloScene {
     }
 
     if (x >= 10 && x <= 70 && y >= hudTop + 2 && y <= hudTop + 62) {
-      this.showHome();
+      // On a dead board with no paid charge left, Back is the explicit "end run" escape
+      // while the player is deciding whether to use the optional rewarded rescue.
+      if (!this.controller.board.canMove() && this.skillCharges <= 0) this.finishSolo('stuck');
+      else this.showHome();
       return;
     }
 
@@ -978,13 +1007,14 @@ export class DouyinSoloScene {
     const highestKey = `doublefight-highest-${this.currentTheme}`;
     const previousBest = Number(this.platform.storage.getItem(bestKey) ?? 0);
     const previousHighest = Number(this.platform.storage.getItem(highestKey) ?? 2);
-    const improved = this.score > previousBest || this.highest > previousHighest;
-    if (this.score > previousBest) {
-      this.platform.storage.setItem(bestKey, String(this.score));
-      void this.social.setSoloRank(this.score);
-    }
-    if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
-    if (improved || forceSync) {
+    const scoreImproved = this.score > previousBest;
+    const highestImproved = this.highest > previousHighest;
+    if (scoreImproved) this.platform.storage.setItem(bestKey, String(this.score));
+    if (highestImproved) this.platform.storage.setItem(highestKey, String(this.highest));
+
+    // Local records update immediately; server writes happen only on new tiers
+    // or explicit run boundaries (result/exit), avoiding one request per score tick.
+    if (highestImproved || forceSync) {
       void this.auth.syncSoloProgressDetailed(
         this.currentTheme,
         Math.max(previousBest, this.score),
@@ -1553,7 +1583,7 @@ export class DouyinSoloScene {
       ctx,
       skill,
       canReward ? '补充清障' : '清障',
-      canReward ? '看完广告 · 补 1 次' : `清除 2 枚最低阶 · ${this.skillCharges} 次`,
+      canReward ? '看完广告 · 补 1 次' : `最多清除 2 枚最低阶 · ${this.skillCharges} 次`,
       this.skillCharges > 0 || canReward,
       'skill-clear',
     );
@@ -2250,8 +2280,18 @@ export class DouyinSoloScene {
       if (claim === 'granted') {
         this.rewardedSkillClaims += 1;
         this.skillCharges = Math.max(1, this.skillCharges);
-        this.notice = { text: '奖励到账 · 清块 +1', until: this.visualTime + 1.5 };
+        this.notice = { text: '奖励到账 · 清障 +1', until: this.visualTime + 1.5 };
         this.platform.haptics.trigger('success');
+
+        // If the ad was opened from a dead board, consume the granted rescue
+        // immediately so the player returns to a playable state in one action.
+        const shouldAutoRescue = !this.controller.board.canMove();
+        this.inputLocked = false;
+        if (shouldAutoRescue) {
+          const rescued = await this.useRandomClear();
+          if (!rescued && !this.controller.board.canMove()) this.finishSolo('stuck');
+          return;
+        }
       } else {
         this.notice = { text: claim === 'duplicate' ? '该奖励已领取' : '奖励服务暂不可用', until: this.visualTime + 1.5 };
       }
