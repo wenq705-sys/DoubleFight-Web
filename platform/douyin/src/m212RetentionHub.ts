@@ -1231,8 +1231,8 @@ function miniHomeButton(
   const cx = rect.x + rect.width / 2;
   const cy = rect.y + 18;
   const outline = '#1f2426';
-  const primary = theme === 'palace' ? '#cc6b72' : '#4d82b4';
-  const secondary = theme === 'palace' ? '#f0b384' : '#e1b45d';
+  const primary = THEMES[theme].ui.accent;
+  const secondary = THEMES[theme].ui.secondary;
 
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,.38)';

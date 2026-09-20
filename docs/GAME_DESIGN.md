@@ -126,8 +126,11 @@ Themes change:
 
 Themes do **not** change competitive rules or base skill balance.
 
-Current themes:
-- Miniature Kingdom
+First-release themes:
+- 微缩王国 / Miniature Kingdom
 - 后宫晋升 / Palace Rank
+- 生肖战神 / Zodiac Ascension — combat-power chain: 灵鼠 → 斗鸡 → 岩羊 → 灵猴 → 战犬 → 山猪 → 玄蛇 → 烈马 → 神牛 → 白虎 → 东方神龙; Rabbit is the environment mascot.
+- 甜蜜星球 / Candy Planet
+- 梦想家园 / Dream Home
 
-Core pieces will gradually migrate from procedural blockouts to authored stylized low-poly GLB assets.
+All five use the same 11/11 Solo rules and are free at first release. Current procedural low-poly pieces are production-safe launch assets; individual hero themes can later migrate to Codex/Blender-authored stylized GLB assets without changing Board2048 or progression contracts.

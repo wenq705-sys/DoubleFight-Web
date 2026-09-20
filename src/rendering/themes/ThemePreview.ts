@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { THEME_PRESENTATIONS } from './ThemePresentation';
 import { fitTile } from '../tiles/TileSizingPolicy';
-import type { ThemeId } from '../../config/themes';
+import { THEME_IDS, type ThemeId } from '../../config/themes';
 
 let previews: Record<ThemeId, string> | undefined;
-/** Two cached images from the actual game factories, with no additional animation loop. */
+/** Cached launch-theme images from the actual game factories, with no additional animation loop. */
 export function themePreviews(): Record<ThemeId, string> {
   if (previews) return previews;
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -18,7 +18,7 @@ export function themePreviews(): Record<ThemeId, string> {
   const camera = new THREE.OrthographicCamera(-2.25, 2.25, 2.25, -2.25, 0.1, 30);
   camera.position.set(4, 4.8, 8); camera.lookAt(0, 1.6, 0);
   previews = {} as Record<ThemeId, string>;
-  for (const theme of ['kingdom', 'palace'] as const) {
+  for (const theme of THEME_IDS) {
     const adapter = THEME_PRESENTATIONS[theme];
     const model = fitTile(adapter.factory.create(2048), 2048, adapter.sizing).root;
     scene.add(model); renderer.render(scene, camera);

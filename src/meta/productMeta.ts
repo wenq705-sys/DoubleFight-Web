@@ -96,9 +96,12 @@ export interface ThemeAccess {
   trial: 'none' | 'rewarded_once_per_day';
 }
 
-// Both currently shipped themes remain free. Future themes use the same
-// contract instead of introducing a second currency or direct purchase.
+// All first-release themes remain free. Future paid themes use this same
+// contract instead of introducing a second currency or direct-purchase fork.
 export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
   kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, trial: 'none' },
   palace: { theme: 'palace', free: true, permanentPrice: 0, trial: 'none' },
+  zodiac: { theme: 'zodiac', free: true, permanentPrice: 0, trial: 'none' },
+  candy: { theme: 'candy', free: true, permanentPrice: 0, trial: 'none' },
+  dreamhouse: { theme: 'dreamhouse', free: true, permanentPrice: 0, trial: 'none' },
 };

@@ -1,4 +1,5 @@
 import type { Platform } from '../../../src/platform/types';
+import { THEME_IDS, type ThemeId } from '../../../src/config/themes';
 import type { DouyinApi } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 
@@ -25,6 +26,7 @@ export interface PublicPlayer {
   displayName: string;
   avatarUrl?: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
+  soloByTheme?: Record<string, { best: number; highest: number }>;
   pvp: { wins: number; losses: number; draws: number; rating: number };
   rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
   season?: PublicPlayerSeason;
@@ -266,7 +268,7 @@ export class DouyinAuthClient {
   }
 
   async syncSoloProgressDetailed(
-    theme: 'kingdom' | 'palace',
+    theme: ThemeId,
     best: number,
     highest: number,
   ): Promise<SoloProgressSyncResult> {
@@ -286,7 +288,7 @@ export class DouyinAuthClient {
     }
   }
 
-  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+  async syncSoloProgress(theme: ThemeId, best: number, highest: number): Promise<boolean> {
     return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
   }
 
@@ -316,9 +318,12 @@ export class DouyinAuthClient {
   }
 
   private restoreSoloCache(player: PublicPlayer): void {
-    for (const theme of ['kingdom', 'palace'] as const) {
-      const best = theme === 'kingdom' ? player.solo.bestKingdom : player.solo.bestPalace;
-      const highest = theme === 'kingdom' ? player.solo.highestKingdom : player.solo.highestPalace;
+    for (const theme of THEME_IDS) {
+      const generic = player.soloByTheme?.[theme];
+      const best = generic?.best
+        ?? (theme === 'kingdom' ? player.solo.bestKingdom : theme === 'palace' ? player.solo.bestPalace : 0);
+      const highest = generic?.highest
+        ?? (theme === 'kingdom' ? player.solo.highestKingdom : theme === 'palace' ? player.solo.highestPalace : 2);
       const bestKey = `doublefight-best-${theme}`;
       const highestKey = `doublefight-highest-${theme}`;
       if (Number.isSafeInteger(best) && best > Number(this.platform.storage.getItem(bestKey) ?? 0)) {

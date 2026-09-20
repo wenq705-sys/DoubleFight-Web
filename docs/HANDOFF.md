@@ -6,23 +6,25 @@ Branch: `feat/m2-17-solo-launch-rc` (stacked on `feat/m2-16-ui-architecture-prof
 
 The launch decision is now explicit: the first Douyin release ships as a polished **Solo / Theme Islands** product. Online Duel/PvP remains implemented for a later release, but M2.17 hides and disables its launch surfaces rather than deleting the architecture.
 
-First closure batch:
-- `DOUYIN_PRODUCT_CONFIG.launch` is the single launch-policy gate.
-- Online Home CTA/tap, shared-room deep links and PvP ranking/season entry are disabled.
-- app resume/start does not auto-connect the PvP WebSocket while Online is disabled.
-- visible daily tasks are Solo + ad only.
-- Home/Profile identity uses current-world Solo mastery instead of competitive rating.
-- a regression test locks the first-release launch policy.
+Release closure implemented:
+- `DOUYIN_PRODUCT_CONFIG.launch` is the single launch-policy gate; Online Home CTA/tap, room deep links and PvP rank/season surfaces are disabled.
+- first-release world registry is **five themes**: 微缩王国 / 后宫晋升 / 生肖战神 / 甜蜜星球 / 梦想家园.
+- every world has an 11-tier numberless progression, independent collection/mastery data, preview, palette, presentation adapter and server-persisted Solo progress.
+- 生肖战神 uses combat-power progression: 灵鼠 → 斗鸡 → 岩羊 → 灵猴 → 战犬 → 山猪 → 玄蛇 → 烈马 → 神牛 → 白虎 → 东方神龙. Rabbit is the world mascot so the global 11/11 rule remains intact.
+- the three new worlds use cached procedural low-poly factories and lightweight reusable environments; these are release-safe now and can later be replaced by Codex/Blender-authored GLB without changing gameplay contracts.
+- account migration retains legacy Kingdom/Palace fields and adds generic `soloByTheme` persistence for all five worlds.
+- audio is split into BGM/SFX with per-theme looping music, legendary merge, milestone, rescue, victory/defeat cues and lifecycle-safe suspend/resume.
+- Browser and Douyin world navigation are registry-driven; the first-release Browser/Douyin shells hide Online Duel while retaining the deferred network implementation.
+- local release validation: TypeScript PASS; 24/24 test files, 158/158 tests PASS; Browser build PASS; Douyin dev/release builds PASS; release preflight PASS.
+- current Douyin release `game.js`: about 715 kB / 193 kB gzip; complete generated release directory about 1.51 MB.
 
-Next exact work:
-1. refactor remaining two-theme assumptions so Home/navigation/collection can scale to five launch worlds;
-2. finish five distinct launch-quality themes (final art direction/content must be deliberate, not placeholder skins);
-3. replace the current seven generated prototype WAV cues with a real layered audio/BGM system;
-4. remove disabled-online runtime cost from the Solo release path and tighten adaptive quality/memory budgets;
-5. finish Solo merge/ascension/danger/recovery VFX and haptic/audio feedback;
-6. run full CI, Douyin release preflight, IDE and physical-device acceptance.
+Remaining release gate:
+1. final GitHub CI on the pushed M2.17 head;
+2. Douyin IDE and physical-device visual/touch/lifecycle verification;
+3. live platform/provider configuration checks required by submission (AppID/legal request domains/account/ad availability);
+4. submit the accepted release bundle in the Douyin developer console.
 
-No main merge or production deploy is implied by code-side green status.
+No production deploy is implied by code-side green status.
 
 
 ## M2.12 server authority

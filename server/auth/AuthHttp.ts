@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { AccountRepository } from './AccountRepository';
-import { currentSeason, publicPlayer, THEME_REGISTRY } from './AccountRepository';
+import { currentSeason, publicPlayer, RELEASE_THEME_IDS, THEME_REGISTRY, type ReleaseThemeId } from './AccountRepository';
 import type { DouyinProvider } from './DouyinProvider';
 import { ProviderError } from './DouyinProvider';
 import { SessionToken } from './SessionToken';
@@ -78,7 +78,8 @@ export function createAuthHandler(deps: AuthDependencies) {
 
       if (path === '/progress/solo') {
         const body = await readBody(request);
-        if (body.theme !== 'kingdom' && body.theme !== 'palace') throw new RequestError(400, 'invalid_progress');
+        if (typeof body.theme !== 'string' || !(RELEASE_THEME_IDS as readonly string[]).includes(body.theme)) throw new RequestError(400, 'invalid_progress');
+        const theme = body.theme as ReleaseThemeId;
         if (typeof body.best !== 'number' || !Number.isSafeInteger(body.best) || body.best < 0 || body.best > 100_000_000) {
           throw new RequestError(400, 'invalid_progress');
         }
@@ -86,7 +87,7 @@ export function createAuthHandler(deps: AuthDependencies) {
           || body.highest > 1_048_576 || !Number.isInteger(Math.log2(body.highest))) {
           throw new RequestError(400, 'invalid_progress');
         }
-        const updated = await deps.repository.mergeSoloProgress(account.id, body.theme, body.best, body.highest, now());
+        const updated = await deps.repository.mergeSoloProgress(account.id, theme, body.best, body.highest, now());
         json(response, 200, { player: publicPlayer(updated.account, now()), discoveryAmount: updated.discoveryAmount, taskAmount: updated.taskAmount });
         return true;
       }

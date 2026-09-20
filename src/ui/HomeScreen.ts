@@ -1,21 +1,21 @@
-import type { ThemeId } from '../config/themes';
+import { THEME_IDS, THEMES, pieceName, pieceTier, type ThemeId } from '../config/themes';
 import { themePreviews } from '../rendering/themes/ThemePreview';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 type ThemeCard = {
-  id: ThemeId | 'candy' | 'snow';
-  title: string;
-  kicker: string;
+  id: ThemeId;
   icon: string;
-  locked?: boolean;
 };
 
-const CARDS: ThemeCard[] = [
-  { id: 'kingdom', title: '微缩王国', kicker: 'MINIATURE KINGDOM', icon: '♜' },
-  { id: 'palace', title: '后宫晋升', kicker: 'PALACE ASCENSION', icon: '♛' },
-  { id: 'candy', title: '糖果王国', kicker: 'COMING SOON', icon: '🍭', locked: true },
-  { id: 'snow', title: '冰雪神殿', kicker: 'COMING SOON', icon: '❄️', locked: true },
-];
+const ICONS: Record<ThemeId, string> = {
+  kingdom: '♜',
+  palace: '♛',
+  zodiac: '◉',
+  candy: '◆',
+  dreamhouse: '⌂',
+};
+
+const CARDS: ThemeCard[] = THEME_IDS.map(id => ({ id, icon: ICONS[id] }));
 
 export class HomeScreen {
   private readonly root: HTMLElement;
@@ -33,24 +33,26 @@ export class HomeScreen {
   private onPreviewHandler: ((theme: ThemeId) => void) | null = null;
 
   constructor(container: HTMLElement, initialTheme: ThemeId) {
-    this.index = Math.max(0, CARDS.findIndex((card) => card.id === initialTheme));
+    this.index = Math.max(0, CARDS.findIndex(card => card.id === initialTheme));
     const previews = themePreviews();
 
-    const islands = CARDS.map((card, index) => `
-      <article class="home-island home-island--${card.id} ${card.locked ? 'home-island--locked' : ''}" data-index="${index}">
-        <div class="home-island__cloud home-island__cloud--a"></div>
-        <div class="home-island__cloud home-island__cloud--b"></div>
-        <div class="home-island__land">
-          <div class="home-island__rim"></div>
-          <div class="home-island__world">
-            ${card.id === 'kingdom' || card.id === 'palace' ? `<img class="home-island__hero" src="${previews[card.id]}" alt="${card.title}主题棋子" />` : `<span class="home-island__icon">${card.icon}</span>`}
-            <i class="home-island__prop home-island__prop--1"></i>
-            <i class="home-island__prop home-island__prop--2"></i>
-            <i class="home-island__prop home-island__prop--3"></i>
+    const islands = CARDS.map((card, index) => {
+      const meta = THEMES[card.id];
+      return `
+        <article class="home-island home-island--${card.id}" data-index="${index}">
+          <div class="home-island__cloud home-island__cloud--a"></div>
+          <div class="home-island__cloud home-island__cloud--b"></div>
+          <div class="home-island__land">
+            <div class="home-island__rim"></div>
+            <div class="home-island__world">
+              <img class="home-island__hero" src="${previews[card.id]}" alt="${meta.label}主题终阶棋子" />
+              <i class="home-island__prop home-island__prop--1"></i>
+              <i class="home-island__prop home-island__prop--2"></i>
+              <i class="home-island__prop home-island__prop--3"></i>
+            </div>
           </div>
-        </div>
-        ${card.locked ? '<div class="home-island__lock">🔒 即将开放</div>' : ''}
-      </article>`).join('');
+        </article>`;
+    }).join('');
 
     container.insertAdjacentHTML('beforeend', `
       <section class="home" id="home-screen" aria-label="主题选择">
@@ -69,9 +71,9 @@ export class HomeScreen {
           <h1 class="home__title" id="home-title"></h1>
           <div class="home__record" id="home-record"></div>
           <div class="home__dots" id="home-dots"></div>
-          <button class="home__start" id="home-start" type="button">进入世界</button>
-          <button class="home__online" id="home-online" type="button"><span>⚔</span> 在线对决</button>
-          <div class="home__tip">左右滑动选择主题</div>
+          <button class="home__start" id="home-start" type="button">开始挑战</button>
+          <button class="home__online" id="home-online" type="button" hidden disabled aria-hidden="true">在线对决</button>
+          <div class="home__tip">左右滑动选择世界 · 合成至 11/11 登顶</div>
         </div>
       </section>`);
 
@@ -90,7 +92,7 @@ export class HomeScreen {
 
   show(theme?: ThemeId): void {
     if (theme) {
-      const next = CARDS.findIndex((card) => card.id === theme);
+      const next = CARDS.findIndex(card => card.id === theme);
       if (next >= 0) this.index = next;
     }
     this.root.classList.remove('home--hidden');
@@ -103,39 +105,25 @@ export class HomeScreen {
     this.root.setAttribute('aria-hidden', 'true');
   }
 
-  onStart(handler: (theme: ThemeId) => void): void {
-    this.onStartHandler = handler;
-  }
-
-  onOnline(handler: (theme: ThemeId) => void): void {
-    this.onOnlineHandler = handler;
-  }
-
-  onPreview(handler: (theme: ThemeId) => void): void {
-    this.onPreviewHandler = handler;
-  }
-
-  refreshRecord(): void {
-    this.render(false);
-  }
+  onStart(handler: (theme: ThemeId) => void): void { this.onStartHandler = handler; }
+  onOnline(handler: (theme: ThemeId) => void): void { this.onOnlineHandler = handler; }
+  onPreview(handler: (theme: ThemeId) => void): void { this.onPreviewHandler = handler; }
+  refreshRecord(): void { this.render(false); }
 
   private bind(): void {
     this.startButton.addEventListener('click', () => {
       const card = CARDS[this.index];
-      if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
       this.onStartHandler?.(card.id);
     });
 
+    // PvP stays wired for future reactivation, but the launch shell never exposes this button.
     this.onlineButton.addEventListener('click', () => {
-      const card = CARDS[this.index];
-      if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
-      this.onOnlineHandler?.(card.id);
+      if (this.onlineButton.disabled) return;
+      this.onOnlineHandler?.(CARDS[this.index].id);
     });
 
-    this.root.addEventListener('pointerdown', (event) => {
-      this.pointerStart = event.clientX;
-    });
-    this.root.addEventListener('pointerup', (event) => {
+    this.root.addEventListener('pointerdown', event => { this.pointerStart = event.clientX; });
+    this.root.addEventListener('pointerup', event => {
       if (this.pointerStart === null) return;
       const dx = event.clientX - this.pointerStart;
       this.pointerStart = null;
@@ -143,7 +131,7 @@ export class HomeScreen {
       this.move(dx < 0 ? 1 : -1);
     });
 
-    this.root.querySelectorAll<HTMLElement>('.home-island').forEach((item) => {
+    this.root.querySelectorAll<HTMLElement>('.home-island').forEach(item => {
       item.addEventListener('click', () => {
         const index = Number(item.dataset.index ?? 0);
         if (Number.isFinite(index) && index !== this.index) {
@@ -155,35 +143,28 @@ export class HomeScreen {
   }
 
   private move(delta: number): void {
-    this.index = Math.max(0, Math.min(CARDS.length - 1, this.index + delta));
+    this.index = (this.index + delta + CARDS.length) % CARDS.length;
     this.render(true);
   }
 
   private render(notify: boolean): void {
     this.track.style.transform = `translate3d(${-this.index * 100}%,0,0)`;
     const card = CARDS[this.index];
-    this.title.textContent = card.title;
-    this.kicker.textContent = card.kicker;
-    this.startButton.disabled = Boolean(card.locked);
-    this.onlineButton.disabled = Boolean(card.locked);
-    this.startButton.textContent = card.locked ? '即将开放' : '进入世界';
-    this.onlineButton.innerHTML = card.locked
-      ? '<span>🔒</span> 在线对决 <small>未开放</small>'
-      : '<span>⚔</span> 在线对决';
+    const meta = THEMES[card.id];
+    this.title.textContent = meta.label;
+    this.kicker.textContent = meta.subtitle;
+    this.startButton.disabled = false;
+    this.startButton.textContent = '开始挑战';
 
-    if (card.id === 'kingdom' || card.id === 'palace') {
-      const best = Number(browserPlatform.storage.getItem(`doublefight-best-${card.id}`) ?? 0);
-      const highest = Number(browserPlatform.storage.getItem(`doublefight-highest-${card.id}`) ?? 2);
-      this.record.textContent = `最高 ${highest}  ·  BEST ${best.toLocaleString('zh-CN')}`;
-      if (notify) this.onPreviewHandler?.(card.id);
-    } else {
-      this.record.textContent = '新的主题世界正在制作中';
-    }
+    const best = Number(browserPlatform.storage.getItem(`doublefight-best-${card.id}`) ?? 0);
+    const highest = Number(browserPlatform.storage.getItem(`doublefight-highest-${card.id}`) ?? 2);
+    this.record.textContent = `${pieceName(card.id, highest)} · ${pieceTier(highest)}/11 · 最高分 ${best.toLocaleString('zh-CN')}`;
+    if (notify) this.onPreviewHandler?.(card.id);
 
     this.dots.innerHTML = CARDS.map((_, index) =>
       `<i class="${index === this.index ? 'is-active' : ''}"></i>`,
     ).join('');
 
-    this.root.dataset.theme = String(card.id);
+    this.root.dataset.theme = card.id;
   }
 }

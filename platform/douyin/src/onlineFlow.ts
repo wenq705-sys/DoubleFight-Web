@@ -4,6 +4,7 @@ import {
   type Direction,
   type MatchPlayerState,
   type MatchSnapshot,
+  type NetworkThemeId,
   type ServerMessage,
   type SkillId,
   type SkillLoadout,
@@ -24,7 +25,7 @@ export interface DouyinOnlineSnapshot {
   state: Readonly<OnlineClientState>;
   me: MatchPlayerState | null;
   opponent: MatchPlayerState | null;
-  selectedTheme: ThemeId;
+  selectedTheme: NetworkThemeId;
   loadout: SkillLoadout;
   playerName: string;
 }
@@ -34,7 +35,7 @@ export class DouyinOnlineFlow {
   readonly remote: BattleBoardView;
   readonly controller: OnlineController;
 
-  private selectedTheme: ThemeId;
+  private selectedTheme: NetworkThemeId;
   private loadout: SkillLoadout;
   private playerName: string;
   private opened = false;
@@ -54,7 +55,7 @@ export class DouyinOnlineFlow {
     this.local = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
     this.remote = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
     this.controller = new OnlineController(this.local, this.remote);
-    this.selectedTheme = initialTheme;
+    this.selectedTheme = initialTheme === 'palace' ? 'palace' : 'kingdom';
     // The mini-game has no unreviewed free-text nickname entry. Authenticated
     // connections receive their profile name from the server instead.
     this.playerName = '玩家';
@@ -72,7 +73,7 @@ export class DouyinOnlineFlow {
 
   open(theme: ThemeId): void {
     this.opened = true;
-    if (!this.platform.storage.getItem('doublefight-online-theme')) this.selectedTheme = theme;
+    if (!this.platform.storage.getItem('doublefight-online-theme')) this.selectedTheme = theme === 'palace' ? 'palace' : 'kingdom';
     this.client.connect();
     this.emit();
   }
@@ -120,9 +121,10 @@ export class DouyinOnlineFlow {
   setTheme(theme: ThemeId): void {
     const state = this.client.snapshot();
     if (state.matchmaking.status === 'searching' || state.match?.phase === 'playing') return;
-    this.selectedTheme = theme;
-    this.platform.storage.setItem('doublefight-online-theme', theme);
-    if (state.room?.phase === 'lobby') this.client.setTheme(theme);
+    const networkTheme: NetworkThemeId = theme === 'palace' ? 'palace' : 'kingdom';
+    this.selectedTheme = networkTheme;
+    this.platform.storage.setItem('doublefight-online-theme', networkTheme);
+    if (state.room?.phase === 'lobby') this.client.setTheme(networkTheme);
     this.emit();
   }
 

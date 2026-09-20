@@ -27,6 +27,9 @@ export const DOUYIN_PRODUCT_CONFIG = {
     ascensionZones: {
       kingdom: 'ascension-kingdom',
       palace: 'ascension-palace',
+      zodiac: 'ascension-zodiac',
+      candy: 'ascension-candy',
+      dreamhouse: 'ascension-dreamhouse',
     },
   },
   retention: {

@@ -105,6 +105,30 @@ Do not replace this with "light red / dark red" or other same-hue progressions.
 - 1024: throne / royal frame
 - 2048: throne + crown halo + wing-like gold prestige shapes
 
+## Theme 3 — 生肖战神 / Zodiac Ascension
+
+- warm red / sacred gold / jade-green world palette
+- animal silhouette is the primary tier identifier; avoid text/numbers on pieces
+- main 11-tier chain follows combat power rather than calendar order
+- Rabbit appears as a small environment guide/mascot so all 12 zodiac are represented without breaking the 11/11 rule
+- upper tiers (Ox/Tiger/Dragon) gain ceremonial aura/rings and stronger silhouette width
+- 2048 Dragon is the legendary visual climax
+
+## Theme 4 — 甜蜜星球 / Candy Planet
+
+- candy pink / mint / violet / custard palette
+- each tier changes dessert archetype, not just hue
+- rounded readable silhouettes, bright but restrained emissive accents
+- 2048 becomes a layered candy miracle/celebration landmark
+
+## Theme 5 — 梦想家园 / Dream Home
+
+- fresh green / sky blue / warm timber / gold palette
+- progression reads as visible housing status growth: shelter → apartment → home → villa → estate → castle
+- higher tiers add floors, landscaping, water and beacon/ring accents while remaining cell-readable
+
+The three M2.17 launch additions use procedural low-poly factories for release speed and package control. Their factory/presentation contracts are intentionally replaceable by authored Blender/GLB assets later.
+
 ## Palace VFX motif
 
 Allowed:

@@ -94,6 +94,21 @@ async function writeGeneratedAudio(root) {
       { from: 520, to: 880, duration: 0.14, gain: 0.3 },
       { from: 880, to: 1180, duration: 0.16, gain: 0.2 },
     ],
+    'merge-legendary.wav': [
+      { from: 180, to: 420, duration: 0.12, gain: 0.30 },
+      { from: 420, to: 840, duration: 0.16, gain: 0.34 },
+      { from: 840, to: 1320, duration: 0.20, gain: 0.28 },
+      { from: 660, to: 990, duration: 0.24, gain: 0.18 },
+    ],
+    'milestone.wav': [
+      { from: 392, to: 523, duration: 0.12, gain: 0.22 },
+      { from: 523, to: 659, duration: 0.14, gain: 0.22 },
+      { from: 659, to: 784, duration: 0.18, gain: 0.18 },
+    ],
+    'rescue.wav': [
+      { from: 330, to: 440, duration: 0.12, gain: 0.16 },
+      { from: 440, to: 587, duration: 0.16, gain: 0.16 },
+    ],
     'skill.wav': [
       { from: 220, to: 760, duration: 0.12, gain: 0.28 },
       { from: 520, to: 1040, duration: 0.18, gain: 0.24 },
@@ -115,4 +130,21 @@ async function writeGeneratedAudio(root) {
   await Promise.all(Object.entries(cues).map(([name, sequence]) =>
     writeFile(`${audioDir}/${name}`, wavBuffer(sequence))
   ));
+
+  const musicPlans = {
+    kingdom: [196, 247, 294, 392, 294, 247, 220, 294, 330, 392, 330, 247],
+    palace: [220, 277, 330, 440, 392, 330, 277, 330, 370, 440, 370, 277],
+    zodiac: [165, 220, 247, 330, 294, 247, 196, 247, 294, 370, 330, 220],
+    candy: [262, 330, 392, 523, 440, 392, 330, 392, 494, 523, 440, 330],
+    dreamhouse: [196, 247, 330, 392, 330, 294, 247, 294, 330, 440, 392, 247],
+  };
+  await Promise.all(Object.entries(musicPlans).map(([theme, notes]) => {
+    const sequence = notes.map((note, index) => ({
+      from: note,
+      to: index % 3 === 0 ? note * 1.01 : note,
+      duration: 0.48,
+      gain: index % 4 === 0 ? 0.085 : 0.065,
+    }));
+    return writeFile(`${audioDir}/music-${theme}.wav`, wavBuffer(sequence, 11025));
+  }));
 }

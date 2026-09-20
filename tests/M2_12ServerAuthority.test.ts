@@ -37,6 +37,19 @@ describe('M2.12 authoritative economy migration',()=>{
     expect((await repo.unlockTheme(a.id,'future_theme','unlock-0001',day(36))).amount).toBe(0);
     expect((await repo.findById(a.id))?.themes.owned).toContain('future_theme');
   });
+  it('persists all five Solo launch themes without resetting legacy fields',async()=>{
+    const {repo}=await fixture(),a=(await repo.findOrCreate('launch-five',undefined,undefined,day(1))).account;
+    const zodiac=await repo.mergeSoloProgress(a.id,'zodiac',888,128,day(1));
+    const candy=await repo.mergeSoloProgress(a.id,'candy',555,64,day(1));
+    const home=await repo.mergeSoloProgress(a.id,'dreamhouse',333,32,day(1));
+    const saved=await repo.findById(a.id);
+    expect(zodiac.account.soloByTheme.zodiac).toEqual({best:888,highest:128});
+    expect(candy.account.soloByTheme.candy.highest).toBe(64);
+    expect(home.account.soloByTheme.dreamhouse.highest).toBe(32);
+    expect(saved?.solo.highestKingdom).toBe(2);
+    expect(publicPlayer(saved!,day(1)).soloByTheme.zodiac.highest).toBe(128);
+    expect(Object.keys(THEME_REGISTRY)).toEqual(expect.arrayContaining(['kingdom','palace','zodiac','candy','dreamhouse']));
+  });
   it('caps discovery rewards at the shipped 11 tiers and resets displayed daily tasks by UTC day',async()=>{
     const {repo}=await fixture(),a=(await repo.findOrCreate('cap-player',undefined,undefined,day(1))).account;
     const maxed=await repo.mergeSoloProgress(a.id,'kingdom',5000,1_048_576,day(1));

@@ -575,8 +575,9 @@ export class DouyinSoloScene {
     this.soloDangerBand = dangerBand;
     const sky = new THREE.Color(presentation.sky);
     const fog = new THREE.Color(presentation.fog);
-    const stageTint = new THREE.Color(this.currentTheme === 'palace' ? 0xe8a29d : 0x8fb6c8);
-    const finalTint = new THREE.Color(this.currentTheme === 'palace' ? 0xc96977 : 0x657f9c);
+    const themeUi = THEMES[this.currentTheme].ui;
+    const stageTint = new THREE.Color(themeUi.stageTint);
+    const finalTint = new THREE.Color(themeUi.finalTint);
     const dangerTint = new THREE.Color(0x6d3034);
 
     sky.lerp(stageTint, 0.05 + progress * 0.18);
@@ -596,7 +597,7 @@ export class DouyinSoloScene {
     this.scene.fog = new THREE.Fog(fog, distance + 7 - danger * 1.5, distance + 28 - danger * 4.5);
     this.renderer.toneMappingExposure = presentation.exposure + progress * 0.07 - danger * 0.035;
     this.soloBaseStageGlow = 0.14 + progress * 0.82;
-    this.stageGlow.color.set(this.currentTheme === 'palace' ? 0xffc16c : 0x78d7ff);
+    this.stageGlow.color.setHex(THEMES[this.currentTheme].ui.glow);
     this.stageGlow.intensity = this.soloBaseStageGlow;
     this.dangerGlow.intensity = danger * 0.82;
   }
@@ -829,7 +830,7 @@ export class DouyinSoloScene {
       const layout = this.onlineLobbyLayout(info.width, info.height);
       if (this.hit(x, y, layout.theme)) {
         this.flashTap(layout.theme);
-        this.online.setTheme(snap.selectedTheme === 'kingdom' ? 'palace' : 'kingdom');
+        this.online.setTheme(adjacentTheme(snap.selectedTheme, 1));
         return;
       }
       for (let i = 0; i < layout.skills.length; i++) if (this.hit(x, y, layout.skills[i])) {
@@ -1141,9 +1142,7 @@ export class DouyinSoloScene {
   }
 
   private applyHomeAmbientTheme(): void {
-    const kingdom = [0x7adff2, 0xf3c969, 0x91d46d, 0xffdda0] as const;
-    const palace = [0xf2a3ae, 0xffd089, 0x86cfc2, 0xf6b6cb] as const;
-    const palette = this.currentTheme === 'palace' ? palace : kingdom;
+    const palette = THEMES[this.currentTheme].ui.ambient;
     this.homeMotes.forEach((mote, index) => {
       const material = mote.mesh.material as THREE.MeshBasicMaterial;
       material.color.setHex(palette[index % palette.length]);
@@ -1215,7 +1214,7 @@ export class DouyinSoloScene {
   private updateMomentLighting(): void {
     if (this.mode !== 'solo') return;
 
-    const normalColor = this.currentTheme === 'palace' ? 0xffc16c : 0x78d7ff;
+    const normalColor = THEMES[this.currentTheme].ui.glow;
     let intensity = this.soloBaseStageGlow;
     this.stageGlow.color.setHex(normalColor);
 
@@ -1797,7 +1796,7 @@ export class DouyinSoloScene {
 
   private drawJoinPad(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     const pad = this.joinPadLayout(width, height);
-    const bg = this.currentTheme === 'palace' ? '#D88F6E' : '#72BEDA';
+    const bg = THEMES[this.currentTheme].ui.background;
     const ink = '#17343C';
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
@@ -1870,7 +1869,7 @@ export class DouyinSoloScene {
 
   private drawSettings(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     const layout = this.settingsLayout(width, height);
-    ctx.fillStyle = '#72BEDA';
+    ctx.fillStyle = THEMES[this.currentTheme].ui.background;
     ctx.fillRect(0, 0, width, height);
 
     ctx.save();
@@ -1949,7 +1948,7 @@ export class DouyinSoloScene {
   }
 
   private drawOnboarding(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    ctx.fillStyle = '#72BEDA';
+    ctx.fillStyle = THEMES[this.currentTheme].ui.background;
     ctx.fillRect(0, 0, width, height);
     const panelWidth = Math.min(314, width - 30);
     const x = (width - panelWidth) / 2;

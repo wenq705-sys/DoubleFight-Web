@@ -7,12 +7,15 @@ The first Douyin release is now intentionally Solo-first. Online Duel/PvP remain
 ### P0 — release closure
 - ✅ single launch policy disables Online/PvP surfaces without deleting the implementation
 - ✅ Home/profile/ranking/daily-task copy is Solo-first
-- ⏳ generalize hard-coded two-theme navigation/collection assumptions
-- ⏳ ship five visually distinct, readable 11-tier launch worlds
-- ⏳ full BGM + layered SFX + music/SFX settings and lifecycle-safe audio
-- ⏳ remove avoidable disabled-online runtime memory/render/network cost
-- ⏳ Solo game-feel pass: merge cadence, milestone moments, danger/recovery, 1024→2048 climax
-- ⏳ package-size / sustained-FPS / renderer-call / memory acceptance
+- ✅ registry-driven five-world Home/navigation/collection architecture
+- ✅ five readable 11-tier launch worlds: Kingdom, Palace, Zodiac, Candy, Dreamhouse
+- ✅ Zodiac combat-power chain with Rabbit retained as world mascot
+- ✅ generic five-theme server Solo persistence with backward-compatible migration
+- ✅ theme BGM + layered SFX + separate music/SFX settings + lifecycle-safe audio
+- ✅ Solo game-feel pass: merge cadence, milestone moments, danger/recovery and legendary merge feedback
+- ✅ code-side package/build budget: release game.js ~715 kB (~193 kB gzip), complete release directory ~1.51 MB
+- ✅ local typecheck + 24/24 test files + 158/158 tests + Browser/Douyin builds + release preflight
+- ⏳ final GitHub CI on release head
 - ⏳ Douyin IDE + physical-device safe-area, touch, lifecycle, account, ads and ranking acceptance
 
 ### Release definition
@@ -27,7 +30,7 @@ A release candidate is not accepted only because TypeScript/build/tests are gree
 
 Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. M2.10.4 adds account-bound WebSocket attribution and Solo/PvP progress without changing Protocol v6. Production deployment, real legal-domain validation and provider-backed ad proof remain separate acceptance work.
 
-## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
+## Historical milestone — M2.10 Douyin Platform Foundation
 
 M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
 
@@ -78,7 +81,7 @@ Implementation on `refactor/m2-10-platform-foundation`: shared Platform contract
 - Palace 2/4/8 stylized low-poly pilot
 - compare visual quality, draw calls, package size and loading
 
-## M2 — Real online duel ← CURRENT
+## M2 — Real online duel ← IMPLEMENTED / DEFERRED FROM FIRST RELEASE
 
 **Definition:** two players on two devices connect through a server. Each device ultimately shows both boards; each player controls only their own board. Players may choose different visual themes.
 

@@ -4,7 +4,7 @@ import {
   matchTimerPhase,
   type Direction,
 } from '../../../shared/index';
-import { MAX_PIECE_VALUE, THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
+import { MAX_PIECE_VALUE, THEME_IDS, THEMES, pieceName, pieceTier, type ThemeId } from '../../../src/config/themes';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { OnlineClient } from '../../../src/network/OnlineClient';
@@ -383,10 +383,10 @@ function drawProfile(
   hudTop: number,
   state: PassState,
 ): void {
-  const bg = theme === 'palace' ? '#D88F6E' : '#72BEDA';
+  const bg = THEMES[theme].ui.background;
   const ink = '#17343C';
   const paper = '#FFF0C9';
-  const accent = theme === 'palace' ? '#A94D55' : '#236B83';
+  const accent = THEMES[theme].ui.accent;
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
@@ -427,25 +427,30 @@ function drawProfile(
   ctx.font = '900 16px sans-serif';
   ctx.fillText(String(player?.rewards.currency ?? 0), cardX + cardW - 50, headerY + 73);
 
-  (['kingdom', 'palace'] as ThemeId[]).forEach((world, index) => {
-    const rowY = headerY + 166 + index * 82;
+  THEME_IDS.forEach((world, index) => {
+    const rowY = headerY + 160 + index * 49;
     const highest = Number(platform.storage.getItem(`doublefight-highest-${world}`) ?? 2);
     const best = Number(platform.storage.getItem(`doublefight-best-${world}`) ?? 0);
     const mastery = loadThemeMastery(platform.storage, world);
-    round(ctx, cardX, rowY, cardW, 66, 18);
-    ctx.fillStyle = world === 'palace' ? '#F7D3C1' : '#D9F0E1';
+    round(ctx, cardX, rowY, cardW, 42, 13);
+    ctx.fillStyle = '#FFF0C9';
     ctx.fill();
     ctx.strokeStyle = ink;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.2;
     ctx.stroke();
+    ctx.fillStyle = THEMES[world].ui.accent;
+    ctx.fillRect(cardX, rowY + 8, 4, 26);
     ctx.textAlign = 'left';
     ctx.fillStyle = ink;
-    ctx.font = '900 13px sans-serif';
-    ctx.fillText(THEMES[world].label, cardX + 16, rowY + 19);
-    ctx.font = '800 10px sans-serif';
-    ctx.fillText(`已到达 ${pieceName(world, highest)} · 最高分 ${best.toLocaleString('zh-CN')}`, cardX + 16, rowY + 40);
+    ctx.font = '900 11px sans-serif';
+    ctx.fillText(THEMES[world].label, cardX + 13, rowY + 14);
+    ctx.fillStyle = '#46636A';
+    ctx.font = '800 8.5px sans-serif';
+    ctx.fillText(`${pieceName(world, highest)} · ${pieceTier(highest)}/11 · ${best.toLocaleString('zh-CN')}分`, cardX + 13, rowY + 30);
     ctx.textAlign = 'right';
-    ctx.fillText(mastery.bestAscensionMs ? `最快 ${formatDuration(mastery.bestAscensionMs)}` : '尚未登顶', cardX + cardW - 16, rowY + 19);
+    ctx.fillStyle = mastery.bestAscensionMs ? '#8A5A13' : '#6B797D';
+    ctx.font = '800 8.5px sans-serif';
+    ctx.fillText(mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶', cardX + cardW - 12, rowY + 21);
   });
 
   const sync = profileSyncRect(width, height);
