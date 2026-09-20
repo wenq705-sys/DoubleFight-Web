@@ -82,6 +82,7 @@ export class CollectibleThemeEnvironment {
     this.accentLight.position.set(0, 5.4, 2.2);
     this.world.add(this.accentLight);
 
+    this.addHeroSetpiece(detail);
     if (detail === 'full') this.addFullDecor();
     else if (detail === 'duel') this.addCompactDecor();
   }
@@ -124,6 +125,105 @@ export class CollectibleThemeEnvironment {
     this.pulseRing.scale.setScalar(scale);
     this.pulseRing.rotation.z += dt * 0.16;
     this.accentLight.intensity = 0.24 + this.pulse * 2.2 + Math.sin(time * 1.8) * 0.04;
+    this.world.traverse(node => {
+      if (!(node instanceof THREE.Mesh) || !node.userData.environmentFlame) return;
+      const breathe = 1 + Math.sin(time * 7 + node.position.x) * .08;
+      node.scale.set(1 / breathe, breathe, 1 / breathe);
+      node.rotation.y += dt * .7;
+    });
+  }
+
+  private addHeroSetpiece(detail: EnvironmentDetail): void {
+    if (detail === 'board') return;
+    const centerZ = ART.board.centerZ;
+    const add = (geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number) => {
+      const value = new THREE.Mesh(geometry, material);
+      value.position.set(x, y, z);
+      value.castShadow = true;
+      value.receiveShadow = true;
+      this.world.add(value);
+      return value;
+    };
+
+    if (this.config.motif === 'zodiac') {
+      // Ceremonial red-lacquer battle shrine: stairs, gate, war drum and braziers.
+      const stairMat = standard(0x7e2d27);
+      for (let step = 0; step < 3; step += 1) {
+        add(new THREE.BoxGeometry(4.4 - step * .55, .18, .58), stairMat, 0, .47 + step * .16, centerZ + 5.35 + step * .20);
+      }
+      for (const x of [-4.55, 4.55]) {
+        add(new THREE.BoxGeometry(.34, 1.55, .34), standard(0x6c2824), x, 1.24, centerZ - 4.55);
+        add(new THREE.BoxGeometry(.70, .16, .70), standard(0xd9a94b), x, 2.06, centerZ - 4.55);
+      }
+      add(new THREE.BoxGeometry(9.65, .24, .32), standard(0x873229), 0, 1.92, centerZ - 4.55);
+      const drum = add(new THREE.CylinderGeometry(1.12, 1.12, .42, 24), standard(0x8c332b), 0, 2.48, centerZ - 5.0);
+      drum.rotation.x = Math.PI / 2;
+      const drumTrim = add(new THREE.TorusGeometry(1.10, .055, 8, 32), standard(0xe2b554, this.config.glow), 0, 2.48, centerZ - 4.76);
+      drumTrim.rotation.x = Math.PI / 2;
+
+      for (const x of [-3.85, 3.85]) {
+        for (const zOffset of [-3.65, 3.65]) {
+          add(new THREE.CylinderGeometry(.28, .40, .58, 10), standard(0x4d3029), x, .92, centerZ + zOffset);
+          const flame = add(new THREE.ConeGeometry(.22, .62, 9), standard(0xff9a32, 0xff6a24), x, 1.48, centerZ + zOffset);
+          flame.userData.environmentFlame = true;
+        }
+      }
+      for (const x of [-4.75, 4.75]) {
+        const banner = add(new THREE.BoxGeometry(.72, 1.55, .06), standard(0x9e302b), x, 2.15, centerZ - 1.1);
+        banner.rotation.y = x < 0 ? .14 : -.14;
+        add(new THREE.BoxGeometry(.92, .08, .10), standard(0xd7a64a), x, 2.92, centerZ - 1.1);
+      }
+    } else if (this.config.motif === 'candy') {
+      // Cake-showcase board: layered sponge, frosting pearls and glowing candy lamps.
+      add(new THREE.CylinderGeometry(5.18, 5.34, .38, 32), standard(0xf1b98c), 0, .34, centerZ);
+      add(new THREE.CylinderGeometry(5.08, 5.18, .18, 32), standard(0xffd9e9), 0, .58, centerZ);
+      for (let i = 0; i < 20; i += 1) {
+        const angle = i / 20 * Math.PI * 2;
+        add(
+          new THREE.SphereGeometry(.18, 9, 7),
+          standard(i % 3 === 0 ? 0xffffff : i % 3 === 1 ? 0xff9fc7 : 0xffd36d),
+          Math.cos(angle) * 5.06,
+          .72,
+          centerZ + Math.sin(angle) * 5.06,
+        );
+      }
+      for (const x of [-4.45, 4.45]) {
+        for (const zOffset of [-4.0, 4.0]) {
+          add(new THREE.CylinderGeometry(.07, .07, 1.15, 8), standard(0xfff0dc), x, 1.12, centerZ + zOffset);
+          add(new THREE.SphereGeometry(.28, 12, 9), standard(0xffd966, 0xffca55), x, 1.79, centerZ + zOffset);
+          const bow = add(new THREE.TorusGeometry(.18, .055, 7, 18), standard(0xff6fa6), x, 1.43, centerZ + zOffset);
+          bow.scale.x = 1.5;
+        }
+      }
+      for (const x of [-3.35, 0, 3.35]) {
+        const cloud = add(new THREE.SphereGeometry(.55, 10, 8), standard(0xfff5fb), x, 2.15, centerZ - 5.0);
+        cloud.scale.set(1.55, .72, .78);
+      }
+    } else {
+      // Premium garden estate: stone forecourt, hedges, lamps, water and a fountain axis.
+      add(new THREE.BoxGeometry(9.65, .10, 9.65), standard(0xcfc7ac), 0, .43, centerZ);
+      add(new THREE.BoxGeometry(8.95, .11, 8.95), standard(0x8ab77b), 0, .50, centerZ);
+      for (const x of [-4.65, 4.65]) {
+        add(new THREE.BoxGeometry(.36, .62, 9.45), standard(0x4f8b61), x, .82, centerZ);
+      }
+      for (const zOffset of [-4.65, 4.65]) {
+        add(new THREE.BoxGeometry(9.45, .62, .36), standard(0x4f8b61), 0, .82, centerZ + zOffset);
+      }
+      const basin = add(new THREE.CylinderGeometry(1.02, 1.16, .20, 24), standard(0xe5dcc6), 0, .72, centerZ - 5.05);
+      basin.receiveShadow = true;
+      add(new THREE.CylinderGeometry(.54, .68, .12, 20), standard(0x61bed4, 0x61bed4), 0, .86, centerZ - 5.05);
+      add(new THREE.CylinderGeometry(.12, .16, 1.0, 12), standard(0xe4dac2), 0, 1.25, centerZ - 5.05);
+      add(new THREE.SphereGeometry(.20, 10, 8), standard(0x73cee0, 0x73cee0), 0, 1.82, centerZ - 5.05);
+
+      for (const x of [-4.30, 4.30]) {
+        for (const zOffset of [-3.55, 3.55]) {
+          add(new THREE.CylinderGeometry(.065, .075, 1.08, 8), standard(0x45433d), x, 1.10, centerZ + zOffset);
+          add(new THREE.SphereGeometry(.16, 10, 8), standard(0xffdf8f, 0xffc65a), x, 1.72, centerZ + zOffset);
+        }
+      }
+      // Water strip sells the lakefront theme without expensive transparent meshes.
+      add(new THREE.BoxGeometry(8.25, .06, .62), standard(0x5bb7cf, 0x5bb7cf), 0, .51, centerZ + 5.18);
+    }
   }
 
   private addFullDecor(): void {
