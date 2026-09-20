@@ -133,7 +133,9 @@ export function installM212RetentionHub(
     if (!scene.disposed && state.screen === 'daily') scene.refreshHud();
   });
   void auth.start().then(current => {
-    if (current.status === 'authenticated') void social.setPvpRank(current.player.season?.rating ?? current.player.pvp.rating);
+    if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && current.status === 'authenticated') {
+      void social.setPvpRank(current.player.season?.rating ?? current.player.pvp.rating);
+    }
   });
 
   const originalStartSolo = scene.startSolo.bind(scene) as () => void;
@@ -305,13 +307,17 @@ export function installM212RetentionHub(
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen);
     if (!nativeModal && !state.screen) {
       if (game.currentMode === 'home') drawHomeUtility(ctx, width, height, scene, auth);
-      if (game.currentMode === 'online') drawOnlinePolish(ctx, width, height, scene, state, auth);
+      if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled && game.currentMode === 'online') {
+        drawOnlinePolish(ctx, width, height, scene, state, auth);
+      }
     }
 
     if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
-    if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, auth);
-    if (state.screen === 'season') drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
+    if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform);
+    if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && state.screen === 'season') {
+      drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
+    }
     if (state.coinBurst) drawCoinBurst(ctx, width, height, state.coinBurst, number(scene.visualTime));
 
     scene.uiTexture.needsUpdate = true;
@@ -431,7 +437,7 @@ function handleHubTap(
       });
       return;
     }
-    if (hit(x, y, layout.pvp)) {
+    if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && hit(x, y, layout.pvp)) {
       state.screen = 'season';
       requestSeasonLeaderboard(scene, auth, engagement, state);
       platform.haptics.trigger('light');
@@ -657,15 +663,13 @@ function drawRankingCenter(
   height: number,
   game: DouyinSoloScene,
   platform: DouyinPlatform,
-  auth: DouyinAuthClient,
 ): void {
   const layout = rankingCenterLayout(width, height);
   shade(ctx, width, height);
-  drawPageHeader(ctx, width, layout.close, '排行榜', '查看你的记录与竞技成绩');
+  drawPageHeader(ctx, width, layout.close, '排行榜', '查看你的单机记录与世界进度');
 
   const mastery = loadThemeMastery(platform.storage, game.theme);
   const weekly = loadWeeklySolo(platform.storage);
-  const rating = competitiveRating(auth);
 
   actionCard(
     ctx,
@@ -683,19 +687,10 @@ function drawRankingCenter(
     false,
     'rank',
   );
-  actionCard(
-    ctx,
-    layout.pvp,
-    '竞技排行',
-    `${competitiveRankLabel(rating)} · ${rating}`,
-    true,
-    'pvp',
-  );
-
   ctx.textAlign = 'center';
   ctx.fillStyle = PAGE_MUTED;
   ctx.font = '800 10px sans-serif';
-  ctx.fillText('选择一个榜单查看详细排名', width / 2, Math.min(height - 44, layout.pvp.y + layout.pvp.height + 34));
+  ctx.fillText('选择一个榜单查看详细排名', width / 2, Math.min(height - 44, layout.solo.y + layout.solo.height + 34));
 }
 
 function drawSeasonLeaderboard(
@@ -883,7 +878,7 @@ function drawDailyCenter(
   const balance = player?.rewards.currency ?? 0;
   const daily = player?.rewards.daily;
   const tasks = daily?.tasks ?? { solo: false, pvp: false, ad: false };
-  const taskCount = Number(tasks.solo) + Number(tasks.pvp) + Number(tasks.ad);
+  const taskCount = Number(tasks.solo) + Number(tasks.ad);
   const today = new Date().toISOString().slice(0, 10);
   const sidebarClaimed = player?.rewards.lastSidebarRewardDay === today;
   const sidebarReady = !sidebarClaimed && Boolean(scene.sidebarRewardReady?.());
@@ -926,11 +921,11 @@ function drawDailyCenter(
   ctx.textAlign = 'left';
   ctx.fillStyle = PAGE_INK;
   ctx.font = '900 12px sans-serif';
-  ctx.fillText(`今日任务  ${taskCount}/3`, layout.progress.x + 14, layout.progress.y + 20);
+  ctx.fillText(`今日任务  ${taskCount}/2`, layout.progress.x + 14, layout.progress.y + 20);
   ctx.fillStyle = PAGE_MUTED;
   ctx.font = '800 10px sans-serif';
   ctx.fillText(
-    `单机 ${tasks.solo ? '✓' : '○'}   对战 ${tasks.pvp ? '✓' : '○'}   广告 ${tasks.ad ? '✓' : '○'}`,
+    `单机 ${tasks.solo ? '✓' : '○'}   广告 ${tasks.ad ? '✓' : '○'}`,
     layout.progress.x + 14,
     layout.progress.y + 42,
   );
