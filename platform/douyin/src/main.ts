@@ -1,4 +1,5 @@
 import type { Direction } from '../../../shared/game/types';
+import { isThemeId } from '../../../src/config/themes';
 import type { DouyinApi } from './api';
 import { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import { DouyinRenderLoop } from '../../../src/platform/douyin/DouyinRenderLoop';
@@ -33,7 +34,7 @@ const context = canvas.getContext('webgl2', { antialias: true, alpha: false })
 if (!context) throw new Error('Double Fight requires a WebGL context in the Douyin runtime.');
 
 const savedTheme = platform.storage.getItem('doublefight-theme');
-const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
+const theme = isThemeId(savedTheme) ? savedTheme : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
 installM212ProductPass(game, platform, client, auth, commercial);
 installM212RetentionHub(game, platform, auth, social, commercial, engagement);
