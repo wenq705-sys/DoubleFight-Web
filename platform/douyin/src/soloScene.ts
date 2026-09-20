@@ -95,6 +95,7 @@ export class DouyinSoloScene {
   private joinCode = '';
   private exitConfirm = false;
   private settingsOpen = false;
+  private healthNoticeOpen = true;
   private onboardingOpen = false;
   private soundEnabled = true;
   private musicEnabled = true;
@@ -159,6 +160,8 @@ export class DouyinSoloScene {
     this.audio.setSfxEnabled(this.soundEnabled);
     this.audio.setMusicEnabled(this.musicEnabled);
     this.audio.setScene('home', theme);
+    // Startup health reminder owns the first interaction; music begins only after entry.
+    this.audio.suspend();
     this.platform.haptics.setEnabled(this.hapticsEnabled);
 
     const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
@@ -256,6 +259,7 @@ export class DouyinSoloScene {
   }
 
   handleDirection(direction: Direction): void {
+    if (this.healthNoticeOpen || this.onboardingOpen) return;
     if (this.mode === 'home') {
       if (direction === 'left' || direction === 'right') this.startHomeSlide(direction === 'left' ? -1 : 1);
       return;
@@ -338,6 +342,17 @@ export class DouyinSoloScene {
 
   handleTap(x: number, y: number): void {
     if (this.disposed) return;
+    if (this.healthNoticeOpen) {
+      const info = this.platform.getSystemInfo();
+      const button = this.healthNoticeButton(info.width, info.height);
+      if (this.hit(x, y, button)) {
+        this.healthNoticeOpen = false;
+        this.audio.resume();
+        this.platform.haptics.trigger('light');
+        this.refreshHud();
+      }
+      return;
+    }
     if (this.inputLocked) {
       this.platform.haptics.trigger('light');
       if (!this.notice) this.notice = { text: '正在处理，请稍候…', until: this.visualTime + .8 };
@@ -1307,7 +1322,102 @@ export class DouyinSoloScene {
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
     if (this.settingsOpen) this.drawSettings(ctx, width, height);
     if (this.onboardingOpen) this.drawOnboarding(ctx, width, height);
+    if (this.healthNoticeOpen) this.drawHealthNotice(ctx, width, height);
     this.uiTexture.needsUpdate = true;
+  }
+
+  private healthNoticeButton(width: number, height: number): Rect {
+    const buttonWidth = Math.min(286, width - 64);
+    return {
+      x: width / 2 - buttonWidth / 2,
+      y: Math.min(height - 88, Math.max(height * 0.78, 520)),
+      width: buttonWidth,
+      height: 54,
+    };
+  }
+
+  private drawHealthNotice(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+    ctx.save();
+    const palette = THEMES[this.currentTheme].ui;
+    const bg = ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#f5d79a');
+    bg.addColorStop(.46, '#f1bf80');
+    bg.addColorStop(1, '#d88965');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, height);
+
+    // Subtle board motif keeps the screen branded without using external artwork.
+    ctx.globalAlpha = .18;
+    ctx.fillStyle = palette.accent;
+    const cell = Math.min(54, width / 7);
+    for (let row = 0; row < 4; row += 1) {
+      for (let col = 0; col < 4; col += 1) {
+        this.roundedRect(ctx, width / 2 - cell * 2 + col * cell, height * .60 + row * cell * .48, cell - 5, cell * .42, 6);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(64,35,20,.22)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#fff4ce';
+    ctx.font = '900 34px sans-serif';
+    ctx.fillText('双数对决', width / 2, Math.max(82, height * .13));
+    ctx.shadowBlur = 0;
+
+    const panelW = Math.min(340, width - 38);
+    const panelH = Math.min(310, height * .44);
+    const panelX = (width - panelW) / 2;
+    const panelY = Math.max(145, height * .23);
+    this.roundedRect(ctx, panelX, panelY, panelW, panelH, 24);
+    ctx.fillStyle = 'rgba(255,248,226,.94)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(128,73,42,.20)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#78452f';
+    ctx.font = '900 14px sans-serif';
+    ctx.fillText('健康游戏提示', width / 2, panelY + 34);
+
+    const lines = [
+      '抵制不良游戏，拒绝盗版游戏',
+      '注意自我保护，谨防受骗上当',
+      '适度游戏益脑，沉迷游戏伤身',
+      '合理安排时间，享受健康生活',
+    ];
+    ctx.font = '800 13px sans-serif';
+    lines.forEach((line, index) => {
+      ctx.fillStyle = index % 2 === 0 ? '#6f4030' : '#83523f';
+      ctx.fillText(line, width / 2, panelY + 78 + index * 42);
+    });
+
+    ctx.strokeStyle = 'rgba(123,77,49,.22)';
+    ctx.beginPath();
+    ctx.moveTo(panelX + 42, panelY + panelH - 58);
+    ctx.lineTo(panelX + panelW - 42, panelY + panelH - 58);
+    ctx.stroke();
+    ctx.fillStyle = '#9b755f';
+    ctx.font = '700 10px sans-serif';
+    ctx.fillText('请合理安排游戏时间，享受健康游戏体验', width / 2, panelY + panelH - 31);
+
+    const button = this.healthNoticeButton(width, height);
+    const buttonGradient = ctx.createLinearGradient(button.x, button.y, button.x + button.width, button.y);
+    buttonGradient.addColorStop(0, '#f9dfa0');
+    buttonGradient.addColorStop(.5, '#efc45e');
+    buttonGradient.addColorStop(1, '#e8ae43');
+    this.roundedRect(ctx, button.x, button.y, button.width, button.height, 18);
+    ctx.fillStyle = buttonGradient;
+    ctx.shadowColor = 'rgba(89,54,25,.25)';
+    ctx.shadowBlur = 14;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#6d3a1e';
+    ctx.font = '900 18px sans-serif';
+    ctx.fillText('进入游戏', width / 2, button.y + button.height / 2);
+    ctx.restore();
   }
 
   private drawHomeHud(ctx: CanvasRenderingContext2D, width: number, height: number, safeBottomInset: number): void {
