@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current milestone — M2.17 Solo-first Douyin Launch RC ← CURRENT
+## Current milestone — v1.0 final Douyin RC ← CURRENT
 
 The first Douyin release is now intentionally Solo-first. Online Duel/PvP remains in the repository for later activation but is not part of the initial player-facing release.
 
@@ -13,8 +13,10 @@ The first Douyin release is now intentionally Solo-first. Online Duel/PvP remain
 - ✅ generic five-theme server Solo persistence with backward-compatible migration
 - ✅ theme BGM + layered SFX + separate music/SFX settings + lifecycle-safe audio
 - ✅ Solo game-feel pass: merge cadence, milestone moments, danger/recovery and legendary merge feedback
-- ✅ code-side package/build budget: release game.js ~715 kB (~193 kB gzip), complete release directory ~1.51 MB
-- ✅ local typecheck + 24/24 test files + 158/158 tests + Browser/Douyin builds + release preflight
+- ✅ startup performance: isolated health screen + visible preload progress + five-theme environment/tile/GPU/audio prewarm; fitted tile templates and VFX hot-path caching
+- ✅ permanent theme economy: 1 free world + 星币/ad-progress unlocks with server ledger, idempotency and 2/day theme-ad cap
+- ✅ review-language hardening: numeric-only generated guest names, Chinese currency/rank/match labels, build-time visible-copy audit
+- ✅ local typecheck + 27/27 test files + 172/172 tests + Browser/Douyin builds + release preflight
 - ⏳ final GitHub CI on release head
 - ⏳ Douyin IDE + physical-device safe-area, touch, lifecycle, account, ads and ranking acceptance
 

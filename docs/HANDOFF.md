@@ -1,8 +1,8 @@
 # Handoff
 
-## M2.17 Solo-first launch RC — CURRENT
+## v1.0 final RC — performance, economy and review hardening — CURRENT
 
-Branch: `feat/m2-17-solo-launch-rc`. PR #44 is the consolidated M2.13–M2.17 release candidate targeting `main`.
+Branch: `feat/m2-17-solo-launch-rc`. PR #44 is the consolidated v1.0 release candidate targeting `main`; the latest hardening head adds performance prewarming, permanent theme economy and Douyin review-copy gates.
 
 The launch decision is now explicit: the first Douyin release ships as a polished **Solo / Theme Islands** product. Online Duel/PvP remains implemented for a later release, but M2.17 hides and disables its launch surfaces rather than deleting the architecture.
 
@@ -12,11 +12,11 @@ Release closure implemented:
 - every world has an 11-tier numberless progression, independent collection/mastery data, preview, palette, presentation adapter and server-persisted Solo progress.
 - 生肖战神 uses combat-power progression: 灵鼠 → 斗鸡 → 岩羊 → 灵猴 → 战犬 → 山猪 → 玄蛇 → 烈马 → 神牛 → 白虎 → 东方神龙. Rabbit is the world mascot so the global 11/11 rule remains intact.
 - the three new worlds use cached procedural low-poly factories and lightweight reusable environments; these are release-safe now and can later be replaced by Codex/Blender-authored GLB without changing gameplay contracts.
-- account migration retains legacy Kingdom/Palace fields and adds generic `soloByTheme` persistence for all five worlds.
-- audio is split into BGM/SFX with per-theme looping music, legendary merge, milestone, rescue, victory/defeat cues and lifecycle-safe suspend/resume.
+- account migration retains legacy Kingdom/Palace fields and generic `soloByTheme` persistence; players with prior progress in formerly-free worlds keep permanent ownership.
+- startup preloads all five environments/tile templates/GPU programs and theme music behind the isolated health screen so first world swipes avoid one-time construction hitches.
 - Browser and Douyin world navigation are registry-driven; the first-release Browser/Douyin shells hide Online Duel while retaining the deferred network implementation.
-- local release validation: TypeScript PASS; 24/24 test files, 158/158 tests PASS; Browser build PASS; Douyin dev/release builds PASS; release preflight PASS.
-- current Douyin release `game.js`: about 715 kB / 193 kB gzip; complete generated release directory about 1.51 MB.
+- theme economy: 微缩王国 is free; 后宫晋升 / 生肖战神 / 甜蜜星球 / 梦想家园 permanently unlock for 100 / 180 / 280 / 400 星币, or cumulative rewarded-ad progress 2 / 3 / 4 / 5 with a global 2-per-day cap.
+- review-copy gate removes complex-English player-facing labels, uses numeric-only generated guest names and the Chinese currency name 星币; final local validation is 27/27 test files, 172/172 tests plus Browser/Douyin builds and preflight PASS; release `game.js` is about 735 kB / 199 kB gzip.
 
 Remaining release gate:
 1. final GitHub CI on the pushed M2.17 head;

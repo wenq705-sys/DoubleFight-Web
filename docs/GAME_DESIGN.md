@@ -133,4 +133,4 @@ First-release themes:
 - 甜蜜星球 / Candy Planet
 - 梦想家园 / Dream Home
 
-All five use the same 11/11 Solo rules and are free at first release. Current procedural low-poly pieces are production-safe launch assets; individual hero themes can later migrate to Codex/Blender-authored stylized GLB assets without changing Board2048 or progression contracts.
+All five use the same 11/11 Solo rules. 微缩王国 is the free onboarding world; the remaining four are permanent progression unlocks via 星币 or cumulative rewarded-video progress. Current procedural low-poly pieces are production-safe launch assets; individual hero themes can later migrate to authored stylized GLB assets without changing Board2048 or progression contracts.
