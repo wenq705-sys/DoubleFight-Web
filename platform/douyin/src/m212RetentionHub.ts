@@ -152,10 +152,9 @@ export function installM212RetentionHub(
     originalPersistRecord(forceSync);
     if (game.currentMode !== 'solo') return;
     const weekly = recordWeeklySolo(platform.storage, game.score);
-    if (weekly.improved) {
-      void social.setSoloRank(weekly.progress.best);
-      engagement.track('solo_weekly_best', { score: weekly.progress.best });
-    }
+    if (weekly.improved) engagement.track('solo_weekly_best', { score: weekly.progress.best });
+    // Native rank upload is a run-boundary operation, not a per-merge network call.
+    if (forceSync && weekly.progress.best > 0) void social.setSoloRank(weekly.progress.best);
   };
 
   const originalShowHome = scene.showHome.bind(scene) as () => void;
@@ -419,25 +418,37 @@ function handleHubTap(
       return;
     }
     if (hit(x, y, layout.ascension)) {
-      void social.openAscensionRank(game.theme).then(ok => {
+      void (async () => {
+        const mastery = loadThemeMastery(platform.storage, game.theme);
+        const synced = mastery.bestAscensionMs
+          ? await social.setAscensionRank(game.theme, mastery.bestAscensionMs)
+          : true;
+        const ok = await social.openAscensionRank(game.theme);
         scene.notice = {
-          text: ok ? '已打开登顶竞速榜' : '当前环境暂不支持登顶榜',
+          text: ok
+            ? (synced ? '已打开登顶竞速榜' : '已打开登顶榜 · 本机成绩稍后同步')
+            : '当前环境暂不支持登顶榜',
           until: number(scene.visualTime) + 1.4,
         };
-        engagement.track('rank_open', { board: 'ascension', success: ok, theme: game.theme });
+        engagement.track('rank_open', { board: 'ascension', success: ok, synced, theme: game.theme });
         scene.refreshHud();
-      });
+      })();
       return;
     }
     if (hit(x, y, layout.solo)) {
-      void social.openSoloRank().then(ok => {
+      void (async () => {
+        const weekly = loadWeeklySolo(platform.storage);
+        const synced = weekly.best > 0 ? await social.setSoloRank(weekly.best) : true;
+        const ok = await social.openSoloRank();
         scene.notice = {
-          text: ok ? '已打开最高分榜' : '当前环境暂不支持最高分榜',
+          text: ok
+            ? (synced ? '已打开最高分榜' : '已打开最高分榜 · 本机成绩稍后同步')
+            : '当前环境暂不支持最高分榜',
           until: number(scene.visualTime) + 1.4,
         };
-        engagement.track('rank_open', { board: 'solo_weekly', success: ok });
+        engagement.track('rank_open', { board: 'solo_weekly', success: ok, synced });
         scene.refreshHud();
-      });
+      })();
       return;
     }
     if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && hit(x, y, layout.pvp)) {
