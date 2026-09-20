@@ -19,7 +19,7 @@ import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
 import { DouyinAudio } from './audio';
 import type { DouyinAuthClient } from './auth';
-import { DOUYIN_RELEASE } from './config';
+import { DOUYIN_PRODUCT_CONFIG, DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
 
@@ -229,6 +229,7 @@ export class DouyinSoloScene {
   }
 
   openSharedRoom(code: string): void {
+    if (!DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled || !DOUYIN_PRODUCT_CONFIG.launch.sharedRoomInvitesEnabled) return;
     const normalized = code.replace(/\D/g, '').slice(0, 6);
     if (normalized.length !== 6) return;
     void this.auth.start().then(() => {
@@ -584,6 +585,7 @@ export class DouyinSoloScene {
   }
 
   private openOnline(): void {
+    if (!DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled) return;
     void this.auth.start().then(() => {
       if (!this.disposed) this.enterOnline();
     });
@@ -664,7 +666,11 @@ export class DouyinSoloScene {
     }
 
     if (this.hit(x, y, layout.solo)) { this.flashTap(layout.solo); this.startSolo(); return; }
-    if (this.hit(x, y, layout.online)) { this.flashTap(layout.online); this.openOnline(); return; }
+    if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled && this.hit(x, y, layout.online)) {
+      this.flashTap(layout.online);
+      this.openOnline();
+      return;
+    }
     if (this.hit(x, y, layout.rank)) {
       this.flashTap(layout.rank);
       void this.social.openSoloRank().then(ok => {
@@ -1330,7 +1336,9 @@ export class DouyinSoloScene {
 
     this.drawWorldPager(ctx, width, metaY + 67);
     this.drawPillButton(ctx, layout.solo, '开始挑战', 'primary', 'solo');
-    this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
+    if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled) {
+      this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
+    }
   }
 
   private drawWorldPager(ctx: CanvasRenderingContext2D, width: number, y: number): void {
@@ -2173,7 +2181,7 @@ export class DouyinSoloScene {
     const secondaryWidth = Math.min(metrics.compact ? 204 : 224, width - metrics.edge * 2 - 28);
     const utilityY = height - metrics.bottom - 48;
     const onlineY = utilityY - 54;
-    const soloY = onlineY - 62;
+    const soloY = DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled ? onlineY - 62 : utilityY - 72;
     const utilityAnchorWidth = Math.min(90, Math.max(72, width * .23));
     return {
       settings: { x: metrics.edge - 2, y: metrics.top + 4, width: metrics.minTouch, height: metrics.minTouch },
