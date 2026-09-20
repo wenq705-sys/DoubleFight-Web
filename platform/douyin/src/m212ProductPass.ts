@@ -6,11 +6,11 @@ import {
 } from '../../../shared/index';
 import { MAX_PIECE_VALUE, THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
-import { competitiveRankLabel } from '../../../src/meta/productMeta';
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { OnlineClient } from '../../../src/network/OnlineClient';
 import type { DouyinAuthClient } from './auth';
 import type { DouyinCommercial } from './commercial';
+import { DOUYIN_PRODUCT_CONFIG } from './config';
 import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } from './metaProgress';
 import type { DouyinSoloScene } from './soloScene';
 import { drawDouyinAvatar, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
@@ -127,7 +127,12 @@ export function installM212ProductPass(
             platform.haptics.trigger('success');
             scene.refreshAccountState();
             const socket = client.snapshot();
-            if (!socket.room && socket.matchmaking.status === 'idle' && socket.match?.phase !== 'playing') {
+            if (
+              DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled
+              && !socket.room
+              && socket.matchmaking.status === 'idle'
+              && socket.match?.phase !== 'playing'
+            ) {
               client.close();
               client.connect();
             }
@@ -236,7 +241,7 @@ function drawHomeMeta(
   platform: DouyinPlatform,
 ): void {
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
-  const rating = player?.season?.rating ?? player?.pvp.rating ?? 1000;
+  const mastery = loadThemeMastery(platform.storage, game.theme);
   const balance = player?.rewards.currency ?? 0;
   const profile = profileRect(width, top);
 
@@ -253,7 +258,7 @@ function drawHomeMeta(
   ctx.fillText(player?.displayName ?? '游客玩家', profile.x + 43, profile.y + 15);
   ctx.fillStyle = '#D4E2E1';
   ctx.font = '800 9.5px sans-serif';
-  ctx.fillText(competitiveRankLabel(rating), profile.x + 43, profile.y + 31);
+  ctx.fillText(`${THEMES[game.theme].label} · ${mastery.highestDiscoveredTier}/11`, profile.x + 43, profile.y + 31);
 
   const metrics = uiMetrics(width, platform.getSystemInfo().height, platform.getSystemInfo().safeArea, platform.getSystemInfo().menuButton?.bottom ?? 0);
   const coinW = metrics.compact ? 82 : 88;
@@ -388,7 +393,7 @@ function drawProfile(
   const close = profileCloseRect(width, hudTop);
   drawUiIcon(ctx, 'back', close.x + close.width / 2, close.y + close.height / 2, 30, ink);
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
-  const rating = player?.pvp.rating ?? 1000;
+  const mastery = loadThemeMastery(platform.storage, theme);
   const cardX = 24;
   const cardW = width - 48;
   const headerY = Math.max(hudTop + 54, 84);
@@ -414,7 +419,7 @@ function drawProfile(
   ctx.fillText(player?.displayName ?? '游客玩家', cardX + 78, headerY + 60);
   ctx.font = '800 11px sans-serif';
   ctx.fillStyle = '#38565D';
-  ctx.fillText(`${competitiveRankLabel(rating)} · 竞技分 ${rating}`, cardX + 78, headerY + 84);
+  ctx.fillText(`${THEMES[theme].label} · 世界进度 ${mastery.highestDiscoveredTier}/11`, cardX + 78, headerY + 84);
   ctx.fillText(player?.avatarUrl ? '已绑定抖音资料' : '可绑定抖音昵称头像', cardX + 78, headerY + 106);
 
   drawSCoinIcon(ctx, cardX + cardW - 68, headerY + 73, 24, true);
