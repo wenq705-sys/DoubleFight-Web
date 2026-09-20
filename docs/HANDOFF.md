@@ -1,5 +1,30 @@
 # Handoff
 
+## M2.17 Solo-first launch RC — CURRENT
+
+Branch: `feat/m2-17-solo-launch-rc` (stacked on `feat/m2-16-ui-architecture-profile`, Draft PR #44).
+
+The launch decision is now explicit: the first Douyin release ships as a polished **Solo / Theme Islands** product. Online Duel/PvP remains implemented for a later release, but M2.17 hides and disables its launch surfaces rather than deleting the architecture.
+
+First closure batch:
+- `DOUYIN_PRODUCT_CONFIG.launch` is the single launch-policy gate.
+- Online Home CTA/tap, shared-room deep links and PvP ranking/season entry are disabled.
+- app resume/start does not auto-connect the PvP WebSocket while Online is disabled.
+- visible daily tasks are Solo + ad only.
+- Home/Profile identity uses current-world Solo mastery instead of competitive rating.
+- a regression test locks the first-release launch policy.
+
+Next exact work:
+1. refactor remaining two-theme assumptions so Home/navigation/collection can scale to five launch worlds;
+2. finish five distinct launch-quality themes (final art direction/content must be deliberate, not placeholder skins);
+3. replace the current seven generated prototype WAV cues with a real layered audio/BGM system;
+4. remove disabled-online runtime cost from the Solo release path and tighten adaptive quality/memory budgets;
+5. finish Solo merge/ascension/danger/recovery VFX and haptic/audio feedback;
+6. run full CI, Douyin release preflight, IDE and physical-device acceptance.
+
+No main merge or production deploy is implied by code-side green status.
+
+
 ## M2.12 server authority
 
 `feat/m2-12-server-authority` adds the server-only S Coin ledger, UTC daily/streak grants, derived Solo/PvP/ad tasks, monotonic discovery grants, permanent theme ownership and current 14-day authoritative PvP seasons. Account JSON v1 data migrates in place without resetting Solo or lifetime PvP fields; Protocol remains v6. New additive HTTP reads are `GET /themes`, `GET /season/current` and `GET /leaderboards/pvp`; `POST /themes/unlock` and existing reward/progress routes return updated additive player state. Follow-up audit hardening caps discovery rewards to the shipped 11 tiers, resets public daily-task flags at the UTC boundary, rejects duplicate-account/guest-only season accounting, excludes inactive players from the season leaderboard, validates theme unlocks as 400-level client errors, and keeps unreleased paid themes out of the production registry while retaining an injectable paid-theme contract for tests. The branch has no deployment.
