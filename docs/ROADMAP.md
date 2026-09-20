@@ -1,5 +1,24 @@
 # Roadmap
 
+## Current milestone — M2.17 Solo-first Douyin Launch RC ← CURRENT
+
+The first Douyin release is now intentionally Solo-first. Online Duel/PvP remains in the repository for later activation but is not part of the initial player-facing release.
+
+### P0 — release closure
+- ✅ single launch policy disables Online/PvP surfaces without deleting the implementation
+- ✅ Home/profile/ranking/daily-task copy is Solo-first
+- ⏳ generalize hard-coded two-theme navigation/collection assumptions
+- ⏳ ship five visually distinct, readable 11-tier launch worlds
+- ⏳ full BGM + layered SFX + music/SFX settings and lifecycle-safe audio
+- ⏳ remove avoidable disabled-online runtime memory/render/network cost
+- ⏳ Solo game-feel pass: merge cadence, milestone moments, danger/recovery, 1024→2048 climax
+- ⏳ package-size / sustained-FPS / renderer-call / memory acceptance
+- ⏳ Douyin IDE + physical-device safe-area, touch, lifecycle, account, ads and ranking acceptance
+
+### Release definition
+A release candidate is not accepted only because TypeScript/build/tests are green. It must feel complete on a real portrait phone: no exposed deferred PvP UI, no placeholder/debug wording, stable sustained performance, clear 11/11 progression, responsive touch, coherent audio, readable five-theme art, and reliable platform flows.
+
+
 ## Douyin Full Product RC — code-side hardening
 
 `rc/douyin-full-product-release-candidate` prepares release preflight, safe server readiness, logging/compliance review, offline-bundle operator deployment and a real-device PASS/FAIL matrix. Final RC acceptance still depends on out-of-band secrets, formal request/socket legal domains and actual iPhone/Android testing; the branch does not deploy.
