@@ -4,6 +4,7 @@ import {
   MAX_PIECE_VALUE,
   PIECE_VALUES,
   THEMES,
+  adjacentTheme,
   pieceName,
   pieceTier,
   type ThemeId,
@@ -393,15 +394,17 @@ function handleHubTap(
       scene.refreshHud();
       return;
     }
-    if (hit(x, y, layout.kingdom)) {
-      state.collectionTheme = 'kingdom';
-      engagement.track('collection_theme', { theme: 'kingdom' });
+    if (hit(x, y, layout.previousTheme)) {
+      state.collectionTheme = adjacentTheme(state.collectionTheme, -1);
+      engagement.track('collection_theme', { theme: state.collectionTheme });
+      platform.haptics.trigger('light');
       scene.refreshHud();
       return;
     }
-    if (hit(x, y, layout.palace)) {
-      state.collectionTheme = 'palace';
-      engagement.track('collection_theme', { theme: 'palace' });
+    if (hit(x, y, layout.nextTheme)) {
+      state.collectionTheme = adjacentTheme(state.collectionTheme, 1);
+      engagement.track('collection_theme', { theme: state.collectionTheme });
+      platform.haptics.trigger('light');
       scene.refreshHud();
       return;
     }
@@ -791,8 +794,7 @@ function drawCollection(
   shade(ctx, width, height);
   drawPageHeader(ctx, width, layout.close, '棋子图鉴', '收集每个世界的 11 个阶位');
 
-  tab(ctx, layout.kingdom, '微缩王国', state.collectionTheme === 'kingdom');
-  tab(ctx, layout.palace, '后宫晋升', state.collectionTheme === 'palace');
+  themeSelector(ctx, layout.previousTheme, layout.themeLabel, layout.nextTheme, state.collectionTheme);
 
   const mastery = loadThemeMastery(platform.storage, state.collectionTheme);
   const values = [...PIECE_VALUES];
@@ -860,6 +862,43 @@ function drawCollection(
     ctx.fillStyle = '#E9B84E';
     ctx.fill();
   }
+}
+
+function themeSelector(
+  ctx: CanvasRenderingContext2D,
+  previous: Rect,
+  label: Rect,
+  next: Rect,
+  theme: ThemeId,
+): void {
+  const drawArrow = (rect: Rect, glyph: string) => {
+    round(ctx, rect.x, rect.y, rect.width, rect.height, 14);
+    ctx.fillStyle = PAGE_SURFACE;
+    ctx.fill();
+    ctx.strokeStyle = PAGE_INK;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = PAGE_INK;
+    ctx.font = '900 20px sans-serif';
+    ctx.fillText(glyph, rect.x + rect.width / 2, rect.y + rect.height / 2);
+  };
+  drawArrow(previous, '‹');
+  drawArrow(next, '›');
+
+  round(ctx, label.x, label.y, label.width, label.height, 14);
+  ctx.fillStyle = '#FFDFA0';
+  ctx.fill();
+  ctx.strokeStyle = PAGE_INK;
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = PAGE_INK;
+  ctx.font = '900 12px sans-serif';
+  fitText(ctx, THEMES[theme].label, label.width - 20, 12, 900, 9);
+  ctx.fillText(THEMES[theme].label, label.x + label.width / 2, label.y + label.height / 2);
 }
 
 function drawDailyCenter(
@@ -1307,9 +1346,11 @@ function rankingCenterLayout(width: number, height: number) {
 
 function collectionLayout(width: number, height: number) {
   const edge = Math.max(18, Math.min(24, width * .055));
-  const tabGap = 10;
-  const tabW = (width - edge * 2 - tabGap) / 2;
-  const gridY = 198;
+  const arrowSize = 44;
+  const selectorGap = 8;
+  const labelW = Math.max(120, width - edge * 2 - arrowSize * 2 - selectorGap * 2);
+  const selectorY = 146;
+  const gridY = 206;
   const gapX = 10;
   const gapY = 9;
   const cellW = (width - edge * 2 - gapX) / 2;
@@ -1324,8 +1365,9 @@ function collectionLayout(width: number, height: number) {
   return {
     panel: { x: 0, y: 0, width, height },
     close: { x: 12, y: 72, width: 58, height: 58 },
-    kingdom: { x: edge, y: 148, width: tabW, height: 40 },
-    palace: { x: edge + tabW + tabGap, y: 148, width: tabW, height: 40 },
+    previousTheme: { x: edge, y: selectorY, width: arrowSize, height: 44 },
+    themeLabel: { x: edge + arrowSize + selectorGap, y: selectorY, width: labelW, height: 44 },
+    nextTheme: { x: width - edge - arrowSize, y: selectorY, width: arrowSize, height: 44 },
     progress: { x: edge, y: Math.min(height - 92, gridY + 6 * cellH + gapY * 5 + 18), width: width - edge * 2, height: 58 },
     cells,
   };
