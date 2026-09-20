@@ -303,16 +303,20 @@ export class DouyinSoloScene {
     await result.finished;
     if (this.disposed) return true;
     this.inputLocked = false;
-    this.persistRecord();
 
     const cleared = result.merges.some((merge) => merge.value >= MAX_PIECE_VALUE);
     // Reaching 2048 is the terminal 11/11 success even if the spawned tile also locks the board.
-    if (cleared) this.finishSolo('cleared');
-    else if (result.gameOver) this.resolveStuckBoard();
-    else {
-      if (result.merges.length > 1) this.platform.haptics.trigger('success');
-      this.applySoloAtmosphere();
-      this.refreshHud();
+    if (cleared) {
+      // finishSolo() performs the single final forced record/rank sync.
+      this.finishSolo('cleared');
+    } else {
+      this.persistRecord();
+      if (result.gameOver) this.resolveStuckBoard();
+      else {
+        if (result.merges.length > 1) this.platform.haptics.trigger('success');
+        this.applySoloAtmosphere();
+        this.refreshHud();
+      }
     }
     return true;
   }
