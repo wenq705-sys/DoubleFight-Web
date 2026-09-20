@@ -81,14 +81,17 @@ function wavBuffer(sequence, sampleRate = 22050) {
   return pcmWav(samples, sampleRate);
 }
 
-const midiHz = midi => 440 * Math.pow(2, (midi - 69) / 12);
-const wave = (kind, phase) => {
+function midiHz(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function wave(kind, phase) {
   if (kind === 'square') return Math.sin(phase) >= 0 ? 1 : -1;
   if (kind === 'triangle') return 2 / Math.PI * Math.asin(Math.sin(phase));
   if (kind === 'pluck') return Math.sin(phase) * 0.72 + Math.sin(phase * 2) * 0.2 + Math.sin(phase * 3) * 0.08;
   if (kind === 'bell') return Math.sin(phase) * 0.68 + Math.sin(phase * 2.01) * 0.22 + Math.sin(phase * 3.98) * 0.1;
   return Math.sin(phase);
-};
+}
 
 function renderMusic(plan, sampleRate = 11025) {
   const beat = 60 / plan.bpm;
