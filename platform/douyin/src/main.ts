@@ -37,9 +37,12 @@ const theme = savedTheme === 'palace' ? 'palace' : 'kingdom';
 const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
 installM212ProductPass(game, platform, client, auth, commercial);
 installM212RetentionHub(game, platform, auth, social, commercial, engagement);
-const sharedRoom = social.launchRoomCode();
-if (sharedRoom) game.openSharedRoom(sharedRoom);
-const unsubscribeRoomInvite = social.subscribeRoomInvite(code => game.openSharedRoom(code));
+const sharedRoom = DOUYIN_PRODUCT_CONFIG.launch.sharedRoomInvitesEnabled ? social.launchRoomCode() : null;
+if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled && sharedRoom) game.openSharedRoom(sharedRoom);
+const unsubscribeRoomInvite = DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled
+  && DOUYIN_PRODUCT_CONFIG.launch.sharedRoomInvitesEnabled
+  ? social.subscribeRoomInvite(code => game.openSharedRoom(code))
+  : () => {};
 
 const touch = platform.createSwipeInput(
   (direction: Direction) => game.handleDirection(direction),
@@ -61,7 +64,10 @@ const loop = new DouyinRenderLoop(
     touch.setActive(true);
     platform.refreshSystemInfo();
     game.refreshSystemLayout();
-    void auth.refresh().then(() => client.connect());
+    void auth.refresh().then(() => {
+      if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled) client.connect();
+      else client.close();
+    });
   },
   () => {
     touch.setActive(false);
