@@ -90,7 +90,8 @@ export class DouyinSoloScene {
   private perfTime = 0;
   private perfFrames = 0;
   private goodPerfWindows = 0;
-  private quality: 'high' | 'medium' | 'low' = 'high';
+  // Start conservatively on mobile. Promote to high only after sustained real-frame evidence.
+  private quality: 'high' | 'medium' | 'low' = 'medium';
   private currentDpr = 1;
   private frameWidth = 1;
   private frameHeight = 1;
@@ -178,6 +179,9 @@ export class DouyinSoloScene {
     this.boardView = new BattleBoardView(theme, 'full', undefined, presentation, true);
     this.controller = new SoloController(this.boardView);
     this.online = new DouyinOnlineFlow(platform, client, theme, presentation);
+    this.boardView.setQuality('medium');
+    this.online.local.setQuality('medium');
+    this.online.remote.setQuality('medium');
     this.scene.add(this.boardView.root, this.online.local.root, this.online.remote.root);
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
@@ -453,10 +457,12 @@ export class DouyinSoloScene {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
     this.platform.storage.setItem('doublefight-theme', theme);
+    // Startup has already warmed every release theme. BattleBoardView.setTheme()
+    // preserves and rebuilds the current tile snapshot once, so avoid a second
+    // HOME_TILES reset on every swipe.
     this.boardView.setTheme(theme);
-    this.boardView.prewarmTheme(theme);
     this.applyHomeAmbientTheme();
-    if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
+    if (this.mode === 'online' && this.online.snapshot().mode !== 'playing') {
       this.boardView.reset(HOME_TILES);
     }
     this.applyThemeLook();
@@ -1210,7 +1216,7 @@ export class DouyinSoloScene {
     this.frameWidth = width;
     this.frameHeight = height;
     this.devicePixelRatio = Math.max(1, info.pixelRatio);
-    const dpr = Math.min(1.5, this.devicePixelRatio);
+    const dpr = Math.min(1.28, this.devicePixelRatio);
     this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
@@ -1241,18 +1247,18 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyQuality('low', 1.12);
+      this.applyQuality('low', 1.0);
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyQuality('medium', 1.32);
+      this.applyQuality('medium', 1.28);
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
-      if (this.goodPerfWindows >= 2) {
-        this.applyQuality('high', 1.65);
+      if (this.goodPerfWindows >= 3) {
+        this.applyQuality('high', 1.5);
         this.goodPerfWindows = 0;
       }
     } else {
