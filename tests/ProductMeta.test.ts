@@ -8,10 +8,10 @@ describe('S Coin product economy', () => {
     expect(S_COIN.themeUnlock).toBe(100);
     expect(S_COIN.dailyRewardedBonus).toBe(S_COIN.dailyLogin * 2);
     expect(THEME_ACCESS.kingdom).toMatchObject({ free: true, permanentPrice: 0, rewardedUnlockViews: 0 });
-    expect(THEME_ACCESS.palace).toMatchObject({ free: false, permanentPrice: 100, rewardedUnlockViews: 2 });
-    expect(THEME_ACCESS.zodiac).toMatchObject({ free: false, permanentPrice: 180, rewardedUnlockViews: 3 });
-    expect(THEME_ACCESS.candy).toMatchObject({ free: false, permanentPrice: 280, rewardedUnlockViews: 4 });
-    expect(THEME_ACCESS.dreamhouse).toMatchObject({ free: false, permanentPrice: 400, rewardedUnlockViews: 5 });
+    expect(THEME_ACCESS.palace).toMatchObject({ free: false, permanentPrice: 100, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.zodiac).toMatchObject({ free: false, permanentPrice: 180, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.candy).toMatchObject({ free: false, permanentPrice: 280, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.dreamhouse).toMatchObject({ free: false, permanentPrice: 400, rewardedUnlockViews: 1 });
   });
 });
 
