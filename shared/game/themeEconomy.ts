@@ -12,14 +12,16 @@ export interface ThemeUnlockEconomy {
  * - Kingdom is the free onboarding world.
  * - A highly engaged day-one player can earn ~110 S币 and unlock Palace.
  * - Coin-only progression lands around a 10-14 day full collection.
- * - Rewarded-ad unlock is a slower permanent alternative with a global 2/day cap.
+ * - One completed rewarded video immediately and permanently unlocks one paid theme.
+ *   Never require multiple rewarded videos for a single reward; this matches Douyin review rules.
+ * - Theme rewarded unlocks remain capped globally at 2/day.
  */
 export const THEME_UNLOCK_ECONOMY: Readonly<Record<ReleaseThemeId, ThemeUnlockEconomy>> = {
   kingdom: { free: true, coinCost: 0, adViewsRequired: 0 },
-  palace: { free: false, coinCost: 100, adViewsRequired: 2 },
-  zodiac: { free: false, coinCost: 180, adViewsRequired: 3 },
-  candy: { free: false, coinCost: 280, adViewsRequired: 4 },
-  dreamhouse: { free: false, coinCost: 400, adViewsRequired: 5 },
+  palace: { free: false, coinCost: 100, adViewsRequired: 1 },
+  zodiac: { free: false, coinCost: 180, adViewsRequired: 1 },
+  candy: { free: false, coinCost: 280, adViewsRequired: 1 },
+  dreamhouse: { free: false, coinCost: 400, adViewsRequired: 1 },
 };
 
 export const THEME_UNLOCK_AD_DAILY_CAP = 2;
