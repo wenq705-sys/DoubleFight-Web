@@ -16,6 +16,7 @@ export class DouyinCommercial {
   private readonly startedAt = Date.now();
   private lastInterstitialAt = 0;
   private lastRewardedAt = 0;
+  private rewardedTriggerTimes: number[] = [];
   private interstitialBusy = false;
 
   constructor(private readonly api: DouyinApi) {}
@@ -24,8 +25,12 @@ export class DouyinCommercial {
     // Douyin traffic-master rules require the rewarded ad request to be
     // created only after the user's explicit tap. Never pre-create it.
     if (this.rewardedBusy) return 'unavailable';
+    const now = Date.now();
+    this.rewardedTriggerTimes = this.rewardedTriggerTimes.filter(timestamp => now - timestamp < 60_000);
+    if (this.rewardedTriggerTimes.length >= 5) return 'unavailable';
     const ad = this.prepareRewarded();
     if (!ad) return 'unavailable';
+    this.rewardedTriggerTimes.push(now);
     this.rewardedBusy = true;
 
     return new Promise<RewardedResult>(async (resolve) => {
