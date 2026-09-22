@@ -10,6 +10,7 @@ export type RewardedResult = 'rewarded' | 'skipped' | 'unavailable';
 
 export class DouyinCommercial {
   private rewarded: DouyinRewardedVideoAd | null = null;
+  private rewardedBusy = false;
   private banner: DouyinBannerAd | null = null;
   private bannerVisible = false;
   private readonly startedAt = Date.now();
@@ -17,13 +18,15 @@ export class DouyinCommercial {
   private lastRewardedAt = 0;
   private interstitialBusy = false;
 
-  constructor(private readonly api: DouyinApi) {
-    this.prepareRewarded();
-  }
+  constructor(private readonly api: DouyinApi) {}
 
   async showRewarded(): Promise<RewardedResult> {
-    const ad = this.rewarded ?? this.prepareRewarded();
+    // Douyin traffic-master rules require the rewarded ad request to be
+    // created only after the user's explicit tap. Never pre-create it.
+    if (this.rewardedBusy) return 'unavailable';
+    const ad = this.prepareRewarded();
     if (!ad) return 'unavailable';
+    this.rewardedBusy = true;
 
     return new Promise<RewardedResult>(async (resolve) => {
       let settled = false;
@@ -32,6 +35,9 @@ export class DouyinCommercial {
         settled = true;
         ad.offClose?.(onClose);
         ad.offError?.(onError);
+        if (this.rewarded === ad) this.rewarded = null;
+        this.rewardedBusy = false;
+        try { ad.destroy?.(); } catch { /* optional native cleanup */ }
         resolve(value);
       };
       const onClose = (result: { isEnded?: boolean; count?: number }) => {
@@ -153,6 +159,8 @@ export class DouyinCommercial {
 
   dispose(): void {
     this.destroyBanner();
+    this.rewardedBusy = false;
+    try { this.rewarded?.destroy?.(); } catch { /* optional native cleanup */ }
     this.rewarded = null;
   }
 
