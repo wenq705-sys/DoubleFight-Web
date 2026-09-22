@@ -69,7 +69,10 @@ for (const file of files) {
   visit(source);
 }
 
-const hardBans = ['S币', 'Solo 周榜', ' RP'];
+const hardBans = [
+  'S币', 'S 币', 'Solo 周榜', ' RP',
+  '广告进度', '累计解锁进度', '广告进度永久累计',
+];
 const joined = files.map(file => readFileSync(resolve(file), 'utf8')).join('\n');
 for (const term of hardBans) {
   if (joined.includes(term)) failures.push(`forbidden review term: ${term}`);
