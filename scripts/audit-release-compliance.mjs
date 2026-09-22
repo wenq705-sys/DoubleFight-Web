@@ -74,6 +74,50 @@ if (multiAdUnlocks.length > 0) {
   issues.push('shared/game/themeEconomy.ts: a single theme reward requires multiple rewarded-video views');
 }
 
+const soloSceneSource = await readFile(join(ROOT, 'platform/douyin/src/soloScene.ts'), 'utf8');
+const retentionSource = await readFile(join(ROOT, 'platform/douyin/src/m212RetentionHub.ts'), 'utf8');
+const commercialSource = await readFile(join(ROOT, 'platform/douyin/src/commercial.ts'), 'utf8');
+
+const exactHealthNotice = [
+  '《健康游戏忠告》',
+  '抵制不良游戏，拒绝盗版游戏。',
+  '注意自我保护，谨防受骗上当。',
+  '适度游戏益脑，沉迷游戏伤身。',
+  '合理安排时间，享受健康生活。',
+];
+for (const line of exactHealthNotice) {
+  if (!soloSceneSource.includes(line)) issues.push(`platform/douyin/src/soloScene.ts: missing exact health notice copy "${line}"`);
+}
+for (const forbidden of ['健康游戏提示', '请合理安排游戏时间，享受健康游戏体验']) {
+  if (soloSceneSource.includes(forbidden)) issues.push(`platform/douyin/src/soloScene.ts: non-standard health notice copy "${forbidden}"`);
+}
+
+const commercialConstructor = commercialSource.match(/constructor\([^)]*\)\s*\{([\s\S]*?)\}\s*\n\s*async showRewarded/)?.[1] ?? '';
+if (commercialConstructor.includes('prepareRewarded')) {
+  issues.push('platform/douyin/src/commercial.ts: rewarded ad is pre-created before an explicit user action');
+}
+if (!commercialSource.includes('if (this.rewardedBusy) return')) {
+  issues.push('platform/douyin/src/commercial.ts: rewarded ad flow has no re-entry guard');
+}
+if (/rewardedSkillClaims\s*<\s*[2-9]/.test(soloSceneSource)
+  || /rewardedSkillClaims\s*>=\s*[2-9]/.test(soloSceneSource)) {
+  issues.push('platform/douyin/src/soloScene.ts: Solo page allows multiple rewarded-rescue ads in one run');
+}
+
+for (const required of [
+  '首页侧边栏入口奖励',
+  '去首页侧边栏',
+  '立即领奖',
+  'subscribeSidebarReturn',
+]) {
+  if (!retentionSource.includes(required) && !soloSceneSource.includes(required)) {
+    issues.push(`Douyin sidebar revisit flow is missing required review contract "${required}"`);
+  }
+}
+if (retentionSource.includes("'READY'") || /toFixed\(1\)\}s/.test(retentionSource)) {
+  issues.push('platform/douyin/src/m212RetentionHub.ts: hidden competitive UI still contains review-risk English status copy');
+}
+
 const generatedAudioSource = await readFile(join(ROOT, 'scripts/build-douyin.mjs'), 'utf8');
 if (!generatedAudioSource.includes('renderMusic(plan)') || !generatedAudioSource.includes('pcmWav(')) {
   issues.push('scripts/build-douyin.mjs: release music is not proven to be generated in-repo');
