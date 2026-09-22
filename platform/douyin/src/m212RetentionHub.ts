@@ -22,7 +22,7 @@ import type { DouyinSoloScene } from './soloScene';
 import { drawDouyinAvatar, drawPremiumButton, drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, skillUiIcon, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
-type HubScreen = 'collection' | 'daily' | 'rankings' | 'season' | null;
+type HubScreen = 'collection' | 'daily' | 'sidebar' | 'rankings' | 'season' | null;
 type SceneInternals = Record<string, any>;
 
 const PAGE_BG = '#72BEDA';
@@ -137,6 +137,20 @@ export function installM212RetentionHub(
     if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && current.status === 'authenticated') {
       void social.setPvpRank(current.player.season?.rating ?? current.player.pvp.rating);
     }
+  });
+
+  // The official sidebar flow is driven by the latest tt.onShow payload.
+  // Re-open the task page on a real sidebar return so the user immediately
+  // sees the completed state and the "立即领奖" action.
+  const unsubscribeSidebarReturn = social.subscribeSidebarReturn(() => {
+    if (scene.disposed) return;
+    state.screen = 'sidebar';
+    state.busyAction = null;
+    engagement.track('sidebar_return');
+    void auth.refresh().finally(() => {
+      if (!scene.disposed && state.screen === 'sidebar') scene.refreshHud();
+    });
+    scene.refreshHud();
   });
 
   const originalStartSolo = scene.startSolo.bind(scene) as () => void;
@@ -277,11 +291,13 @@ export function installM212RetentionHub(
         return;
       }
       if (hit(x, y, utility.daily)) {
-        state.screen = 'daily';
+        state.screen = scene.sidebarSupported === false ? 'daily' : 'sidebar';
         platform.haptics.trigger('light');
-        engagement.track('daily_center_open');
+        engagement.track(state.screen === 'sidebar' ? 'sidebar_guide_open' : 'daily_center_open', { source: 'home' });
         scene.refreshHud();
-        void auth.refresh().then(() => { if (!scene.disposed && state.screen === 'daily') scene.refreshHud(); });
+        void auth.refresh().then(() => {
+          if (!scene.disposed && (state.screen === 'sidebar' || state.screen === 'daily')) scene.refreshHud();
+        });
         return;
       }
       // The M2.12 three-destination row visually covers the legacy two-button
@@ -314,6 +330,7 @@ export function installM212RetentionHub(
 
     if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
     if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
+    if (state.screen === 'sidebar') drawSidebarGuide(ctx, width, height, scene, auth, state);
     if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform);
     if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && state.screen === 'season') {
       drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
@@ -359,6 +376,7 @@ export function installM212RetentionHub(
   game.dispose = () => {
     unsubscribeOnline();
     unsubscribeDailyLogin();
+    unsubscribeSidebarReturn();
     originalDispose();
   };
 
@@ -405,6 +423,60 @@ function handleHubTap(
       engagement.track('collection_theme', { theme: state.collectionTheme });
       platform.haptics.trigger('light');
       scene.refreshHud();
+      return;
+    }
+    return;
+  }
+
+  if (state.screen === 'sidebar') {
+    const layout = sidebarGuideLayout(info.width, info.height);
+    const today = new Date().toISOString().slice(0, 10);
+    const player = auth.current.status === 'authenticated' ? auth.current.player : null;
+    const claimed = player?.rewards.lastSidebarRewardDay === today
+      || platform.storage.getItem('doublefight-sidebar-reward-date') === today;
+    const ready = !claimed && Boolean(scene.sidebarRewardReady?.());
+
+    if (hit(x, y, layout.close)) {
+      state.screen = null;
+      scene.refreshHud();
+      return;
+    }
+    if (hit(x, y, layout.more)) {
+      state.screen = 'daily';
+      engagement.track('daily_center_open', { source: 'sidebar_guide' });
+      scene.refreshHud();
+      return;
+    }
+    if (hit(x, y, layout.action)) {
+      engagement.track('sidebar_action', { ready, claimed });
+      if (claimed) {
+        scene.notice = { text: '今日入口奖励已领取，明天再来', until: number(scene.visualTime) + 1.5 };
+        scene.refreshHud();
+        return;
+      }
+      if (ready) {
+        void scene.claimSidebarReward?.().finally(() => {
+          if (!scene.disposed) scene.refreshHud();
+        });
+        return;
+      }
+
+      // Platform guidance recommends closing the reward page before
+      // tt.navigateToScene({ scene: 'sidebar' }).
+      state.screen = null;
+      state.busyAction = 'sidebar';
+      scene.notice = { text: '正在前往抖音首页侧边栏…', until: number(scene.visualTime) + 2 };
+      scene.refreshHud();
+      void social.navigateSidebar().then(ok => {
+        if (!ok) {
+          scene.notice = { text: '当前环境暂不支持首页侧边栏', until: number(scene.visualTime) + 1.6 };
+          state.screen = 'sidebar';
+        }
+        engagement.track('sidebar_navigate', { success: ok });
+      }).finally(() => {
+        state.busyAction = null;
+        if (!scene.disposed) scene.refreshHud();
+      });
       return;
     }
     return;
@@ -515,25 +587,10 @@ function handleHubTap(
       return;
     }
     if (hit(x, y, layout.sidebar)) {
-      const ready = Boolean(scene.sidebarRewardReady?.());
-      engagement.track('sidebar_action', { ready });
-      if (ready) {
-        void scene.claimSidebarReward?.().finally(() => scene.refreshHud());
-      } else {
-        state.busyAction = 'sidebar';
-        scene.notice = { text: '正在打开侧边栏…', until: number(scene.visualTime) + 2 };
-        scene.refreshHud();
-        void social.navigateSidebar().then(ok => {
-          scene.notice = {
-            text: ok ? '已打开侧边栏入口' : '当前环境暂不支持侧边栏',
-            until: number(scene.visualTime) + 1.5,
-          };
-          engagement.track('sidebar_navigate', { success: ok });
-        }).finally(() => {
-          state.busyAction = null;
-          scene.refreshHud();
-        });
-      }
+      state.screen = 'sidebar';
+      platform.haptics.trigger('light');
+      engagement.track('sidebar_guide_open', { source: 'daily' });
+      scene.refreshHud();
       return;
     }
     if (hit(x, y, layout.shortcut)) {
@@ -667,8 +724,13 @@ function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: n
   miniHomeButton(ctx, utility.collection, 'collection', '图鉴', false, theme);
   miniHomeButton(ctx, utility.rank, 'rank', '排行', false, theme);
   const daily = auth.current.status === 'authenticated' ? auth.current.player.rewards.daily : undefined;
-  const benefitReady = Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
-  miniHomeButton(ctx, utility.daily, 'gift', '福利', benefitReady, theme);
+  const today = new Date().toISOString().slice(0, 10);
+  const player = auth.current.status === 'authenticated' ? auth.current.player : null;
+  const sidebarClaimed = player?.rewards.lastSidebarRewardDay === today
+    || scene.platform.storage.getItem('doublefight-sidebar-reward-date') === today;
+  const sidebarTaskOpen = scene.sidebarSupported !== false && !sidebarClaimed;
+  const benefitReady = sidebarTaskOpen || Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
+  miniHomeButton(ctx, utility.daily, 'gift', sidebarTaskOpen ? '入口有奖' : '福利', benefitReady, theme);
 }
 
 function drawRankingCenter(
@@ -912,6 +974,75 @@ function themeSelector(
   ctx.fillText(THEMES[theme].label, label.x + label.width / 2, label.y + label.height / 2);
 }
 
+function drawSidebarGuide(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scene: SceneInternals,
+  auth: DouyinAuthClient,
+  state: RetentionState,
+): void {
+  const layout = sidebarGuideLayout(width, height);
+  const today = new Date().toISOString().slice(0, 10);
+  const player = auth.current.status === 'authenticated' ? auth.current.player : null;
+  const claimed = player?.rewards.lastSidebarRewardDay === today
+    || scene.platform.storage.getItem('doublefight-sidebar-reward-date') === today;
+  const ready = !claimed && Boolean(scene.sidebarRewardReady?.());
+
+  shade(ctx, width, height);
+  drawPageHeader(ctx, width, layout.close, '首页侧边栏入口奖励', '按步骤完成复访，每日可领取一次');
+
+  panel(ctx, layout.reward);
+  drawSCoinIcon(ctx, layout.reward.x + 38, layout.reward.y + layout.reward.height / 2, 42, true);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = PAGE_INK;
+  ctx.font = '900 15px sans-serif';
+  ctx.fillText('每日奖励', layout.reward.x + 70, layout.reward.y + 25);
+  ctx.fillStyle = '#8A5A13';
+  ctx.font = '900 12px sans-serif';
+  ctx.fillText('10 星币 + 下局清障 1 次', layout.reward.x + 70, layout.reward.y + 50);
+
+  panel(ctx, layout.steps);
+  ctx.fillStyle = PAGE_INK;
+  ctx.font = '900 13px sans-serif';
+  ctx.fillText('完成方法', layout.steps.x + 20, layout.steps.y + 28);
+  const steps = [
+    '1. 点击下方「去首页侧边栏」',
+    '2. 在侧边栏点击「双数对决」',
+    '3. 返回游戏，点击「立即领奖」',
+  ];
+  ctx.fillStyle = PAGE_MUTED;
+  ctx.font = '800 12px sans-serif';
+  steps.forEach((text, index) => {
+    ctx.fillText(text, layout.steps.x + 20, layout.steps.y + 68 + index * 44);
+  });
+
+  const status = claimed ? '今日已领取' : ready ? '任务已完成 · 可以领奖' : '任务未完成';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = claimed ? '#4F7C60' : ready ? '#A25C17' : PAGE_MUTED;
+  ctx.font = '900 11px sans-serif';
+  ctx.fillText(status, width / 2, layout.statusY);
+
+  const label = claimed
+    ? '今日已领取'
+    : ready
+      ? '立即领奖'
+      : state.busyAction === 'sidebar'
+        ? '正在前往侧边栏…'
+        : '去首页侧边栏';
+  drawPremiumButton(ctx, layout.action, label, {
+    kind: ready ? 'primary' : 'secondary',
+    icon: ready ? 'gift' : 'share',
+  });
+  drawPremiumButton(ctx, layout.more, '更多今日福利', { kind: 'secondary', icon: 'gift' });
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = PAGE_MUTED;
+  ctx.font = '750 9px sans-serif';
+  ctx.fillText('只有从首页侧边栏返回游戏后，才会完成本任务', width / 2, height - 22);
+}
+
 function drawDailyCenter(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -994,9 +1125,9 @@ function drawDailyCenter(
   actionCard(
     ctx,
     layout.sidebar,
-    state.busyAction === 'sidebar' ? '正在打开…' : sidebarClaimed ? '今日已领取' : sidebarReady ? '领取 10 星币' : '侧边栏奖励',
-    sidebarClaimed ? '明天再来' : sidebarReady ? '同时获得下局清障 +1' : '从侧边栏返回即可领取',
-    sidebarReady,
+    sidebarClaimed ? '首页侧边栏入口奖励 · 已领取' : sidebarReady ? '首页侧边栏入口奖励 · 可领取' : '首页侧边栏入口奖励',
+    sidebarClaimed ? '明天再来' : sidebarReady ? '点此立即领取 10 星币 + 清障' : '查看完整三步指引',
+    !sidebarClaimed,
     sidebarClaimed ? 'check' : 'gift',
   );
 
@@ -1391,6 +1522,23 @@ function seasonLeaderboardLayout(width: number, height: number) {
     close: { x: 12, y: 72, width: 58, height: 58 },
     refresh: { x: width / 2 - 72, y: 220, width: 144, height: 44 },
     social: { x: edge, y: height - 92, width: width - edge * 2, height: 48 },
+  };
+}
+
+function sidebarGuideLayout(width: number, height: number) {
+  const edge = Math.max(20, Math.min(26, width * .06));
+  const w = width - edge * 2;
+  const rewardY = Math.max(154, height * .18);
+  const stepsY = rewardY + 92;
+  const actionY = Math.min(height - 142, stepsY + 218);
+  return {
+    panel: { x: 0, y: 0, width, height },
+    close: { x: 12, y: 72, width: 58, height: 58 },
+    reward: { x: edge, y: rewardY, width: w, height: 76 },
+    steps: { x: edge, y: stepsY, width: w, height: 190 },
+    statusY: actionY - 18,
+    action: { x: edge, y: actionY, width: w, height: 52 },
+    more: { x: edge, y: actionY + 62, width: w, height: 44 },
   };
 }
 
