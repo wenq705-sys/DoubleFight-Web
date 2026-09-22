@@ -687,14 +687,14 @@ export class DouyinSoloScene {
     const before = this.auth.themeUnlockProgress(theme);
     if (before.dailyRemaining <= 0) {
       this.themeUnlockBusy = false;
-      this.themeUnlockMessage = `今日主题广告次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
+      this.themeUnlockMessage = `今日视频解锁次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
       this.refreshHud();
       return;
     }
     const adResult = await this.commercial.showRewarded();
     if (adResult !== 'rewarded') {
       this.themeUnlockBusy = false;
-      this.themeUnlockMessage = adResult === 'skipped' ? '完整看完视频才会累计解锁进度' : '当前暂无可用广告，请稍后再试';
+      this.themeUnlockMessage = adResult === 'skipped' ? '完整看完视频后才会永久解锁当前主题' : '当前暂无可用广告，请稍后再试';
       this.refreshHud();
       return;
     }
@@ -706,10 +706,9 @@ export class DouyinSoloScene {
       this.notice = { text: `${THEMES[theme].label} 已永久解锁`, until: this.visualTime + 1.8 };
       this.platform.haptics.trigger('success');
     } else if (claim.status === 'granted') {
-      this.themeUnlockMessage = `广告进度 ${claim.progress}/${claim.required} · 今日还可看 ${claim.dailyRemaining} 次`;
-      this.platform.haptics.trigger('medium');
+      this.themeUnlockMessage = '奖励确认中，请稍后重试';
     } else if (claim.status === 'limited') {
-      this.themeUnlockMessage = `今日主题广告次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
+      this.themeUnlockMessage = `今日视频解锁次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
     } else {
       this.themeUnlockMessage = claim.status === 'duplicate' ? '该广告进度已记录' : '奖励确认失败，请稍后再试';
     }
@@ -2244,7 +2243,7 @@ export class DouyinSoloScene {
     ctx.font = '850 12px sans-serif';
     ctx.fillText(`当前星币：${balance}`, layout.panel.x + 24, layout.panel.y + 101);
     ctx.textAlign = 'right';
-    ctx.fillText(`广告进度：${progress.progress}/${progress.required}`, layout.panel.x + layout.panel.width - 24, layout.panel.y + 101);
+    ctx.fillText('视频方式：一次永久解锁', layout.panel.x + layout.panel.width - 24, layout.panel.y + 101);
 
     this.drawPillButton(
       ctx, layout.coin, `使用 ${economy.coinCost} 星币永久解锁`,
@@ -2254,29 +2253,18 @@ export class DouyinSoloScene {
     this.drawPillButton(
       ctx, layout.ad,
       progress.dailyRemaining > 0
-        ? `看完整视频 +1 · 今日剩 ${progress.dailyRemaining}/${THEME_UNLOCK_AD_DAILY_CAP}`
-        : '今日广告解锁次数已用完',
+        ? `看完整视频永久解锁 · 今日剩 ${progress.dailyRemaining}/${THEME_UNLOCK_AD_DAILY_CAP}`
+        : '今日视频解锁次数已用完',
       'secondary', 'video', adDisabled, this.themeUnlockBusy,
     );
 
-    const barW = layout.panel.width - 48;
-    const barX = layout.panel.x + 24;
-    const barY = layout.ad.y + layout.ad.height + 18;
-    this.roundedRect(ctx, barX, barY, barW, 7, 4);
-    ctx.fillStyle = 'rgba(23,52,60,.12)';
-    ctx.fill();
-    if (progress.required > 0 && progress.progress > 0) {
-      this.roundedRect(ctx, barX, barY, Math.max(7, barW * progress.progress / progress.required), 7, 4);
-      ctx.fillStyle = '#E0A63D';
-      ctx.fill();
-    }
-
+    const hintY = layout.ad.y + layout.ad.height + 26;
     ctx.textAlign = 'center';
     ctx.fillStyle = this.themeUnlockMessage ? '#9A4F32' : '#5E746F';
     ctx.font = '750 10px sans-serif';
     ctx.fillText(
-      this.themeUnlockMessage ?? '广告进度永久累计；每日主题广告有上限，避免强迫观看',
-      width / 2, barY + 25,
+      this.themeUnlockMessage ?? '完整观看一次即可获得当前主题永久解锁奖励',
+      width / 2, hintY,
     );
 
     this.roundedRect(ctx, layout.close.x, layout.close.y, layout.close.width, layout.close.height, 16);
