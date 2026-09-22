@@ -47,7 +47,10 @@ describe('Douyin commercial services', () => {
     const api = minimalApi({ createRewardedVideoAd: vi.fn(() => rewarded) });
     const commercial = new DouyinCommercial(api);
 
+    // Review rule: merely constructing the service must not request an ad.
+    expect(api.createRewardedVideoAd).not.toHaveBeenCalled();
     const pending = commercial.showRewarded();
+    expect(api.createRewardedVideoAd).toHaveBeenCalledOnce();
     await Promise.resolve();
     await Promise.resolve();
     close?.({ isEnded: true, count: 1 });
