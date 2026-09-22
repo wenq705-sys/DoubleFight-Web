@@ -710,7 +710,7 @@ export class DouyinSoloScene {
     } else if (claim.status === 'limited') {
       this.themeUnlockMessage = `今日视频解锁次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
     } else {
-      this.themeUnlockMessage = claim.status === 'duplicate' ? '该广告进度已记录' : '奖励确认失败，请稍后再试';
+      this.themeUnlockMessage = claim.status === 'duplicate' ? '该解锁奖励已记录' : '奖励确认失败，请稍后再试';
     }
     this.themeUnlockBusy = false;
     this.refreshHud();
