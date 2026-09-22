@@ -37,7 +37,7 @@ describe('M2.12 authoritative economy migration',()=>{
     expect((await repo.unlockTheme(a.id,'future_theme','unlock-0001',day(36))).amount).toBe(0);
     expect((await repo.findById(a.id))?.themes.owned).toContain('future_theme');
   });
-  it('supports permanent theme unlock by coin or cumulative rewarded ads with a global daily cap',async()=>{
+  it('grants each rewarded theme unlock after one completed video and keeps claims idempotent',async()=>{
     const {repo}=await fixture(),a=(await repo.findOrCreate('theme-economy',undefined,undefined,day(1))).account;
     expect(publicPlayer(a,day(1)).themes.owned).toEqual(['kingdom']);
 
@@ -46,17 +46,15 @@ describe('M2.12 authoritative economy migration',()=>{
     expect(palace.unlocked).toBe(true);
     expect(palace.amount).toBe(-100);
 
-    const first=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0001',day(8));
-    expect(first).toMatchObject({granted:true,unlocked:false,limited:false,progress:1,required:3,dailyRemaining:1});
+    const zodiac=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0001',day(8));
+    expect(zodiac).toMatchObject({granted:true,unlocked:true,limited:false,progress:1,required:1,dailyRemaining:1});
     const duplicate=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0001',day(8));
-    expect(duplicate).toMatchObject({granted:false,unlocked:false,progress:1,required:3,dailyRemaining:1});
-    const second=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0002',day(8));
-    expect(second).toMatchObject({granted:true,unlocked:false,progress:2,required:3,dailyRemaining:0});
-    const limited=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0003',day(8));
-    expect(limited).toMatchObject({granted:false,unlocked:false,limited:true,progress:2,dailyRemaining:0});
-    const third=await repo.unlockThemeByAd(a.id,'zodiac','zodiac-ad-0003',day(9));
-    expect(third).toMatchObject({granted:true,unlocked:true,progress:3,required:3,dailyRemaining:1});
-    expect(publicPlayer(third.account,day(9)).themes.owned).toEqual(expect.arrayContaining(['kingdom','palace','zodiac']));
+    expect(duplicate).toMatchObject({granted:false,unlocked:true,progress:1,required:1,dailyRemaining:1});
+    const candy=await repo.unlockThemeByAd(a.id,'candy','candy-ad-0001',day(8));
+    expect(candy).toMatchObject({granted:true,unlocked:true,limited:false,progress:1,required:1,dailyRemaining:0});
+    const limited=await repo.unlockThemeByAd(a.id,'dreamhouse','dream-ad-0001',day(8));
+    expect(limited).toMatchObject({granted:false,unlocked:false,limited:true,progress:0,required:1,dailyRemaining:0});
+    expect(publicPlayer(candy.account,day(8)).themes.owned).toEqual(expect.arrayContaining(['kingdom','palace','zodiac','candy']));
   });
 
   it('persists all five Solo launch themes without resetting legacy fields',async()=>{
