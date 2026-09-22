@@ -38,7 +38,7 @@ describe('Solo 1.0 release closure', () => {
 
   it('offers remaining paid/rewarded clear rescue before declaring a stuck loss', () => {
     const source = readFileSync(new URL('../platform/douyin/src/soloScene.ts', import.meta.url), 'utf8');
-    expect(source).toContain('const canRewardRescue = this.rewardedSkillClaims < 3');
+    expect(source).toContain('const canRewardRescue = this.rewardedSkillClaims < 1');
     expect(source).toContain('if (this.skillCharges > 0 || canRewardRescue)');
     expect(source).toContain('const shouldAutoRescue = !this.controller.board.canMove()');
     expect(source).toContain('const rescued = await this.useRandomClear()');
