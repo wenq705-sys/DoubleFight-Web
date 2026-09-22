@@ -7,14 +7,17 @@ export class DouyinSocial {
   private latestShow: DouyinShowOptions;
   private sidebarSupported: boolean | null = null;
   private roomListeners = new Set<(code: string) => void>();
+  private sidebarListeners = new Set<() => void>();
 
   constructor(private readonly api: DouyinApi) {
     this.latestShow = this.safeLaunchOptions();
     try {
       api.onShow((options) => {
         if (options) this.latestShow = options;
-        const code = this.roomCodeFrom(options ?? this.latestShow);
+        const latest = options ?? this.latestShow;
+        const code = this.roomCodeFrom(latest);
         if (code) this.roomListeners.forEach(listener => listener(code));
+        if (this.isSidebarOptions(latest)) this.sidebarListeners.forEach(listener => listener());
       });
     } catch { /* optional host signal */ }
   }
@@ -26,6 +29,11 @@ export class DouyinSocial {
   subscribeRoomInvite(listener: (code: string) => void): () => void {
     this.roomListeners.add(listener);
     return () => this.roomListeners.delete(listener);
+  }
+
+  subscribeSidebarReturn(listener: () => void): () => void {
+    this.sidebarListeners.add(listener);
+    return () => this.sidebarListeners.delete(listener);
   }
 
   async shareRoom(roomCode: string): Promise<boolean> {
@@ -102,8 +110,7 @@ export class DouyinSocial {
   }
 
   cameFromSidebar(): boolean {
-    return this.latestShow.launch_from === 'homepage'
-      && this.latestShow.location === 'sidebar_card';
+    return this.isSidebarOptions(this.latestShow);
   }
 
   async setSoloRank(score: number): Promise<boolean> {
@@ -224,6 +231,11 @@ export class DouyinSocial {
         resolve(false);
       }
     });
+  }
+
+  private isSidebarOptions(options?: DouyinShowOptions | DouyinLaunchOptions): boolean {
+    return options?.launch_from === 'homepage'
+      && options?.location === 'sidebar_card';
   }
 
   private roomCodeFrom(options?: DouyinShowOptions | DouyinLaunchOptions): string | null {
