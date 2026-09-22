@@ -82,6 +82,36 @@ describe('Douyin commercial services', () => {
     await expect(pending).resolves.toBe('skipped');
   });
 
+  it('caps rewarded-ad triggers at five within sixty seconds', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-23T00:00:00Z'));
+    const createRewardedVideoAd = vi.fn(() => {
+      let close: ((value: { isEnded?: boolean; count?: number }) => void) | undefined;
+      return {
+        load: vi.fn(async () => undefined),
+        show: vi.fn(async () => { close?.({ isEnded: true, count: 1 }); }),
+        destroy: vi.fn(),
+        onLoad: vi.fn(),
+        offLoad: vi.fn(),
+        onError: vi.fn(),
+        offError: vi.fn(),
+        onClose: vi.fn((listener) => { close = listener; }),
+        offClose: vi.fn(),
+      } as DouyinRewardedVideoAd;
+    });
+    const commercial = new DouyinCommercial(minimalApi({ createRewardedVideoAd }));
+
+    for (let index = 0; index < 5; index += 1) {
+      await expect(commercial.showRewarded()).resolves.toBe('rewarded');
+    }
+    await expect(commercial.showRewarded()).resolves.toBe('unavailable');
+    expect(createRewardedVideoAd).toHaveBeenCalledTimes(5);
+
+    vi.advanceTimersByTime(60_001);
+    await expect(commercial.showRewarded()).resolves.toBe('rewarded');
+    expect(createRewardedVideoAd).toHaveBeenCalledTimes(6);
+  });
+
   it('keeps an interstitial alive after show until the native close event', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-14T00:00:00Z'));
