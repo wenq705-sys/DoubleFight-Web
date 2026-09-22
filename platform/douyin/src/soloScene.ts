@@ -1592,13 +1592,13 @@ export class DouyinSoloScene {
 
     ctx.fillStyle = '#78452f';
     ctx.font = '900 14px sans-serif';
-    ctx.fillText('健康游戏提示', width / 2, panelY + 34);
+    ctx.fillText('《健康游戏忠告》', width / 2, panelY + 34);
 
     const lines = [
-      '抵制不良游戏，拒绝盗版游戏',
-      '注意自我保护，谨防受骗上当',
-      '适度游戏益脑，沉迷游戏伤身',
-      '合理安排时间，享受健康生活',
+      '抵制不良游戏，拒绝盗版游戏。',
+      '注意自我保护，谨防受骗上当。',
+      '适度游戏益脑，沉迷游戏伤身。',
+      '合理安排时间，享受健康生活。',
     ];
     ctx.font = '800 13px sans-serif';
     lines.forEach((line, index) => {
@@ -1613,7 +1613,6 @@ export class DouyinSoloScene {
     ctx.stroke();
     ctx.fillStyle = '#9b755f';
     ctx.font = '700 10px sans-serif';
-    ctx.fillText('请合理安排游戏时间，享受健康游戏体验', width / 2, panelY + panelH - 31);
 
     const button = this.healthNoticeButton(width, height);
     const progress = this.startupPreloadProgress();
