@@ -1298,7 +1298,7 @@ function drawOnlinePolish(
       ctx.fillStyle = ready ? '#74e1d5' : '#839396';
       ctx.font = '800 9.5px sans-serif';
       ctx.fillText(
-        remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : ready ? 'READY' : `${def.cost} 能量`,
+        remaining > 0 ? `${(remaining / 1000).toFixed(1)} 秒` : ready ? '可释放' : `${def.cost} 能量`,
         rect.x + rect.width / 2,
         rect.y + 37,
       );
