@@ -144,9 +144,13 @@ export function installM212RetentionHub(
   // sees the completed state and the "立即领奖" action.
   const unsubscribeSidebarReturn = social.subscribeSidebarReturn(() => {
     if (scene.disposed) return;
-    state.screen = 'sidebar';
     state.busyAction = null;
     engagement.track('sidebar_return');
+    // A cold sidebar launch can fire while the mandatory health notice still
+    // owns the screen. Keep the latest launch qualification in DouyinSocial,
+    // but never overlay a product page on top of a native modal.
+    if (scene.healthNoticeOpen || scene.onboardingOpen || scene.settingsOpen || scene.profilePageOpen || scene.themeUnlockOpen) return;
+    state.screen = 'sidebar';
     void auth.refresh().finally(() => {
       if (!scene.disposed && state.screen === 'sidebar') scene.refreshHud();
     });
@@ -328,12 +332,14 @@ export function installM212RetentionHub(
       }
     }
 
-    if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
-    if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
-    if (state.screen === 'sidebar') drawSidebarGuide(ctx, width, height, scene, auth, state);
-    if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform);
-    if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && state.screen === 'season') {
-      drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
+    if (!nativeModal) {
+      if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
+      if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
+      if (state.screen === 'sidebar') drawSidebarGuide(ctx, width, height, scene, auth, state);
+      if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform);
+      if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && state.screen === 'season') {
+        drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
+      }
     }
     if (state.coinBurst) drawCoinBurst(ctx, width, height, state.coinBurst, number(scene.visualTime));
 
