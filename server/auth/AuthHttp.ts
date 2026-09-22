@@ -81,7 +81,6 @@ export function createAuthHandler(deps: AuthDependencies) {
         const body = await readBody(request);
         if (typeof body.theme !== 'string' || !(RELEASE_THEME_IDS as readonly string[]).includes(body.theme)) throw new RequestError(400, 'invalid_progress');
         const theme = body.theme as ReleaseThemeId;
-        if (!ownedThemes(account).includes(theme)) throw new RequestError(403, 'theme_locked');
         if (typeof body.best !== 'number' || !Number.isSafeInteger(body.best) || body.best < 0 || body.best > 100_000_000) {
           throw new RequestError(400, 'invalid_progress');
         }
@@ -89,6 +88,9 @@ export function createAuthHandler(deps: AuthDependencies) {
           || body.highest > 1_048_576 || !Number.isInteger(Math.log2(body.highest))) {
           throw new RequestError(400, 'invalid_progress');
         }
+        // Validate the request shape before authorization so malformed payloads
+        // keep the stable 400 contract; valid requests for locked themes are 403.
+        if (!ownedThemes(account).includes(theme)) throw new RequestError(403, 'theme_locked');
         const updated = await deps.repository.mergeSoloProgress(account.id, theme, body.best, body.highest, now());
         json(response, 200, { player: publicPlayer(updated.account, now()), discoveryAmount: updated.discoveryAmount, taskAmount: updated.taskAmount });
         return true;
