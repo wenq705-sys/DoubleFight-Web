@@ -708,7 +708,7 @@ async function claimDailyCoinReward(
     });
   } else {
     scene.notice = {
-      text: result.status === 'duplicate' ? '今日广告 S 币已领取' : 'S 币服务暂不可用',
+      text: result.status === 'duplicate' ? '今日广告星币已领取' : '星币服务暂不可用',
       until: number(scene.visualTime) + 1.6,
     };
     engagement.track('daily_coin_reward', { result: result.status });
