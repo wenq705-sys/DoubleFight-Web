@@ -717,7 +717,7 @@ export class DouyinSoloScene {
   }
 
   private resolveStuckBoard(): void {
-    const canRewardRescue = this.rewardedSkillClaims < 3;
+    const canRewardRescue = this.rewardedSkillClaims < 1;
     if (this.skillCharges > 0 || canRewardRescue) {
       this.notice = {
         text: this.skillCharges > 0
@@ -1000,7 +1000,7 @@ export class DouyinSoloScene {
     if (this.hit(x, y, skill)) {
       this.flashTap(skill);
       if (this.skillCharges > 0) void this.useRandomClear();
-      else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
+      else if (this.rewardedSkillClaims < 1) void this.rewardSoloSkill();
     }
   }
 
@@ -1774,7 +1774,7 @@ export class DouyinSoloScene {
     ctx.fillText('得分', width - edge - 12, hudTop + 47);
 
     const skill = this.soloSkillRect(width, height, safeBottom);
-    const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 3;
+    const canReward = this.skillCharges <= 0 && this.rewardedSkillClaims < 1;
     this.roundedRect(ctx, skill.x - 8, skill.y - 7, skill.width + 16, skill.height + 14, 22);
     ctx.fillStyle = 'rgba(6,24,31,.74)';
     ctx.fill();
@@ -2538,7 +2538,7 @@ export class DouyinSoloScene {
   }
 
   private async rewardSoloSkill(): Promise<void> {
-    if (this.inputLocked || this.rewardedSkillClaims >= 3) return;
+    if (this.inputLocked || this.rewardedSkillClaims >= 1) return;
     this.inputLocked = true;
     this.notice = { text: '正在准备激励视频…', until: this.visualTime + 8 };
     this.refreshHud();
