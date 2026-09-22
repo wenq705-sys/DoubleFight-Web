@@ -694,7 +694,7 @@ export class DouyinSoloScene {
     const adResult = await this.commercial.showRewarded();
     if (adResult !== 'rewarded') {
       this.themeUnlockBusy = false;
-      this.themeUnlockMessage = adResult === 'skipped' ? '完整看完视频后才会永久解锁当前主题' : '当前暂无可用广告，请稍后再试';
+      this.themeUnlockMessage = adResult === 'skipped' ? '完整看完广告后才会永久解锁当前主题' : '当前暂无可用广告，请稍后再试';
       this.refreshHud();
       return;
     }
@@ -722,7 +722,7 @@ export class DouyinSoloScene {
       this.notice = {
         text: this.skillCharges > 0
           ? '棋盘已满 · 使用清障可继续'
-          : '棋盘已满 · 看视频可获得清障继续',
+          : '棋盘已满 · 看广告可获得清障继续',
         until: this.visualTime + 2.6,
       };
       this.applySoloAtmosphere();
@@ -2252,7 +2252,7 @@ export class DouyinSoloScene {
     this.drawPillButton(
       ctx, layout.ad,
       progress.dailyRemaining > 0
-        ? `看完整视频永久解锁 · 今日剩 ${progress.dailyRemaining}/${THEME_UNLOCK_AD_DAILY_CAP}`
+        ? `看广告永久解锁 · 今日剩 ${progress.dailyRemaining}/${THEME_UNLOCK_AD_DAILY_CAP}`
         : '今日视频解锁次数已用完',
       'secondary', 'video', adDisabled, this.themeUnlockBusy,
     );
@@ -2262,7 +2262,7 @@ export class DouyinSoloScene {
     ctx.fillStyle = this.themeUnlockMessage ? '#9A4F32' : '#5E746F';
     ctx.font = '750 10px sans-serif';
     ctx.fillText(
-      this.themeUnlockMessage ?? '完整观看一次即可获得当前主题永久解锁奖励',
+      this.themeUnlockMessage ?? '完整观看一次广告即可获得当前主题永久解锁奖励',
       width / 2, hintY,
     );
 
