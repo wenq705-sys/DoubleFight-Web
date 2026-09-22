@@ -48,6 +48,7 @@ export interface DouyinAdError { errCode?: number; errNo?: number; errMsg?: stri
 export interface DouyinRewardedVideoAd {
   load(): Promise<void>;
   show(): Promise<void>;
+  destroy?(): void;
   onLoad(listener: () => void): void;
   offLoad?(listener: () => void): void;
   onError(listener: (error: DouyinAdError) => void): void;
