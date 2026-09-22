@@ -165,7 +165,7 @@ describe('DouyinAuthClient authoritative refresh', () => {
         options.success({
           statusCode: 200,
           data: {
-            themes: [{ id: 'kingdom', free: true, cost: 0, adViews: 0 }, { id: 'palace', free: false, cost: 100, adViews: 2 }],
+            themes: [{ id: 'kingdom', free: true, cost: 0, adViews: 0 }, { id: 'palace', free: false, cost: 100, adViews: 1 }],
             player: additivePlayer,
           },
         });
