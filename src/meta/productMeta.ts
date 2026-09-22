@@ -98,11 +98,11 @@ export interface ThemeAccess {
 }
 
 // One free onboarding world; the remaining worlds support either permanent
-// star-coin purchase or cumulative rewarded-ad unlock progress.
+// star-coin purchase or one completed rewarded video for an immediate permanent unlock.
 export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
   kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, rewardedUnlockViews: 0 },
-  palace: { theme: 'palace', free: false, permanentPrice: 100, rewardedUnlockViews: 2 },
-  zodiac: { theme: 'zodiac', free: false, permanentPrice: 180, rewardedUnlockViews: 3 },
-  candy: { theme: 'candy', free: false, permanentPrice: 280, rewardedUnlockViews: 4 },
-  dreamhouse: { theme: 'dreamhouse', free: false, permanentPrice: 400, rewardedUnlockViews: 5 },
+  palace: { theme: 'palace', free: false, permanentPrice: 100, rewardedUnlockViews: 1 },
+  zodiac: { theme: 'zodiac', free: false, permanentPrice: 180, rewardedUnlockViews: 1 },
+  candy: { theme: 'candy', free: false, permanentPrice: 280, rewardedUnlockViews: 1 },
+  dreamhouse: { theme: 'dreamhouse', free: false, permanentPrice: 400, rewardedUnlockViews: 1 },
 };
