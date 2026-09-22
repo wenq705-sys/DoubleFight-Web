@@ -66,6 +66,14 @@ for (const dependency of runtimeDependencies) {
   }
 }
 
+const themeEconomySource = await readFile(join(ROOT, 'shared/game/themeEconomy.ts'), 'utf8');
+const multiAdUnlocks = [...themeEconomySource.matchAll(/adViewsRequired:\s*(\d+)/g)]
+  .map(match => Number(match[1]))
+  .filter(value => Number.isFinite(value) && value > 1);
+if (multiAdUnlocks.length > 0) {
+  issues.push('shared/game/themeEconomy.ts: a single theme reward requires multiple rewarded-video views');
+}
+
 const generatedAudioSource = await readFile(join(ROOT, 'scripts/build-douyin.mjs'), 'utf8');
 if (!generatedAudioSource.includes('renderMusic(plan)') || !generatedAudioSource.includes('pcmWav(')) {
   issues.push('scripts/build-douyin.mjs: release music is not proven to be generated in-repo');
