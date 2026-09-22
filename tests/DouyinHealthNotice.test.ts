@@ -11,13 +11,18 @@ describe('Douyin startup health reminder', () => {
     expect(source).toContain("this.audio.resume()");
   });
 
-  it.each([
-    '抵制不良游戏，拒绝盗版游戏',
-    '注意自我保护，谨防受骗上当',
-    '适度游戏益脑，沉迷游戏伤身',
-    '合理安排时间，享受健康生活',
-  ])('contains required health reminder copy: %s', line => {
-    expect(source).toContain(line);
+  it('uses the exact official health-game notice title and copy', () => {
+    expect(source).toContain('《健康游戏忠告》');
+    for (const line of [
+      '抵制不良游戏，拒绝盗版游戏。',
+      '注意自我保护，谨防受骗上当。',
+      '适度游戏益脑，沉迷游戏伤身。',
+      '合理安排时间，享受健康生活。',
+    ]) {
+      expect(source).toContain(line);
+    }
+    expect(source).not.toContain('健康游戏提示');
+    expect(source).not.toContain('请合理安排游戏时间，享受健康游戏体验');
   });
 
   it('preloads resources behind an isolated startup layer and only enables entry when ready', () => {
