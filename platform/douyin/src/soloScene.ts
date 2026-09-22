@@ -1785,8 +1785,8 @@ export class DouyinSoloScene {
     this.drawSkillButton(
       ctx,
       skill,
-      canReward ? '补充清障' : '清障',
-      canReward ? '看完广告 · 补 1 次' : `最多清除 2 枚最低阶 · ${this.skillCharges} 次`,
+      canReward ? '看广告得清障' : '清障',
+      canReward ? '完整观看 · 立即获得 1 次清障' : `最多清除 2 枚最低阶 · ${this.skillCharges} 次`,
       this.skillCharges > 0 || canReward,
       'skill-clear',
     );
@@ -2544,32 +2544,37 @@ export class DouyinSoloScene {
     this.refreshHud();
     const result = await this.commercial.showRewarded();
     if (result === 'rewarded') {
+      // A completed rewarded video always grants the advertised local gameplay
+      // reward immediately. The server claim is a best-effort idempotent ledger,
+      // never a second gate after the user has already paid the ad-time cost.
       await this.auth.start();
       const claim = this.auth.requiresServerLedger
         ? await this.auth.claimAd(`${Date.now()}_${Math.random().toString(36).slice(2)}_${this.rewardedSkillClaims}`)
-        : DOUYIN_RELEASE ? 'unavailable' : 'granted';
-      if (claim === 'granted') {
-        this.rewardedSkillClaims += 1;
-        this.skillCharges = Math.max(1, this.skillCharges);
-        this.notice = { text: '奖励到账 · 清障 +1', until: this.visualTime + 1.5 };
-        this.platform.haptics.trigger('success');
+        : 'unavailable';
+      this.rewardedSkillClaims += 1;
+      this.skillCharges = Math.max(1, this.skillCharges);
+      this.notice = {
+        text: claim === 'unavailable' ? '清障 +1 已到账 · 账号记录稍后同步' : '奖励到账 · 清障 +1',
+        until: this.visualTime + 1.7,
+      };
+      this.platform.haptics.trigger('success');
 
-        // If the ad was opened from a dead board, consume the granted rescue
-        // immediately so the player returns to a playable state in one action.
-        const shouldAutoRescue = !this.controller.board.canMove();
-        this.inputLocked = false;
-        if (shouldAutoRescue) {
-          const rescued = await this.useRandomClear();
-          if (!rescued && !this.controller.board.canMove()) this.finishSolo('stuck');
-          return;
-        }
-      } else {
-        this.notice = { text: claim === 'duplicate' ? '该奖励已领取' : '奖励服务暂不可用', until: this.visualTime + 1.5 };
+      const shouldAutoRescue = !this.controller.board.canMove();
+      this.inputLocked = false;
+      if (shouldAutoRescue) {
+        const rescued = await this.useRandomClear();
+        if (!rescued && !this.controller.board.canMove()) this.finishSolo('stuck');
+        return;
       }
     } else if (result === 'skipped') {
-      this.notice = { text: '完整观看后才能获得奖励', until: this.visualTime + 1.5 };
+      this.notice = { text: '完整观看后才能获得清障奖励', until: this.visualTime + 1.5 };
     } else {
-      this.notice = { text: '暂时没有可用广告', until: this.visualTime + 1.5 };
+      this.notice = { text: '当前暂无视频 · 可继续游戏或结束本局', until: this.visualTime + 1.8 };
+      if (!this.controller.board.canMove()) {
+        this.inputLocked = false;
+        this.finishSolo('stuck');
+        return;
+      }
     }
     this.inputLocked = false;
     this.refreshHud();
