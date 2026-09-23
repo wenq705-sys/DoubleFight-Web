@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import { tierScale } from '../../config/tierProgression';
 import type { TileVisual } from './TileFactory';
 
@@ -11,7 +12,7 @@ const gradient = (() => {
   return texture;
 })();
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+const toon = (color: number) => createToonMaterial({ color, gradientMap: gradient });
 const metal = (color: number, emissive = 0) => new THREE.MeshStandardMaterial({
   color,
   roughness: 0.28,

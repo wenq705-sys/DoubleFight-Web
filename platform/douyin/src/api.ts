@@ -98,6 +98,10 @@ export interface DouyinApi {
     windowWidth?: number;
     windowHeight?: number;
     pixelRatio?: number;
+    platform?: 'ios' | 'android' | 'devtools' | string;
+    model?: string;
+    brand?: string;
+    system?: string;
     safeArea?: { top: number; left: number; right: number; bottom: number };
   };
   getMenuButtonLayout?(): { width: number; height: number; top: number; right: number; bottom: number; left: number };

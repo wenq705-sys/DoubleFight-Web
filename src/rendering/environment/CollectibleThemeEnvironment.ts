@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import type { Direction } from '../../../shared/game/types';
 import { ART } from '../../config/artDirection';
 import type { EnvironmentDetail } from '../themes/ThemePresentation';
@@ -13,7 +14,7 @@ export interface CollectibleEnvironmentConfig {
   motif: 'zodiac' | 'candy' | 'dreamhouse';
 }
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color });
+const toon = (color: number) => createToonMaterial({ color });
 const standard = (color: number, emissive = 0) => new THREE.MeshStandardMaterial({
   color,
   roughness: 0.62,

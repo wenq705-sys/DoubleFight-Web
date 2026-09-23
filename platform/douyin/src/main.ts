@@ -13,6 +13,7 @@ import { DouyinAuthClient } from './auth';
 import { DouyinEngagement } from './engagement';
 import { installM212ProductPass } from './m212ProductPass';
 import { installM212RetentionHub } from './m212RetentionHub';
+import { configureRuntimeMaterials } from '../../../src/rendering/RuntimeMaterialPolicy';
 
 declare const tt: DouyinApi;
 
@@ -27,11 +28,20 @@ const auth = new DouyinAuthClient(tt, platform, DOUYIN_PRODUCT_CONFIG.apiUrl, to
   if (!token) client.close();
 });
 const canvas = platform.createCanvas(); // First call is the single on-screen canvas.
-const context = canvas.getContext('webgl2', { antialias: true, alpha: false })
-  ?? canvas.getContext('webgl', { antialias: true, alpha: false })
-  ?? canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+const runtimeInfo = tt.getSystemInfoSync();
+const isDevtools = runtimeInfo.platform === 'devtools';
+// Helium currently exposes a stable WebGL1 path. Real iOS/Android devices keep
+// the WebGL2-first production path so the original toon rendering is preserved.
+const context = isDevtools
+  ? (canvas.getContext('webgl', { antialias: true, alpha: false })
+    ?? canvas.getContext('experimental-webgl', { antialias: true, alpha: false }))
+  : (canvas.getContext('webgl2', { antialias: true, alpha: false })
+    ?? canvas.getContext('webgl', { antialias: true, alpha: false })
+    ?? canvas.getContext('experimental-webgl', { antialias: true, alpha: false }));
 
 if (!context) throw new Error('Double Fight requires a WebGL context in the Douyin runtime.');
+const contextVersion = String(context.getParameter(context.VERSION) ?? '');
+configureRuntimeMaterials(/WebGL\s*2/i.test(contextVersion));
 
 const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme = isThemeId(savedTheme) ? savedTheme : 'kingdom';
