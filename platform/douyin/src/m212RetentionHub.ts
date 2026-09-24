@@ -215,7 +215,7 @@ export function installM212RetentionHub(
     }
   };
 
-  const unsubscribeOnline = scene.online.subscribe(() => {
+  const unsubscribeOnline = scene.online?.subscribe?.(() => {
     const snap = scene.online.snapshot();
     const mode = snap.mode as DouyinOnlineMode;
     if (game.currentMode !== 'online') {
@@ -259,7 +259,7 @@ export function installM212RetentionHub(
       }, 450);
     }
     scene.refreshHud();
-  });
+  }) ?? (() => {});
 
   const originalTap = game.handleTap.bind(game);
   game.handleTap = (x: number, y: number) => {
@@ -321,7 +321,7 @@ export function installM212RetentionHub(
     const ctx = scene.uiContext as CanvasRenderingContext2D;
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, info.pixelRatio));
+    const scale = Math.min(2, Math.max(1, number(scene.currentDpr)));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
@@ -357,7 +357,7 @@ export function installM212RetentionHub(
         state.coinBurst = null;
         scene.refreshHud();
       } else if (now >= state.nextCoinBurstHudAt) {
-        state.nextCoinBurstHudAt = now + 1 / 30;
+        state.nextCoinBurstHudAt = now + 1 / 15;
         scene.refreshHud();
       }
     }

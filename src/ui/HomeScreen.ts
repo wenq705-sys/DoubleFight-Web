@@ -1,5 +1,5 @@
 import { THEME_IDS, THEMES, pieceName, pieceTier, type ThemeId } from '../config/themes';
-import { themePreviews } from '../rendering/themes/ThemePreview';
+import { loadThemePreviews } from '../rendering/themes/ThemePreview';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 type ThemeCard = {
@@ -28,13 +28,13 @@ export class HomeScreen {
   private readonly dots: HTMLElement;
   private index = 0;
   private pointerStart: number | null = null;
+  private cancelPreviewLoad: (() => void) | null = null;
   private onStartHandler: ((theme: ThemeId) => void) | null = null;
   private onOnlineHandler: ((theme: ThemeId) => void) | null = null;
   private onPreviewHandler: ((theme: ThemeId) => void) | null = null;
 
   constructor(container: HTMLElement, initialTheme: ThemeId) {
     this.index = Math.max(0, CARDS.findIndex(card => card.id === initialTheme));
-    const previews = themePreviews();
 
     const islands = CARDS.map((card, index) => {
       const meta = THEMES[card.id];
@@ -45,7 +45,7 @@ export class HomeScreen {
           <div class="home-island__land">
             <div class="home-island__rim"></div>
             <div class="home-island__world">
-              <img class="home-island__hero" src="${previews[card.id]}" alt="${meta.label}主题终阶棋子" />
+              <img class="home-island__hero" data-theme="${card.id}" alt="${meta.label}主题终阶棋子" />
               <i class="home-island__prop home-island__prop--1"></i>
               <i class="home-island__prop home-island__prop--2"></i>
               <i class="home-island__prop home-island__prop--3"></i>
@@ -88,6 +88,7 @@ export class HomeScreen {
 
     this.bind();
     this.render(false);
+    this.startPreviewLoading();
   }
 
   show(theme?: ThemeId): void {
@@ -98,11 +99,23 @@ export class HomeScreen {
     this.root.classList.remove('home--hidden');
     this.root.setAttribute('aria-hidden', 'false');
     this.render(false);
+    this.startPreviewLoading();
   }
 
   hide(): void {
     this.root.classList.add('home--hidden');
     this.root.setAttribute('aria-hidden', 'true');
+    this.cancelPreviewLoad?.();
+    this.cancelPreviewLoad = null;
+  }
+
+  private startPreviewLoading(): void {
+    if (this.cancelPreviewLoad) return;
+    this.cancelPreviewLoad = loadThemePreviews((theme, dataUrl) => {
+      if (this.root.classList.contains('home--hidden')) return;
+      const image = this.root.querySelector<HTMLImageElement>(`.home-island__hero[data-theme="${theme}"]`);
+      if (image) image.src = dataUrl;
+    });
   }
 
   onStart(handler: (theme: ThemeId) => void): void { this.onStartHandler = handler; }
