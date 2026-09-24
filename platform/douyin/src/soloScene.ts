@@ -76,7 +76,7 @@ export class DouyinSoloScene {
   private readonly uiMaterial: THREE.MeshBasicMaterial;
   private readonly uiPlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
 
-  private readonly online: DouyinOnlineFlow;
+  private readonly online: DouyinOnlineFlow | null;
   private readonly unsubscribeOnline: () => void;
 
   private inputLocked = false;
@@ -92,7 +92,7 @@ export class DouyinSoloScene {
   private goodPerfWindows = 0;
   // Start conservatively on mobile. Promote to high only after sustained real-frame evidence.
   private quality: 'high' | 'medium' | 'low' = 'medium';
-  private currentDpr = 1;
+  private currentDpr = 1.75;
   private frameWidth = 1;
   private frameHeight = 1;
   private devicePixelRatio = 1;
@@ -178,20 +178,23 @@ export class DouyinSoloScene {
     const presentation = (event: PresentationEvent) => this.handlePresentationFeedback(event);
     this.boardView = new BattleBoardView(theme, 'full', undefined, presentation, true);
     this.controller = new SoloController(this.boardView);
-    this.online = new DouyinOnlineFlow(platform, client, theme, presentation);
+    this.online = DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled
+      ? new DouyinOnlineFlow(platform, client, theme, presentation)
+      : null;
     this.boardView.setQuality('medium');
-    this.online.local.setQuality('medium');
-    this.online.remote.setQuality('medium');
-    this.scene.add(this.boardView.root, this.online.local.root, this.online.remote.root);
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    this.scene.add(this.boardView.root);
+    if (this.online) {
+      this.online!.local.setQuality('medium');
+      this.online!.remote.setQuality('medium');
+      this.scene.add(this.online!.local.root, this.online!.remote.root);
+      this.online!.local.root.visible = false;
+      this.online!.remote.root.visible = false;
+    }
 
     this.configureLighting();
     this.createHomeAmbient();
     this.resize();
     this.applyThemeLook();
-    this.boardView.prewarmTheme(theme);
-    this.boardView.reset(HOME_TILES);
 
     this.uiCanvas = this.platform.createCanvas();
     this.uiContext = this.uiCanvas.getContext('2d') as CanvasRenderingContext2D;
@@ -213,26 +216,29 @@ export class DouyinSoloScene {
     this.resize();
     this.prepareStartupPreload();
 
-    this.unsubscribeOnline = this.online.subscribe(() => {
-      if (this.mode !== 'online') return;
-      const onlineMode = this.online.snapshot().mode;
-      const snap = this.online.snapshot();
-      if (onlineMode === 'playing' || onlineMode === 'result') {
-        this.boardView.root.visible = false;
-        this.online.local.root.visible = true;
-        this.online.remote.root.visible = true;
-      } else {
-        if (this.boardView.theme !== snap.selectedTheme) {
-          this.boardView.setTheme(snap.selectedTheme);
-          this.boardView.reset(HOME_TILES);
-          this.applyThemeLook();
-        }
-        this.boardView.root.visible = true;
-        this.online.local.root.visible = false;
-        this.online.remote.root.visible = false;
-      }
-      this.refreshHud();
-    });
+    const online = this.online;
+    this.unsubscribeOnline = online
+      ? online.subscribe(() => {
+          if (this.mode !== 'online') return;
+          const onlineMode = online.snapshot().mode;
+          const snap = online.snapshot();
+          if (onlineMode === 'playing' || onlineMode === 'result') {
+            this.boardView.root.visible = false;
+            online.local.root.visible = true;
+            online.remote.root.visible = true;
+          } else {
+            if (this.boardView.theme !== snap.selectedTheme) {
+              this.boardView.setTheme(snap.selectedTheme);
+              this.boardView.reset(HOME_TILES);
+              this.applyThemeLook();
+            }
+            this.boardView.root.visible = true;
+            online.local.root.visible = false;
+            online.remote.root.visible = false;
+          }
+          this.refreshHud();
+        })
+      : () => {};
 
     this.refreshHud();
     // Core Home/Solo/PvP surfaces are intentionally banner-free in M2.12.
@@ -249,7 +255,7 @@ export class DouyinSoloScene {
   get highest(): number { return this.controller.board.highest; }
 
   refreshAccountState(): void {
-    this.online.setPlayerName(this.auth.current.status === 'authenticated' ? this.auth.current.player.displayName : undefined);
+    this.online?.setPlayerName(this.auth.current.status === 'authenticated' ? this.auth.current.player.displayName : undefined);
     if (!this.disposed && this.mode === 'home') this.refreshHud();
   }
 
@@ -267,7 +273,7 @@ export class DouyinSoloScene {
       if (this.disposed) return;
       this.enterOnline();
       this.joinCode = normalized;
-      this.online.joinRoom(normalized);
+      this.online?.joinRoom(normalized);
       this.notice = { text: `正在加入房间 ${normalized}`, until: this.visualTime + 1.4 };
       this.refreshHud();
     });
@@ -280,11 +286,13 @@ export class DouyinSoloScene {
       return;
     }
     if (this.mode === 'online') {
-      const state = this.online.snapshot();
+      const online = this.online;
+      if (!online) return;
+      const state = online.snapshot();
       if (state.mode === 'playing') {
-        if (this.online.move(direction)) this.refreshHud();
+        if (online.move(direction)) this.refreshHud();
       } else if (state.mode === 'lobby' && (direction === 'left' || direction === 'right')) {
-        this.online.setTheme(adjacentTheme(state.selectedTheme, direction === 'left' ? 1 : -1));
+        online.setTheme(adjacentTheme(state.selectedTheme, direction === 'left' ? 1 : -1));
       }
       return;
     }
@@ -413,15 +421,15 @@ export class DouyinSoloScene {
   }
 
   private prepareStartupPreload(): void {
-    const tileChunks = [[2, 4], [8, 16], [32, 64], [128, 256], [512, 1024], [2048]];
-    this.startupPreloadTasks = [];
+    const theme = this.currentTheme;
+    this.startupPreloadTasks = [
+      () => this.boardView.prewarmEnvironment(theme),
+      () => this.boardView.prewarmTheme(theme, [32, 64]),
+      () => this.boardView.prewarmTheme(theme, [128, 256]),
+      () => this.boardView.prewarmTheme(theme, [512, 1024]),
+      () => this.prewarmThemeGpu(theme),
+    ];
     this.startupPreloadDone = 0;
-    for (const theme of THEME_IDS) {
-      this.startupPreloadTasks.push(() => this.boardView.prewarmEnvironment(theme));
-      for (const values of tileChunks) this.startupPreloadTasks.push(() => this.boardView.prewarmTheme(theme, values));
-      this.startupPreloadTasks.push(() => this.prewarmThemeGpu(theme));
-      this.startupPreloadTasks.push(() => this.audio.preloadTheme(theme));
-    }
   }
 
   private stepStartupPreload(): void {
@@ -429,11 +437,7 @@ export class DouyinSoloScene {
     if (!task) return;
     try { task(); } catch { /* Optional preload must never block startup. */ }
     this.startupPreloadDone += 1;
-    if (this.startupPreloadTasks.length === 0) {
-      this.boardView.setTheme(this.currentTheme);
-      this.boardView.reset(HOME_TILES);
-      this.applyThemeLook();
-    }
+    if (this.startupPreloadTasks.length === 0) this.applyThemeLook();
     this.refreshHud();
   }
 
@@ -457,12 +461,11 @@ export class DouyinSoloScene {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
     this.platform.storage.setItem('doublefight-theme', theme);
-    // Startup has already warmed every release theme. BattleBoardView.setTheme()
-    // preserves and rebuilds the current tile snapshot once, so avoid a second
-    // HOME_TILES reset on every swipe.
+    // Non-current themes are intentionally lazy. First access may build that
+    // theme once instead of charging every theme to cold start.
     this.boardView.setTheme(theme);
     this.applyHomeAmbientTheme();
-    if (this.mode === 'online' && this.online.snapshot().mode !== 'playing') {
+    if (this.mode === 'online' && this.online && this.online!.snapshot().mode !== 'playing') {
       this.boardView.reset(HOME_TILES);
     }
     this.applyThemeLook();
@@ -488,10 +491,11 @@ export class DouyinSoloScene {
 
     this.samplePerformance(delta);
 
-    const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
+    const online = this.online;
+    const onlineState = this.mode === 'online' ? online?.snapshot() ?? null : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
     if (this.mode === 'home' && this.visualTime >= this.nextHomeHudAt) {
-      this.nextHomeHudAt = this.visualTime + 0.75;
+      this.nextHomeHudAt = this.visualTime + 2;
       this.refreshHud();
     }
 
@@ -499,9 +503,9 @@ export class DouyinSoloScene {
     this.updateHomeSlide(delta);
     this.updateMomentLighting();
 
-    if (duel) {
-      this.online.local.update(delta);
-      this.online.remote.update(delta);
+    if (duel && online) {
+      online.local.update(delta);
+      online.remote.update(delta);
       this.renderDuel();
       if (this.visualTime >= this.nextDynamicHudAt) {
         this.nextDynamicHudAt = this.visualTime + 0.2;
@@ -541,7 +545,7 @@ export class DouyinSoloScene {
         this.mergeBurst = null;
         this.refreshHud();
       } else if (this.visualTime >= this.nextDynamicHudAt) {
-        this.nextDynamicHudAt = this.visualTime + 1 / 24;
+        this.nextDynamicHudAt = this.visualTime + 1 / 15;
         this.refreshHud();
       }
     }
@@ -565,7 +569,7 @@ export class DouyinSoloScene {
     if (this.disposed) return;
     this.disposed = true;
     this.unsubscribeOnline();
-    this.online.dispose();
+    this.online?.dispose();
     this.boardView.dispose();
     for (const mote of this.homeMotes) {
       mote.mesh.geometry.dispose();
@@ -614,8 +618,10 @@ export class DouyinSoloScene {
     this.joinPadOpen = false;
     this.exitConfirm = false;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (this.online) {
+      this.online!.local.root.visible = false;
+      this.online!.remote.root.visible = false;
+    }
     this.controller.reset();
     this.configureCamera();
     this.applyThemeLook();
@@ -825,6 +831,8 @@ export class DouyinSoloScene {
 
   private enterOnline(): void {
     if (this.mode === 'online') return;
+    const online = this.online;
+    if (!online) return;
     if (this.auth.current.status === 'authenticated' && !this.client.snapshot().room) this.client.close();
     this.mode = 'online';
     this.commercial.hideBanner();
@@ -833,10 +841,10 @@ export class DouyinSoloScene {
     this.joinCode = '';
     this.exitConfirm = false;
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    online.local.root.visible = false;
+    online.remote.root.visible = false;
     this.boardView.reset(HOME_TILES);
-    this.online.open(this.currentTheme);
+    online.open(this.currentTheme);
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('medium');
@@ -845,9 +853,10 @@ export class DouyinSoloScene {
 
   private showHome(): void {
     const previousMode = this.mode;
-    const previousOnlineMode = previousMode === 'online' ? this.online.snapshot().mode : null;
+    const online = this.online;
+    const previousOnlineMode = previousMode === 'online' ? online?.snapshot().mode ?? null : null;
     this.persistRecord(true);
-    if (this.mode === 'online') this.online.close();
+    if (this.mode === 'online') online?.close();
     this.mode = 'home';
     this.audio.setScene('home', this.currentTheme);
     this.soloResult = null;
@@ -859,8 +868,10 @@ export class DouyinSoloScene {
     this.notice = null;
     this.joinPadOpen = false;
     this.exitConfirm = false;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    if (online) {
+      online.local.root.visible = false;
+      online.remote.root.visible = false;
+    }
     this.boardView.root.visible = true;
     this.boardView.reset(HOME_TILES);
     this.configureCamera();
@@ -870,17 +881,22 @@ export class DouyinSoloScene {
   }
 
   private returnOnlineLobby(): void {
+    const online = this.online;
+    if (!online) {
+      this.showHome();
+      return;
+    }
     this.commercial.hideBanner();
-    this.online.leaveRoom();
+    online.leaveRoom();
     this.exitConfirm = false;
     this.joinPadOpen = false;
     this.notice = null;
-    const snap = this.online.snapshot();
+    const snap = online.snapshot();
     if (this.boardView.theme !== snap.selectedTheme) this.boardView.setTheme(snap.selectedTheme);
     this.boardView.reset(HOME_TILES);
     this.boardView.root.visible = true;
-    this.online.local.root.visible = false;
-    this.online.remote.root.visible = false;
+    online.local.root.visible = false;
+    online.remote.root.visible = false;
     this.configureCamera();
     this.applyThemeLook();
     this.refreshHud();
@@ -1006,7 +1022,7 @@ export class DouyinSoloScene {
 
   private handleOnlineTap(x: number, y: number): void {
     const info = this.platform.getSystemInfo();
-    const snap = this.online.snapshot();
+    const snap = this.online!.snapshot();
 
     if (this.exitConfirm) {
       const width = Math.min(280, info.width - 42);
@@ -1018,7 +1034,7 @@ export class DouyinSoloScene {
         this.exitConfirm = false;
         this.refreshHud();
       } else if (this.hit(x, y, leave)) {
-        this.online.leaveRoom();
+        this.online!.leaveRoom();
         this.showHome();
       }
       return;
@@ -1036,7 +1052,7 @@ export class DouyinSoloScene {
         this.exitConfirm = true;
         this.refreshHud();
       } else if (snap.mode === 'room') {
-        this.online.leaveRoom();
+        this.online!.leaveRoom();
       } else {
         this.showHome();
       }
@@ -1047,23 +1063,23 @@ export class DouyinSoloScene {
       const layout = this.onlineLobbyLayout(info.width, info.height);
       if (this.hit(x, y, layout.theme)) {
         this.flashTap(layout.theme);
-        this.online.setTheme(adjacentTheme(snap.selectedTheme, 1));
+        this.online!.setTheme(adjacentTheme(snap.selectedTheme, 1));
         return;
       }
       for (let i = 0; i < layout.skills.length; i++) if (this.hit(x, y, layout.skills[i])) {
         this.flashTap(layout.skills[i]);
-        this.online.cycleSkill(i);
+        this.online!.cycleSkill(i);
         return;
       }
       if (this.hit(x, y, layout.quick)) {
         this.flashTap(layout.quick);
-        this.online.quickMatch();
+        this.online!.quickMatch();
         this.platform.haptics.trigger('medium');
         return;
       }
       if (this.hit(x, y, layout.create)) {
         this.flashTap(layout.create);
-        this.online.createRoom();
+        this.online!.createRoom();
         this.platform.haptics.trigger('medium');
         return;
       }
@@ -1079,7 +1095,7 @@ export class DouyinSoloScene {
 
     if (snap.mode === 'matching') {
       const cancel = this.matchingCancelRect(info.width, info.height);
-      if (this.hit(x, y, cancel)) { this.flashTap(cancel); this.online.cancelMatch(); }
+      if (this.hit(x, y, cancel)) { this.flashTap(cancel); this.online!.cancelMatch(); }
       return;
     }
 
@@ -1097,7 +1113,7 @@ export class DouyinSoloScene {
         });
       } else if (this.hit(x, y, layout.ready) && me) {
         this.flashTap(layout.ready);
-        this.online.toggleReady();
+        this.online!.toggleReady();
       }
       return;
     }
@@ -1110,7 +1126,7 @@ export class DouyinSoloScene {
         if (!this.hit(x, y, skillRects[i])) continue;
         this.flashTap(skillRects[i]);
         const skillId = me.loadout[i];
-        const result = this.online.castSkill(skillId);
+        const result = this.online!.castSkill(skillId);
         if (!result.ok && result.reason) {
           this.notice = { text: result.reason, until: this.visualTime + 1.2 };
           this.platform.haptics.trigger('light');
@@ -1127,10 +1143,10 @@ export class DouyinSoloScene {
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
         this.flashTap(primary);
-        if (opponentRoom) this.online.setRematchReady();
+        if (opponentRoom) this.online!.setRematchReady();
         else {
-          this.online.leaveRoom();
-          this.online.quickMatch();
+          this.online!.leaveRoom();
+          this.online!.quickMatch();
         }
       } else if (this.hit(x, y, lobby)) {
         this.flashTap(lobby);
@@ -1168,7 +1184,7 @@ export class DouyinSoloScene {
     }
     if (this.hit(x, y, pad.join) && this.joinCode.length === 6) {
       this.joinPadOpen = false;
-      this.online.joinRoom(this.joinCode);
+      this.online!.joinRoom(this.joinCode);
       this.platform.haptics.trigger('medium');
       this.refreshHud();
     }
@@ -1215,7 +1231,7 @@ export class DouyinSoloScene {
     this.frameWidth = width;
     this.frameHeight = height;
     this.devicePixelRatio = Math.max(1, info.pixelRatio);
-    const dpr = Math.min(1.28, this.devicePixelRatio);
+    const dpr = Math.min(this.currentDpr, this.devicePixelRatio);
     this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
@@ -1246,18 +1262,21 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyQuality('low', 1.0);
+      this.applyDpr(1.4);
+      this.applyQuality('low');
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyQuality('medium', 1.28);
+      this.applyDpr(1.75);
+      this.applyQuality('medium');
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
       if (this.goodPerfWindows >= 3) {
-        this.applyQuality('high', 1.5);
+        this.applyDpr(2);
+        this.applyQuality('high');
         this.goodPerfWindows = 0;
       }
     } else {
@@ -1265,17 +1284,21 @@ export class DouyinSoloScene {
     }
   }
 
-  private applyQuality(quality: 'high' | 'medium' | 'low', maxDpr: number): void {
+  private applyDpr(maxDpr: number): void {
     const info = this.platform.getSystemInfo();
     const targetDpr = Math.min(Math.max(1, info.pixelRatio), maxDpr);
-    if (this.quality === quality && Math.abs(this.currentDpr - targetDpr) < 0.04) return;
-    this.quality = quality;
+    if (Math.abs(this.currentDpr - targetDpr) < 0.04) return;
     this.currentDpr = targetDpr;
     this.renderer.setPixelRatio(targetDpr);
     this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
+  }
+
+  private applyQuality(quality: 'high' | 'medium' | 'low'): void {
+    if (this.quality === quality) return;
+    this.quality = quality;
     this.boardView.setQuality(quality);
-    this.online.local.setQuality(quality);
-    this.online.remote.setQuality(quality);
+    this.online?.local.setQuality(quality);
+    this.online?.remote.setQuality(quality);
   }
 
   private configureCamera(): void {
@@ -1303,14 +1326,14 @@ export class DouyinSoloScene {
     this.renderDuelBoard('local', 0, width, localHeight);
     this.renderDuelBoard('remote', localHeight, width, remoteHeight);
     this.renderer.setScissorTest(false);
-    this.online.local.root.visible = true;
-    this.online.remote.root.visible = true;
+    this.online!.local.root.visible = true;
+    this.online!.remote.root.visible = true;
   }
 
   private renderDuelBoard(role: 'local' | 'remote', bottom: number, width: number, height: number): void {
-    this.online.local.root.visible = role === 'local';
-    this.online.remote.root.visible = role === 'remote';
-    const board = role === 'local' ? this.online.local : this.online.remote;
+    this.online!.local.root.visible = role === 'local';
+    this.online!.remote.root.visible = role === 'remote';
+    const board = role === 'local' ? this.online!.local : this.online!.remote;
     const aspect = width / Math.max(1, height);
     const viewHeight = Math.max(9.3, 9.5 / aspect);
 
@@ -1508,7 +1531,7 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, info.pixelRatio));
+    const scale = Math.min(2, Math.max(1, this.currentDpr));
     const targetCanvasWidth = Math.round(width * scale);
     const targetCanvasHeight = Math.round(height * scale);
     if (this.uiCanvas.width !== targetCanvasWidth) this.uiCanvas.width = targetCanvasWidth;
@@ -1870,7 +1893,7 @@ export class DouyinSoloScene {
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    const snap = this.online.snapshot();
+    const snap = this.online!.snapshot();
     if (snap.mode === 'playing') {
       this.drawDuelHud(ctx, width, height, snap.me, snap.opponent);
       return;
@@ -2006,7 +2029,7 @@ export class DouyinSoloScene {
     const top = this.hudTop();
     this.drawBack(ctx);
 
-    const timerMs = this.online.remainingMs();
+    const timerMs = this.online!.remainingMs();
     const seconds = Math.ceil(timerMs / 1000);
     const timer = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
@@ -2023,7 +2046,7 @@ export class DouyinSoloScene {
     ctx.fillText(myName, 20, top + 66);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
-    ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
+    ctx.fillText(this.online!.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
 
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e3efee';
@@ -2056,7 +2079,7 @@ export class DouyinSoloScene {
     const rects = this.duelSkillRects(width, height);
     me?.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
-      const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - this.online.serverNow());
+      const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - this.online!.serverNow());
       const ready = remaining <= 0 && me.energy >= def.cost;
       this.drawSkillButton(ctx, rects[index], def.shortLabel, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost} 能量`, ready, skillUiIcon(skillId));
     });
@@ -2072,7 +2095,7 @@ export class DouyinSoloScene {
   }
 
   private drawResult(ctx: CanvasRenderingContext2D, width: number, height: number): void {
-    const snap = this.online.snapshot();
+    const snap = this.online!.snapshot();
     const match = snap.state.match;
     if (!match) return;
     const won = match.winnerId === snap.state.playerId;
@@ -2106,7 +2129,7 @@ export class DouyinSoloScene {
     ctx.fillText(`${meScore}   比   ${opponentScore}`, width / 2, y + 92);
     ctx.fillStyle = '#D0DFDE';
     ctx.font = '800 10px sans-serif';
-    ctx.fillText(this.online.resultReason(), width / 2, y + 120);
+    ctx.fillText(this.online!.resultReason(), width / 2, y + 120);
     if (resultMe && resultOpponent) {
       const meHighest = pieceName(resultMe.theme, resultMe.highest);
       const opponentHighest = pieceName(resultOpponent.theme, resultOpponent.highest);

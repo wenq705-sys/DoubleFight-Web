@@ -26,9 +26,6 @@ type PassState = {
   profileOpen: boolean;
   profileBusy: boolean;
   profileMessage: string | null;
-  perfTime: number;
-  perfFrames: number;
-  goodWindows: number;
   nextFlightHudAt: number;
   nextOnlineHudAt: number;
 };
@@ -50,9 +47,6 @@ export function installM212ProductPass(
     profileOpen: false,
     profileBusy: false,
     profileMessage: null,
-    perfTime: 0,
-    perfFrames: 0,
-    goodWindows: 0,
     nextFlightHudAt: 0,
     nextOnlineHudAt: 0,
   };
@@ -165,7 +159,7 @@ export function installM212ProductPass(
     const ctx = scene.uiContext as CanvasRenderingContext2D;
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, info.pixelRatio));
+    const scale = Math.min(2, Math.max(1, number(scene.currentDpr)));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
@@ -183,7 +177,7 @@ export function installM212ProductPass(
     originalRender();
     const now = number(scene.visualTime);
     if (state.flight && now >= state.nextFlightHudAt) {
-      state.nextFlightHudAt = now + 1 / 30;
+      state.nextFlightHudAt = now + 1 / 15;
       scene.refreshHud();
       if (now - state.flight.startedAt >= state.flight.duration) state.flight = null;
     }
@@ -198,28 +192,8 @@ export function installM212ProductPass(
 
   };
 
-  // Medium-first quality avoids the current "start high, stutter, then drop" path.
-  const originalApply = scene.applyQuality.bind(scene) as (quality: 'high' | 'medium' | 'low', dpr: number) => void;
-  scene.applyQuality = (quality: 'high' | 'medium' | 'low', dpr: number) => {
-    originalApply(quality, dpr);
-    scene.renderer.shadowMap.enabled = quality === 'high';
-  };
-  scene.samplePerformance = (delta: number) => {
-    if (!Number.isFinite(delta) || delta <= 0) return;
-    state.perfTime += delta;
-    state.perfFrames += 1;
-    if (state.perfTime < 2) return;
-    const fps = state.perfFrames / state.perfTime;
-    state.perfTime = 0;
-    state.perfFrames = 0;
-    if (fps < 44) { state.goodWindows = 0; scene.applyQuality('low', 1); return; }
-    if (fps < 54) { state.goodWindows = 0; scene.applyQuality('medium', 1.2); return; }
-    if (fps >= 58) {
-      state.goodWindows += 1;
-      if (state.goodWindows >= 4) { scene.applyQuality('high', 1.45); state.goodWindows = 0; }
-    } else state.goodWindows = Math.max(0, state.goodWindows - 1);
-  };
-
+  // Rendering quality is owned by DouyinSoloScene. Product presentation must not
+  // monkey-patch DPR, shadow state, or performance sampling at runtime.
   scene.scene.traverse((object: SceneInternals) => {
     if (!object.isDirectionalLight || !object.castShadow || !object.shadow) return;
     object.shadow.mapSize.set(512, 512);
@@ -227,7 +201,6 @@ export function installM212ProductPass(
     object.shadow.map = null;
   });
   scene.profilePageOpen = false;
-  scene.applyQuality('medium', 1.2);
   scene.refreshHud();
   void client;
 }
