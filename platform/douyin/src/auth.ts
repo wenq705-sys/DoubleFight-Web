@@ -85,6 +85,22 @@ export interface SoloProgressSyncResult {
 type AuthState = { status: 'authenticated'; player: PublicPlayer } | { status: 'local' };
 const TOKEN_KEY = 'doublefight-session-token';
 
+export function reviewSafeDisplayName(displayName: string | undefined, seed = ''): string {
+  const trimmed = displayName?.trim() ?? '';
+  // Review-facing names deliberately allow only CJK Unified Ideographs,
+  // common Chinese middle dots and decimal digits. Any Latin/emoji/other
+  // script falls back to a deterministic Chinese+numeric guest label.
+  if (trimmed && /^[\u3400-\u9FFF0-9·]{1,10}$/.test(trimmed)) return trimmed;
+
+  let hash = 2166136261;
+  const source = seed || trimmed || 'doublefight';
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `玩家${String(hash % 10000).padStart(4, '0')}`;
+}
+
 export class DouyinAuthClient {
   private token: string | null = null;
   private state: AuthState = { status: 'local' };
@@ -256,7 +272,13 @@ export class DouyinAuthClient {
     try {
       const data = await this.call('GET', `/leaderboards/pvp?limit=${safeLimit}`);
       if (!this.isLeaderboard(data)) return null;
-      return data;
+      return {
+        ...data,
+        entries: data.entries.map(entry => ({
+          ...entry,
+          displayName: reviewSafeDisplayName(entry.displayName, `rank-${entry.rank}-${entry.displayName}`),
+        })),
+      };
     } catch (error) {
       this.handleSessionFailure(error);
       return null;
@@ -407,8 +429,12 @@ export class DouyinAuthClient {
 
   private updatePlayer(value: unknown): void {
     if (this.isPlayer(value)) {
-      this.state = { status: 'authenticated', player: value };
-      this.restoreSoloCache(value);
+      const player: PublicPlayer = {
+        ...value,
+        displayName: reviewSafeDisplayName(value.displayName, value.id),
+      };
+      this.state = { status: 'authenticated', player };
+      this.restoreSoloCache(player);
     }
   }
 
