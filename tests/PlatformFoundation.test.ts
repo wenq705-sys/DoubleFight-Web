@@ -4,7 +4,7 @@ import { OnlineClient } from '../src/network/OnlineClient';
 import type { SocketConnection, SocketState, SocketTransport } from '../src/platform/types';
 import { BrowserHaptics, BrowserLifecycle, BrowserPlatform, BrowserStorage } from '../src/platform/browser/BrowserPlatform';
 import { BrowserSocketTransport } from '../src/platform/browser/BrowserSocketTransport';
-import { DouyinAccountBootstrap, DouyinHaptics, DouyinLifecycleAdapter, DouyinStorage, normalizeDouyinSystemInfo } from '../src/platform/douyin/DouyinPlatform';
+import { DouyinAccountBootstrap, DouyinHaptics, DouyinLifecycleAdapter, DouyinPlatform, DouyinStorage, normalizeDouyinSystemInfo } from '../src/platform/douyin/DouyinPlatform';
 import { DouyinRenderLoop } from '../src/platform/douyin/DouyinRenderLoop';
 import { DouyinSocketTransport } from '../src/platform/douyin/DouyinSocketTransport';
 import type { DouyinApi, DouyinSocketTask } from '../platform/douyin/src/api';
@@ -170,6 +170,45 @@ describe('platform storage, lifecycle, haptics, system, and account', () => {
     expect(normalizeDouyinSystemInfo({ screenWidth: 430, screenHeight: 932, pixelRatio: 3, safeArea: { left: 0, top: 47, right: 430, bottom: 898 } })).toEqual({
       width: 430, height: 932, pixelRatio: 3, runtime: 'douyin', safeArea: { top: 47, right: 0, bottom: 34, left: 0 },
     });
+  });
+
+  it('keeps the Douyin logical viewport stable when the host reports a same-orientation zoomed size', () => {
+    let width = 430;
+    let height = 932;
+    const api = {
+      onShow: vi.fn(),
+      onHide: vi.fn(),
+      getSystemInfoSync: vi.fn(() => ({
+        screenWidth: 430,
+        screenHeight: 932,
+        windowWidth: width,
+        windowHeight: height,
+        pixelRatio: 3,
+        safeArea: { left: 0, top: 47, right: 430, bottom: 898 },
+      })),
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync: vi.fn(),
+      vibrateShort: vi.fn(),
+      login: vi.fn(),
+      connectSocket: vi.fn(),
+    } as unknown as DouyinApi;
+
+    const platform = new DouyinPlatform(api);
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 430, height: 932 });
+
+    width = 330;
+    height = 715;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 430, height: 932 });
+
+    // A real same-orientation layout resize changes aspect ratio and is accepted.
+    width = 390;
+    height = 800;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 390, height: 800 });
+
+    width = 932;
+    height = 430;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 932, height: 430 });
   });
 
   it.each([

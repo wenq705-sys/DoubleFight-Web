@@ -2,6 +2,7 @@ export interface DouyinTouchPoint { identifier: number; clientX: number; clientY
 export interface DouyinTouchEvent {
   touches: DouyinTouchPoint[];
   changedTouches: DouyinTouchPoint[];
+  preventDefault?(): void;
 }
 
 export interface DouyinSocketTask {
@@ -24,10 +25,16 @@ export interface DouyinImage {
 export interface DouyinCanvas {
   width: number;
   height: number;
+  style?: {
+    touchAction?: string;
+    msTouchAction?: string;
+    userSelect?: string;
+    webkitUserSelect?: string;
+  };
   getContext(kind: '2d', options?: object): CanvasRenderingContext2D | null;
   getContext(kind: 'webgl2' | 'webgl' | 'experimental-webgl', options?: object): WebGLRenderingContext | null;
-  addEventListener?: (name: string, listener: EventListener) => void;
-  removeEventListener?: (name: string, listener: EventListener) => void;
+  addEventListener?: (name: string, listener: EventListener, options?: AddEventListenerOptions | boolean) => void;
+  removeEventListener?: (name: string, listener: EventListener, options?: EventListenerOptions | boolean) => void;
 }
 
 export interface DouyinInnerAudioContext {
@@ -227,7 +234,7 @@ export interface DouyinApi {
     extra?: string;
     zoneId: string;
     success?: (result?: unknown) => void;
-    fail?: (error: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number; errorCode?: number }) => void;
   }): void;
   getImRankList?(options: {
     rankType: string;
@@ -237,6 +244,6 @@ export interface DouyinApi {
     rankTitle: string;
     zoneId: string;
     success?: (result?: unknown) => void;
-    fail?: (error: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number; errorCode?: number }) => void;
   }): void;
 }

@@ -117,6 +117,7 @@ export class DouyinPlatform implements Platform {
   readonly lifecycle: DouyinLifecycleAdapter;
   readonly account: DouyinAccountBootstrap;
   private systemInfo: SystemInfo | null = null;
+  private stableViewport: { width: number; height: number } | null = null;
 
   constructor(private readonly api: DouyinApi) {
     this.socket = new DouyinSocketTransport(api);
@@ -134,7 +135,33 @@ export class DouyinPlatform implements Platform {
   refreshSystemInfo(): SystemInfo {
     let menuButton: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>> | undefined;
     try { menuButton = this.api.getMenuButtonLayout?.(); } catch { /* optional host chrome */ }
-    this.systemInfo = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+    let next = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+
+    // Mini-game viewport dimensions should be stable for a session. Some preview/
+    // host gesture paths can report browser-like zoomed window dimensions after
+    // accidental multi-touch. Keep the original logical viewport unless the
+    // orientation actually changes, so HUD/layout can never get "stuck zoomed".
+    if (!this.stableViewport) {
+      this.stableViewport = { width: next.width, height: next.height };
+    } else {
+      const stablePortrait = this.stableViewport.height >= this.stableViewport.width;
+      const nextPortrait = next.height >= next.width;
+      const widthScale = next.width / Math.max(1, this.stableViewport.width);
+      const heightScale = next.height / Math.max(1, this.stableViewport.height);
+      // Pinch zoom changes both logical axes by essentially the same scale while
+      // preserving orientation. Real viewport/layout changes generally alter
+      // aspect ratio, so accept those and establish a new stable viewport.
+      const proportionalScale = Math.abs(widthScale - heightScale) < 0.035;
+      const meaningfulScale = Math.abs(widthScale - 1) > 0.06 || Math.abs(heightScale - 1) > 0.06;
+      const looksLikeZoom = stablePortrait === nextPortrait && proportionalScale && meaningfulScale;
+      if (looksLikeZoom) {
+        next = { ...next, width: this.stableViewport.width, height: this.stableViewport.height };
+      } else if (next.width !== this.stableViewport.width || next.height !== this.stableViewport.height) {
+        this.stableViewport = { width: next.width, height: next.height };
+      }
+    }
+
+    this.systemInfo = next;
     return this.systemInfo;
   }
 
