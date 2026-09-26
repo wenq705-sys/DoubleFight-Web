@@ -3,8 +3,9 @@ import { DouyinSocial } from '../platform/douyin/src/social';
 
 describe('Douyin native ranking adapters', () => {
   it('stores ascension time as a visible enum with inverted priority', async () => {
+    const login = vi.fn((options: any) => options.success?.({ isLogin: true, code: 'rank-session' }));
     const setImRankData = vi.fn((options: any) => options.success?.({ errMsg: 'ok' }));
-    const social = new DouyinSocial({ setImRankData } as any);
+    const social = new DouyinSocial({ login, setImRankData } as any);
 
     expect(await social.setAscensionRank('palace', 125_430)).toBe(true);
     expect(setImRankData).toHaveBeenCalledWith(expect.objectContaining({
@@ -16,8 +17,9 @@ describe('Douyin native ranking adapters', () => {
   });
 
   it('opens Solo as a weekly native rank and PvP as an all-time season surface', async () => {
+    const login = vi.fn((options: any) => options.success?.({ isLogin: true, code: 'rank-session' }));
     const getImRankList = vi.fn((options: any) => options.success?.({ errMsg: 'ok' }));
-    const social = new DouyinSocial({ getImRankList } as any);
+    const social = new DouyinSocial({ login, getImRankList } as any);
 
     expect(await social.openSoloRank()).toBe(true);
     expect(getImRankList.mock.calls[0]?.[0]).toEqual(expect.objectContaining({

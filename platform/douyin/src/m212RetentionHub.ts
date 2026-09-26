@@ -497,6 +497,7 @@ function handleHubTap(
     }
     if (hit(x, y, layout.ascension)) {
       void (async () => {
+        await auth.start();
         const mastery = loadThemeMastery(platform.storage, game.theme);
         const synced = mastery.bestAscensionMs
           ? await social.setAscensionRank(game.theme, mastery.bestAscensionMs)
@@ -505,7 +506,7 @@ function handleHubTap(
         scene.notice = {
           text: ok
             ? (synced ? '已打开登顶竞速榜' : '已打开登顶榜 · 本机成绩稍后同步')
-            : '当前环境暂不支持登顶榜',
+            : `当前环境暂不支持登顶榜${social.rankFailureHint()}`,
           until: number(scene.visualTime) + 1.4,
         };
         engagement.track('rank_open', { board: 'ascension', success: ok, synced, theme: game.theme });
@@ -515,13 +516,14 @@ function handleHubTap(
     }
     if (hit(x, y, layout.solo)) {
       void (async () => {
+        await auth.start();
         const weekly = loadWeeklySolo(platform.storage);
         const synced = weekly.best > 0 ? await social.setSoloRank(weekly.best) : true;
         const ok = await social.openSoloRank();
         scene.notice = {
           text: ok
             ? (synced ? '已打开最高分榜' : '已打开最高分榜 · 本机成绩稍后同步')
-            : '当前环境暂不支持最高分榜',
+            : `当前环境暂不支持最高分榜${social.rankFailureHint()}`,
           until: number(scene.visualTime) + 1.4,
         };
         engagement.track('rank_open', { board: 'solo_weekly', success: ok, synced });
@@ -684,7 +686,9 @@ async function claimDailyCoinReward(
   if (ad !== 'rewarded') {
     scene.inputLocked = false;
     scene.notice = {
-      text: ad === 'skipped' ? '完整观看后才能领取星币' : '暂时没有可用广告',
+      text: ad === 'skipped'
+        ? '完整观看后才能领取星币'
+        : `暂时没有可用广告${commercial.lastFailureHint()}`,
       until: number(scene.visualTime) + 1.5,
     };
     scene.refreshHud();

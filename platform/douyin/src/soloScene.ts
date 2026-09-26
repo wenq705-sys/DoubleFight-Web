@@ -127,6 +127,7 @@ export class DouyinSoloScene {
   private homeSlide: { direction: -1 | 1; target: ThemeId; elapsed: number; switched: boolean } | null = null;
   private startupPreloadTasks: Array<() => void> = [];
   private startupPreloadDone = 0;
+  private readonly homePreparedThemes = new Set<ThemeId>();
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -383,6 +384,7 @@ export class DouyinSoloScene {
       const button = this.healthNoticeButton(info.width, info.height);
       if (this.startupPreloadTasks.length === 0 && this.hit(x, y, button)) {
         this.healthNoticeOpen = false;
+        this.resize();
         this.audio.resume();
         this.platform.haptics.trigger('light');
         this.refreshHud();
@@ -421,23 +423,43 @@ export class DouyinSoloScene {
   }
 
   private prepareStartupPreload(): void {
-    const theme = this.currentTheme;
-    this.startupPreloadTasks = [
-      () => this.boardView.prewarmEnvironment(theme),
-      () => this.boardView.prewarmTheme(theme, [32, 64]),
-      () => this.boardView.prewarmTheme(theme, [128, 256]),
-      () => this.boardView.prewarmTheme(theme, [512, 1024]),
-      () => this.prewarmThemeGpu(theme),
-    ];
+    const start = THEME_IDS.indexOf(this.currentTheme);
+    const ordered: ThemeId[] = [this.currentTheme];
+    for (let offset = 1; ordered.length < THEME_IDS.length; offset += 1) {
+      for (const sign of [1, -1] as const) {
+        const candidate = THEME_IDS[(start + sign * offset + THEME_IDS.length * 4) % THEME_IDS.length];
+        if (!ordered.includes(candidate)) ordered.push(candidate);
+        if (ordered.length >= THEME_IDS.length) break;
+      }
+    }
+
+    const adjacent = new Set<ThemeId>(ordered.slice(0, Math.min(3, ordered.length)));
+    const tasks: Array<() => void> = [];
+    for (const theme of ordered) {
+      tasks.push(() => this.boardView.prewarmEnvironment(theme));
+      for (const value of [32, 64, 128, 256, 512, 1024]) {
+        tasks.push(() => this.boardView.prewarmTheme(theme, [value]));
+      }
+      // Never permanently lock navigation if one optional prewarm item fails.
+      // The theme remains switchable; any missing cached item can be created on demand.
+      tasks.push(() => this.homePreparedThemes.add(theme));
+      if (adjacent.has(theme)) tasks.push(() => this.prewarmThemeGpu(theme));
+    }
+    tasks.push(() => {
+      if (this.boardView.theme !== this.currentTheme) this.boardView.setTheme(this.currentTheme);
+      this.boardView.reset(HOME_TILES);
+      this.applyThemeLook();
+    });
+
+    this.startupPreloadTasks = tasks;
     this.startupPreloadDone = 0;
   }
 
   private stepStartupPreload(): void {
     const task = this.startupPreloadTasks.shift();
     if (!task) return;
-    try { task(); } catch { /* Optional preload must never block startup. */ }
+    try { task(); } catch { /* Preload failure must not trap the player on startup. */ }
     this.startupPreloadDone += 1;
-    if (this.startupPreloadTasks.length === 0) this.applyThemeLook();
     this.refreshHud();
   }
 
@@ -700,7 +722,9 @@ export class DouyinSoloScene {
     const adResult = await this.commercial.showRewarded();
     if (adResult !== 'rewarded') {
       this.themeUnlockBusy = false;
-      this.themeUnlockMessage = adResult === 'skipped' ? '完整看完广告后才会永久解锁当前主题' : '当前暂无可用广告，请稍后再试';
+      this.themeUnlockMessage = adResult === 'skipped'
+        ? '完整看完广告后才会永久解锁当前主题'
+        : `当前暂无可用广告${this.commercial.lastFailureHint()}，请稍后再试`;
       this.refreshHud();
       return;
     }
@@ -922,9 +946,12 @@ export class DouyinSoloScene {
     }
     if (this.hit(x, y, layout.rank)) {
       this.flashTap(layout.rank);
-      void this.social.openSoloRank().then(ok => {
+      void this.auth.start().then(() => this.social.openSoloRank()).then(ok => {
         if (!ok) {
-          this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
+          this.notice = {
+            text: `排行榜暂不可用${this.social.rankFailureHint()}，请稍后重试`,
+            until: this.visualTime + 2,
+          };
           this.refreshHud();
         }
       });
@@ -1231,8 +1258,10 @@ export class DouyinSoloScene {
     this.frameWidth = width;
     this.frameHeight = height;
     this.devicePixelRatio = Math.max(1, info.pixelRatio);
-    const dpr = Math.min(this.currentDpr, this.devicePixelRatio);
-    this.currentDpr = dpr;
+    const dpr = this.healthNoticeOpen
+      ? Math.min(3, this.devicePixelRatio)
+      : Math.min(this.currentDpr, this.devicePixelRatio);
+    if (!this.healthNoticeOpen) this.currentDpr = dpr;
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
 
@@ -1397,6 +1426,11 @@ export class DouyinSoloScene {
   private startHomeSlide(direction: -1 | 1): void {
     if (this.mode !== 'home' || this.homeSlide) return;
     const target = adjacentTheme(this.currentTheme, direction === -1 ? 1 : -1);
+    if (!this.homePreparedThemes.has(target)) {
+      this.notice = { text: '主题资源仍在准备，请稍候', until: this.visualTime + 0.8 };
+      this.refreshHud();
+      return;
+    }
     this.homeSlide = { direction, target, elapsed: 0, switched: false };
     this.platform.haptics.trigger('light');
   }
@@ -1531,7 +1565,9 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, this.currentDpr));
+    const scale = this.healthNoticeOpen
+      ? Math.min(3, Math.max(1, this.devicePixelRatio))
+      : Math.min(2, Math.max(1, this.currentDpr));
     const targetCanvasWidth = Math.round(width * scale);
     const targetCanvasHeight = Math.round(height * scale);
     if (this.uiCanvas.width !== targetCanvasWidth) this.uiCanvas.width = targetCanvasWidth;
@@ -1595,8 +1631,8 @@ export class DouyinSoloScene {
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(64,35,20,.22)';
-    ctx.shadowBlur = 14;
+    ctx.shadowColor = 'rgba(64,35,20,.18)';
+    ctx.shadowBlur = 4;
     ctx.fillStyle = '#fff4ce';
     ctx.font = '900 34px sans-serif';
     ctx.fillText('双数对决', width / 2, Math.max(82, height * .13));
@@ -1613,9 +1649,9 @@ export class DouyinSoloScene {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = '#78452f';
-    ctx.font = '900 14px sans-serif';
-    ctx.fillText('《健康游戏忠告》', width / 2, panelY + 34);
+    ctx.fillStyle = '#5d3024';
+    ctx.font = '900 18px sans-serif';
+    ctx.fillText('《健康游戏忠告》', width / 2, panelY + 36);
 
     const lines = [
       '抵制不良游戏，拒绝盗版游戏。',
@@ -1623,10 +1659,10 @@ export class DouyinSoloScene {
       '适度游戏益脑，沉迷游戏伤身。',
       '合理安排时间，享受健康生活。',
     ];
-    ctx.font = '800 13px sans-serif';
+    ctx.font = '800 15px sans-serif';
     lines.forEach((line, index) => {
-      ctx.fillStyle = index % 2 === 0 ? '#6f4030' : '#83523f';
-      ctx.fillText(line, width / 2, panelY + 78 + index * 42);
+      ctx.fillStyle = index % 2 === 0 ? '#5f3529' : '#6b3c2f';
+      ctx.fillText(line, width / 2, panelY + 80 + index * 42);
     });
 
     ctx.strokeStyle = 'rgba(123,77,49,.22)';
@@ -1650,8 +1686,8 @@ export class DouyinSoloScene {
       ctx.fillStyle = '#b96a35';
       ctx.fill();
     }
-    ctx.fillStyle = '#87543a';
-    ctx.font = '700 10px sans-serif';
+    ctx.fillStyle = '#71402e';
+    ctx.font = '800 12px sans-serif';
     ctx.fillText(progress >= 1 ? '资源加载完成' : `正在加载游戏资源 ${Math.round(progress * 100)}%`, width / 2, progressY - 12);
 
     const buttonGradient = ctx.createLinearGradient(button.x, button.y, button.x + button.width, button.y);
@@ -2592,7 +2628,10 @@ export class DouyinSoloScene {
     } else if (result === 'skipped') {
       this.notice = { text: '完整观看后才能获得清障奖励', until: this.visualTime + 1.5 };
     } else {
-      this.notice = { text: '当前暂无视频 · 可继续游戏或结束本局', until: this.visualTime + 1.8 };
+      this.notice = {
+        text: `当前暂无视频${this.commercial.lastFailureHint()} · 可继续游戏或结束本局`,
+        until: this.visualTime + 2.2,
+      };
       if (!this.controller.board.canMove()) {
         this.inputLocked = false;
         this.finishSolo('stuck');

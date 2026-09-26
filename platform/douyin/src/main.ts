@@ -28,6 +28,56 @@ const auth = new DouyinAuthClient(tt, platform, DOUYIN_PRODUCT_CONFIG.apiUrl, to
   if (!token) client.close();
 });
 const canvas = platform.createCanvas(); // First call is the single on-screen canvas.
+
+function lockGameViewportGestures(): void {
+  const canvasTarget = canvas as typeof canvas & {
+    style?: {
+      touchAction?: string;
+      msTouchAction?: string;
+      userSelect?: string;
+      webkitUserSelect?: string;
+    };
+  };
+
+  if (canvasTarget.style) {
+    canvasTarget.style.touchAction = 'none';
+    canvasTarget.style.msTouchAction = 'none';
+    canvasTarget.style.userSelect = 'none';
+    canvasTarget.style.webkitUserSelect = 'none';
+  }
+
+  const prevent = (event: Event) => event.preventDefault();
+  const add = (name: string) => {
+    try { canvasTarget.addEventListener?.(name, prevent, { passive: false }); }
+    catch { try { canvasTarget.addEventListener?.(name, prevent); } catch { /* host canvas may not expose DOM events */ } }
+  };
+  for (const name of ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'gestureend']) add(name);
+
+  const doc = (globalThis as typeof globalThis & { document?: Document }).document;
+  if (!doc) return;
+  try {
+    doc.documentElement.style.touchAction = 'none';
+    doc.body && (doc.body.style.touchAction = 'none');
+    let viewport = doc.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!viewport) {
+      viewport = doc.createElement('meta');
+      viewport.name = 'viewport';
+      doc.head?.appendChild(viewport);
+    }
+    viewport.content = 'width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover';
+    for (const name of ['gesturestart', 'gesturechange', 'gestureend']) {
+      doc.addEventListener(name, prevent, { passive: false });
+    }
+    doc.addEventListener('touchmove', event => {
+      const touchEvent = event as TouchEvent;
+      if (touchEvent.touches.length > 1) event.preventDefault();
+    }, { passive: false });
+  } catch {
+    // Native mini-game runtimes do not expose a DOM; tt touch suppression still applies.
+  }
+}
+lockGameViewportGestures();
+
 const runtimeInfo = tt.getSystemInfoSync();
 const isDevtools = runtimeInfo.platform === 'devtools';
 // Helium currently exposes a stable WebGL1 path. Real iOS/Android devices keep

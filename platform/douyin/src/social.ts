@@ -8,6 +8,7 @@ export class DouyinSocial {
   private sidebarSupported: boolean | null = null;
   private roomListeners = new Set<(code: string) => void>();
   private sidebarListeners = new Set<() => void>();
+  private lastRankError: { errMsg?: string; errNo?: number; errorCode?: number } | null = null;
 
   constructor(private readonly api: DouyinApi) {
     this.latestShow = this.safeLaunchOptions();
@@ -20,6 +21,41 @@ export class DouyinSocial {
         if (this.isSidebarOptions(latest)) this.sidebarListeners.forEach(listener => listener());
       });
     } catch { /* optional host signal */ }
+  }
+
+  rankFailureHint(): string {
+    const error = this.lastRankError;
+    if (!error) return '';
+    const code = error.errNo ?? error.errorCode;
+    return code !== undefined ? `（排行错误 ${code}）` : '（排行服务暂不可用）';
+  }
+
+  private ensureRankLogin(): Promise<boolean> {
+    if (!this.api.login) {
+      this.lastRankError = { errMsg: 'tt.login unavailable', errNo: 21101 };
+      return Promise.resolve(false);
+    }
+    return new Promise(resolve => {
+      try {
+        this.api.login?.({
+          force: false,
+          success: result => {
+            // Native IM rankings require a real logged-in Douyin account.
+            // anonymousCode is not sufficient for getImRankList/setImRankData.
+            const ok = result.isLogin === true;
+            if (!ok) this.lastRankError = { errMsg: 'tt.login returned anonymous session', errNo: 21101 };
+            resolve(ok);
+          },
+          fail: error => {
+            this.lastRankError = { errMsg: error.errMsg, errNo: 21101 };
+            resolve(false);
+          },
+        });
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error), errNo: 21101 };
+        resolve(false);
+      }
+    });
   }
 
   launchRoomCode(): string | null {
@@ -114,7 +150,12 @@ export class DouyinSocial {
   }
 
   async setSoloRank(score: number): Promise<boolean> {
-    if (!this.api.setImRankData || score < 0) return false;
+    this.lastRankError = null;
+    if (!this.api.setImRankData || score < 0) {
+      this.lastRankError = { errMsg: !this.api.setImRankData ? 'setImRankData unavailable' : 'invalid rank score', errNo: 20000 };
+      return false;
+    }
+    if (!(await this.ensureRankLogin())) return false;
     return new Promise(resolve => {
       try {
         this.api.setImRankData?.({
@@ -123,16 +164,25 @@ export class DouyinSocial {
           priority: 0,
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => {
+            this.lastRankError = error;
+            resolve(false);
+          },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });
   }
 
   async openSoloRank(): Promise<boolean> {
-    if (!this.api.getImRankList) return false;
+    this.lastRankError = null;
+    if (!this.api.getImRankList) {
+      this.lastRankError = { errMsg: 'getImRankList unavailable', errNo: 20000 };
+      return false;
+    }
+    if (!(await this.ensureRankLogin())) return false;
     return new Promise(resolve => {
       try {
         this.api.getImRankList?.({
@@ -143,16 +193,25 @@ export class DouyinSocial {
           rankTitle: '双数对决 · 本周最高分',
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => {
+            this.lastRankError = error;
+            resolve(false);
+          },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });
   }
 
   async setAscensionRank(theme: ThemeId, elapsedMs: number): Promise<boolean> {
-    if (!this.api.setImRankData || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return false;
+    this.lastRankError = null;
+    if (!this.api.setImRankData || !Number.isFinite(elapsedMs) || elapsedMs <= 0) {
+      this.lastRankError = { errMsg: !this.api.setImRankData ? 'setImRankData unavailable' : 'invalid ascension time', errNo: 20000 };
+      return false;
+    }
+    if (!(await this.ensureRankLogin())) return false;
     const duration = Math.min(1_999_999_999, Math.max(1, Math.floor(elapsedMs)));
     // Native numeric ranks sort descending. Ascension is lower-is-better, so use
     // an enum row whose visible value is the formatted time and priority is the
@@ -167,16 +226,25 @@ export class DouyinSocial {
           extra: JSON.stringify({ elapsedMs: duration }),
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => {
+            this.lastRankError = error;
+            resolve(false);
+          },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });
   }
 
   async openAscensionRank(theme: ThemeId): Promise<boolean> {
-    if (!this.api.getImRankList) return false;
+    this.lastRankError = null;
+    if (!this.api.getImRankList) {
+      this.lastRankError = { errMsg: 'getImRankList unavailable', errNo: 20000 };
+      return false;
+    }
+    if (!(await this.ensureRankLogin())) return false;
     return new Promise(resolve => {
       try {
         this.api.getImRankList?.({
@@ -187,9 +255,13 @@ export class DouyinSocial {
           rankTitle: `${THEMES[theme].label} · 登顶竞速`,
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => {
+            this.lastRankError = error;
+            resolve(false);
+          },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });

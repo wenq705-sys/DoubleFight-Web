@@ -25,6 +25,9 @@ function minimalApi(extra: Partial<DouyinApi> = {}): DouyinApi {
     onTouchCancel: vi.fn(),
     onShow: vi.fn(),
     onHide: vi.fn(),
+    login: vi.fn((options: Parameters<NonNullable<DouyinApi['login']>>[0]) => {
+      options.success({ isLogin: true, code: 'native-rank-session' });
+    }),
     connectSocket: vi.fn() as unknown as DouyinApi['connectSocket'],
     ...extra,
   };
@@ -61,6 +64,27 @@ describe('Douyin commercial services', () => {
     expect(api.createRewardedVideoAd).toHaveBeenCalledWith({
       adUnitId: DOUYIN_PRODUCT_CONFIG.ads.rewarded,
     });
+  });
+
+  it('preserves the native rewarded-ad error code for real-device diagnosis', async () => {
+    let onError: ((error: { errCode?: number; errNo?: number; errMsg?: string }) => void) | undefined;
+    const rewarded = {
+      load: vi.fn(async () => undefined),
+      show: vi.fn(async () => undefined),
+      destroy: vi.fn(),
+      onLoad: vi.fn(),
+      offLoad: vi.fn(),
+      onError: vi.fn((listener) => { onError = listener; }),
+      offError: vi.fn(),
+      onClose: vi.fn(),
+      offClose: vi.fn(),
+    } as DouyinRewardedVideoAd;
+    const commercial = new DouyinCommercial(minimalApi({ createRewardedVideoAd: () => rewarded }));
+    const pending = commercial.showRewarded();
+    await Promise.resolve();
+    onError?.({ errCode: 1005, errMsg: 'ad unit reviewing' });
+    await expect(pending).resolves.toBe('unavailable');
+    expect(commercial.lastFailureHint()).toBe('（广告错误 1005）');
   });
 
   it('returns skipped when rewarded video is closed early', async () => {
@@ -105,11 +129,12 @@ describe('Douyin commercial services', () => {
       await expect(commercial.showRewarded()).resolves.toBe('rewarded');
     }
     await expect(commercial.showRewarded()).resolves.toBe('unavailable');
-    expect(createRewardedVideoAd).toHaveBeenCalledTimes(5);
+    // Rewarded video is a native global singleton; reuse one instance.
+    expect(createRewardedVideoAd).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(60_001);
     await expect(commercial.showRewarded()).resolves.toBe('rewarded');
-    expect(createRewardedVideoAd).toHaveBeenCalledTimes(6);
+    expect(createRewardedVideoAd).toHaveBeenCalledTimes(1);
   });
 
   it('keeps an interstitial alive after show until the native close event', async () => {
@@ -184,6 +209,26 @@ describe('Douyin social retention services', () => {
 
     showListener?.({ launch_from: 'homepage', location: 'sidebar_card' });
     expect(social.cameFromSidebar()).toBe(true);
+  });
+
+  it('preserves native rank errors instead of swallowing them', async () => {
+    const getImRankList = vi.fn((options: Parameters<NonNullable<DouyinApi['getImRankList']>>[0]) => {
+      options.fail?.({ errMsg: 'not logged in', errNo: 21101 });
+    });
+    const social = new DouyinSocial(minimalApi({ getImRankList }));
+    await expect(social.openSoloRank()).resolves.toBe(false);
+    expect(social.rankFailureHint()).toBe('（排行错误 21101）');
+  });
+
+  it('does not treat an anonymous Douyin session as eligible for native rankings', async () => {
+    const getImRankList = vi.fn();
+    const login = vi.fn((options: Parameters<NonNullable<DouyinApi['login']>>[0]) => {
+      options.success({ isLogin: false, anonymousCode: 'anonymous-only' });
+    });
+    const social = new DouyinSocial(minimalApi({ login, getImRankList }));
+    await expect(social.openSoloRank()).resolves.toBe(false);
+    expect(getImRankList).not.toHaveBeenCalled();
+    expect(social.rankFailureHint()).toBe('（排行错误 21101）');
   });
 
   it('checks/navigates sidebar and writes/opens the Solo rank', async () => {
