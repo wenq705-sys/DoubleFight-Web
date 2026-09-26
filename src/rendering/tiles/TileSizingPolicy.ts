@@ -17,6 +17,18 @@ export const PALACE_SIZING: TileVisualSizingProfile = {
   horizontalLimit: value => tierScale(value, 1.60, 1.94),
   minimumHeight: value => tierScale(value, 1.90, 2.85),
 };
+export const ZODIAC_SIZING: TileVisualSizingProfile = {
+  horizontalLimit: value => tierScale(value, 1.54, 1.92),
+  minimumHeight: value => tierScale(value, 1.52, 2.72),
+};
+export const CANDY_SIZING: TileVisualSizingProfile = {
+  horizontalLimit: value => tierScale(value, 1.48, 1.90),
+  minimumHeight: value => tierScale(value, 1.34, 2.62),
+};
+export const DREAMHOUSE_SIZING: TileVisualSizingProfile = {
+  horizontalLimit: value => tierScale(value, 1.52, 1.93),
+  minimumHeight: value => tierScale(value, 1.30, 3.02),
+};
 export const MOTION_FOOTPRINT = ART.board.gap * 1.06;
 
 /** Preserve authored dimensions until the horizontal silhouette exceeds its cell. */

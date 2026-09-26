@@ -4,7 +4,7 @@ import { OnlineClient } from '../src/network/OnlineClient';
 import type { SocketConnection, SocketState, SocketTransport } from '../src/platform/types';
 import { BrowserHaptics, BrowserLifecycle, BrowserPlatform, BrowserStorage } from '../src/platform/browser/BrowserPlatform';
 import { BrowserSocketTransport } from '../src/platform/browser/BrowserSocketTransport';
-import { DouyinAccountBootstrap, DouyinHaptics, DouyinLifecycleAdapter, DouyinStorage, normalizeDouyinSystemInfo } from '../src/platform/douyin/DouyinPlatform';
+import { DouyinAccountBootstrap, DouyinHaptics, DouyinLifecycleAdapter, DouyinPlatform, DouyinStorage, normalizeDouyinSystemInfo } from '../src/platform/douyin/DouyinPlatform';
 import { DouyinRenderLoop } from '../src/platform/douyin/DouyinRenderLoop';
 import { DouyinSocketTransport } from '../src/platform/douyin/DouyinSocketTransport';
 import type { DouyinApi, DouyinSocketTask } from '../platform/douyin/src/api';
@@ -172,6 +172,45 @@ describe('platform storage, lifecycle, haptics, system, and account', () => {
     });
   });
 
+  it('keeps the Douyin logical viewport stable when the host reports a same-orientation zoomed size', () => {
+    let width = 430;
+    let height = 932;
+    const api = {
+      onShow: vi.fn(),
+      onHide: vi.fn(),
+      getSystemInfoSync: vi.fn(() => ({
+        screenWidth: 430,
+        screenHeight: 932,
+        windowWidth: width,
+        windowHeight: height,
+        pixelRatio: 3,
+        safeArea: { left: 0, top: 47, right: 430, bottom: 898 },
+      })),
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync: vi.fn(),
+      vibrateShort: vi.fn(),
+      login: vi.fn(),
+      connectSocket: vi.fn(),
+    } as unknown as DouyinApi;
+
+    const platform = new DouyinPlatform(api);
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 430, height: 932 });
+
+    width = 330;
+    height = 715;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 430, height: 932 });
+
+    // A real same-orientation layout resize changes aspect ratio and is accepted.
+    width = 390;
+    height = 800;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 390, height: 800 });
+
+    width = 932;
+    height = 430;
+    expect(platform.refreshSystemInfo()).toMatchObject({ width: 932, height: 430 });
+  });
+
   it.each([
     [{ isLogin: true, code: 'temporary-code', anonymousCode: 'anonymous' }, 'logged_in'],
     [{ isLogin: false, anonymousCode: 'anonymous' }, 'anonymous'],
@@ -190,5 +229,40 @@ describe('platform storage, lifecycle, haptics, system, and account', () => {
       expect(await account.bootstrap()).toMatchObject({ status, isLoggedIn: false, error: message });
     }
     expect(await new DouyinAccountBootstrap({ login: () => { throw Error('crash'); } }).bootstrap()).toMatchObject({ status: 'failed' });
+  });
+});
+
+describe('Douyin profile permission adapter', () => {
+  it('prefers the official mini-game getUserInfo path and returns the real nickname/avatar', async () => {
+    const getUserInfo = vi.fn((options: Parameters<NonNullable<DouyinApi['getUserInfo']>>[0]) => {
+      expect(options.withCredentials).toBe(false);
+      options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/avatar.png' } });
+    });
+    const getUserProfile = vi.fn();
+    const account = new DouyinAccountBootstrap({ getUserInfo, getUserProfile });
+    await expect(account.requestProfile()).resolves.toEqual({
+      status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/avatar.png',
+    });
+    expect(getUserInfo).toHaveBeenCalledOnce();
+    expect(getUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('falls back to getUserProfile on hosts where the mini-game API is unavailable', async () => {
+    const getUserProfile = vi.fn((options: Parameters<NonNullable<DouyinApi['getUserProfile']>>[0]) => {
+      options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/fallback.png' } });
+    });
+    const account = new DouyinAccountBootstrap({ getUserProfile });
+    await expect(account.requestProfile()).resolves.toMatchObject({
+      status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/fallback.png',
+    });
+    expect(getUserProfile).toHaveBeenCalledOnce();
+  });
+
+  it('maps user cancellation and unavailable hosts without throwing', async () => {
+    const cancelled = new DouyinAccountBootstrap({
+      getUserInfo: options => options.fail?.({ errMsg: 'getUserInfo:fail auth deny' }),
+    });
+    await expect(cancelled.requestProfile()).resolves.toMatchObject({ status: 'cancelled' });
+    await expect(new DouyinAccountBootstrap({}).requestProfile()).resolves.toMatchObject({ status: 'unavailable' });
   });
 });

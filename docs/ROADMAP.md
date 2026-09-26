@@ -1,5 +1,29 @@
 # Roadmap
 
+## Current milestone — v1.0 final Douyin RC ← CURRENT
+
+The first Douyin release is now intentionally Solo-first. Online Duel/PvP remains in the repository for later activation but is not part of the initial player-facing release.
+
+### P0 — release closure
+- ✅ single launch policy disables Online/PvP surfaces without deleting the implementation
+- ✅ Home/profile/ranking/daily-task copy is Solo-first
+- ✅ registry-driven five-world Home/navigation/collection architecture
+- ✅ five readable 11-tier launch worlds: Kingdom, Palace, Zodiac, Candy, Dreamhouse
+- ✅ Zodiac combat-power chain with Rabbit retained as world mascot
+- ✅ generic five-theme server Solo persistence with backward-compatible migration
+- ✅ theme BGM + layered SFX + separate music/SFX settings + lifecycle-safe audio
+- ✅ Solo game-feel pass: merge cadence, milestone moments, danger/recovery and legendary merge feedback
+- ✅ startup performance: isolated health screen + visible preload progress + five-theme environment/tile/GPU/audio prewarm; fitted tile templates and VFX hot-path caching
+- ✅ permanent theme economy: 1 free world + 星币/ad-progress unlocks with server ledger, idempotency and 2/day theme-ad cap
+- ✅ review-language hardening: numeric-only generated guest names, Chinese currency/rank/match labels, build-time visible-copy audit
+- ✅ local typecheck + 27/27 test files + 172/172 tests + Browser/Douyin builds + release preflight
+- ⏳ final GitHub CI on release head
+- ⏳ Douyin IDE + physical-device safe-area, touch, lifecycle, account, ads and ranking acceptance
+
+### Release definition
+A release candidate is not accepted only because TypeScript/build/tests are green. It must feel complete on a real portrait phone: no exposed deferred PvP UI, no placeholder/debug wording, stable sustained performance, clear 11/11 progression, responsive touch, coherent audio, readable five-theme art, and reliable platform flows.
+
+
 ## Douyin Full Product RC — code-side hardening
 
 `rc/douyin-full-product-release-candidate` prepares release preflight, safe server readiness, logging/compliance review, offline-bundle operator deployment and a real-device PASS/FAIL matrix. Final RC acceptance still depends on out-of-band secrets, formal request/socket legal domains and actual iPhone/Android testing; the branch does not deploy.
@@ -8,7 +32,7 @@
 
 Server-side code2Session, durable accounts, signed sessions and replay-safe reward accounting are implemented on `feat/m2-10-3-douyin-server-auth`. M2.10.4 adds account-bound WebSocket attribution and Solo/PvP progress without changing Protocol v6. Production deployment, real legal-domain validation and provider-backed ad proof remain separate acceptance work.
 
-## Current milestone — M2.10 Douyin Platform Foundation ← IN REVIEW
+## Historical milestone — M2.10 Douyin Platform Foundation
 
 M2.9 runtime feasibility is complete: Three.js/WebGL2, touch/shared-core movement, Protocol v6 WebSocket, and repeated background/foreground lifecycle behavior all work in the Douyin Mini Game runtime.
 
@@ -59,7 +83,7 @@ Implementation on `refactor/m2-10-platform-foundation`: shared Platform contract
 - Palace 2/4/8 stylized low-poly pilot
 - compare visual quality, draw calls, package size and loading
 
-## M2 — Real online duel ← CURRENT
+## M2 — Real online duel ← IMPLEMENTED / DEFERRED FROM FIRST RELEASE
 
 **Definition:** two players on two devices connect through a server. Each device ultimately shows both boards; each player controls only their own board. Players may choose different visual themes.
 

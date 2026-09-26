@@ -23,6 +23,7 @@ export class BattleBoardView {
   private readonly tiles = new Map<number, TileInstance>();
   private readonly tweens: Tween[] = [];
   private readonly environments = new Map<ThemeId, ThemeEnvironment>();
+  private readonly fittedTemplates = new Map<string, THREE.Group>();
   private readonly dragTarget = new THREE.Vector2();
   private readonly dragCurrent = new THREE.Vector2();
   private readonly blockers: THREE.Mesh[] = [];
@@ -78,7 +79,11 @@ export class BattleBoardView {
   get presentation() { return THEME_PRESENTATIONS[this.currentTheme]; }
   snapshot(): BoardTile[] { return this.targetTiles.map(tile => ({ ...tile })); }
   setQuality(quality: QualityLevel): void { this.effects.setQuality(quality); }
-  prewarmTheme(theme: ThemeId): void { THEME_PRESENTATIONS[theme].factory.warmup([2, 4, 8, 16, 32, 64, 128]); }
+  prewarmTheme(theme: ThemeId, values: number[] = [2, 4, 8, 16, 32, 64, 128]): void {
+    THEME_PRESENTATIONS[theme].factory.warmup(values);
+    for (const value of values) void this.getFittedTemplate(theme, value);
+  }
+  prewarmEnvironment(theme: ThemeId): void { void this.getEnvironment(theme); }
 
   setTheme(theme: ThemeId): void {
     if (theme === this.currentTheme) return;
@@ -347,12 +352,25 @@ export class BattleBoardView {
     for (const environment of this.environments.values()) environment.root.traverse(collect);
     this.root.traverse(collect);
     geometry.forEach(item => item.dispose()); materials.forEach(item => item.dispose());
-    this.environments.clear(); this.root.clear(); this.root.removeFromParent();
+    this.environments.clear(); this.fittedTemplates.clear(); this.root.clear(); this.root.removeFromParent();
   }
   private getEnvironment(theme: ThemeId): ThemeEnvironment {
     let environment = this.environments.get(theme);
     if (!environment) { environment = THEME_PRESENTATIONS[theme].environment(this.detail); this.environments.set(theme, environment); }
     return environment;
+  }
+
+  private getFittedTemplate(theme: ThemeId, value: number): THREE.Group {
+    const key = `${theme}:${value}`;
+    let template = this.fittedTemplates.get(key);
+    if (!template) {
+      const presentation = THEME_PRESENTATIONS[theme];
+      const fitted = fitTile(presentation.factory.create(value), value, presentation.sizing);
+      template = fitted.root;
+      template.traverse(node => { if (fitted.animatedParts.includes(node)) node.userData.tileAnimated = true; });
+      this.fittedTemplates.set(key, template);
+    }
+    return template;
   }
 
   async applyClearSkill(removed: readonly BoardTile[]): Promise<void> {
@@ -411,8 +429,10 @@ export class BattleBoardView {
   }
 
   private addTile(tile: BoardTile, spawn: boolean): TileInstance {
-    const visual = fitTile(this.presentation.factory.create(tile.value), tile.value, this.presentation.sizing);
-    const instance: TileInstance = { ...visual, value: tile.value };
+    const root = this.getFittedTemplate(this.currentTheme, tile.value).clone(true) as THREE.Group;
+    const animatedParts: THREE.Object3D[] = [];
+    root.traverse(node => { if (node.userData.tileAnimated) animatedParts.push(node); });
+    const instance: TileInstance = { root, animatedParts, value: tile.value };
     instance.root.position.copy(this.cellPosition(tile.row, tile.col));
     instance.root.name = `Tile-${tile.id}-${tile.value}`;
     this.tileLayer.add(instance.root);

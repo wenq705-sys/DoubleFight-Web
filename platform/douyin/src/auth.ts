@@ -1,4 +1,6 @@
+import { THEME_UNLOCK_ECONOMY } from '../../../shared/index';
 import type { Platform } from '../../../src/platform/types';
+import { THEME_IDS, type ThemeId } from '../../../src/config/themes';
 import type { DouyinApi } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 
@@ -23,16 +25,19 @@ export interface PublicPlayerSeason {
 export interface PublicPlayer {
   id: string;
   displayName: string;
+  avatarUrl?: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
+  soloByTheme?: Record<string, { best: number; highest: number }>;
   pvp: { wins: number; losses: number; draws: number; rating: number };
   rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
   season?: PublicPlayerSeason;
-  themes?: { owned: string[] };
+  themes?: { owned: string[]; adUnlockProgress?: Record<string, number>; adViewsToday?: number; adDailyRemaining?: number };
 }
 
 export interface PvpLeaderboardEntry {
   rank: number;
   displayName: string;
+  avatarUrl?: string;
   rating: number;
   wins: number;
   losses: number;
@@ -49,6 +54,15 @@ export interface ThemeCatalogueEntry {
   id: string;
   free: boolean;
   cost: number;
+  adViews?: number;
+}
+
+export interface ThemeAdUnlockResult {
+  status: 'granted' | 'duplicate' | 'limited' | 'unavailable';
+  unlocked: boolean;
+  progress: number;
+  required: number;
+  dailyRemaining: number;
 }
 
 export interface AuthoritativeRewardResult {
@@ -70,6 +84,22 @@ export interface SoloProgressSyncResult {
 
 type AuthState = { status: 'authenticated'; player: PublicPlayer } | { status: 'local' };
 const TOKEN_KEY = 'doublefight-session-token';
+
+export function reviewSafeDisplayName(displayName: string | undefined, seed = ''): string {
+  const trimmed = displayName?.trim() ?? '';
+  // Review-facing names deliberately allow only CJK Unified Ideographs,
+  // common Chinese middle dots and decimal digits. Any Latin/emoji/other
+  // script falls back to a deterministic Chinese+numeric guest label.
+  if (trimmed && /^[\u3400-\u9FFF0-9·]{1,10}$/.test(trimmed)) return trimmed;
+
+  let hash = 2166136261;
+  const source = seed || trimmed || 'doublefight';
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return `玩家${String(hash % 10000).padStart(4, '0')}`;
+}
 
 export class DouyinAuthClient {
   private token: string | null = null;
@@ -175,6 +205,24 @@ export class DouyinAuthClient {
     return this.state;
   }
 
+  async bindDouyinProfile(): Promise<'updated' | 'cancelled' | 'failed' | 'unavailable'> {
+    if (!this.token || !this.platform.account.requestProfile) return 'unavailable';
+    const profile = await this.platform.account.requestProfile();
+    if (profile.status !== 'granted') return profile.status === 'cancelled' ? 'cancelled' : profile.status === 'unavailable' ? 'unavailable' : 'failed';
+    try {
+      const data = await this.call('POST', '/profile', {
+        displayName: profile.nickName,
+        ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+      });
+      if (!this.isPlayer(data.player)) return 'failed';
+      this.updatePlayer(data.player);
+      return 'updated';
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return 'failed';
+    }
+  }
+
   async claimSidebar(): Promise<'granted' | 'duplicate' | 'unavailable'> {
     if (!this.token) return 'unavailable';
     try {
@@ -224,7 +272,13 @@ export class DouyinAuthClient {
     try {
       const data = await this.call('GET', `/leaderboards/pvp?limit=${safeLimit}`);
       if (!this.isLeaderboard(data)) return null;
-      return data;
+      return {
+        ...data,
+        entries: data.entries.map(entry => ({
+          ...entry,
+          displayName: reviewSafeDisplayName(entry.displayName, `rank-${entry.rank}-${entry.displayName}`),
+        })),
+      };
     } catch (error) {
       this.handleSessionFailure(error);
       return null;
@@ -245,8 +299,66 @@ export class DouyinAuthClient {
     }
   }
 
+  isThemeOwned(theme: ThemeId): boolean {
+    if (THEME_UNLOCK_ECONOMY[theme].free) return true;
+    if (this.state.status === 'authenticated' && this.state.player.themes?.owned.includes(theme)) return true;
+    try {
+      const cached = JSON.parse(this.platform.storage.getItem('doublefight-owned-themes') ?? '[]') as unknown;
+      return Array.isArray(cached) && cached.includes(theme);
+    } catch {
+      return false;
+    }
+  }
+
+  themeUnlockProgress(theme: ThemeId): { progress: number; required: number; dailyRemaining: number } {
+    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    const themes = this.state.status === 'authenticated' ? this.state.player.themes : undefined;
+    return {
+      progress: Math.min(required, Math.max(0, Math.floor(themes?.adUnlockProgress?.[theme] ?? 0))),
+      required,
+      dailyRemaining: Math.max(0, Math.floor(themes?.adDailyRemaining ?? 0)),
+    };
+  }
+
+  async purchaseTheme(theme: ThemeId): Promise<'unlocked' | 'owned' | 'insufficient' | 'unavailable'> {
+    await this.start();
+    if (!this.token || this.state.status !== 'authenticated') return 'unavailable';
+    if (this.isThemeOwned(theme)) return 'owned';
+    if (this.state.player.rewards.currency < THEME_UNLOCK_ECONOMY[theme].coinCost) return 'insufficient';
+    const requestId = `theme_${theme}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    try {
+      const data = await this.call('POST', '/themes/unlock', { themeId: theme, requestId });
+      this.updatePlayer(data.player);
+      return data.unlocked === true ? 'unlocked' : 'insufficient';
+    } catch (error) {
+      if (error instanceof HttpError && error.status === 409) return 'insufficient';
+      this.handleSessionFailure(error);
+      return 'unavailable';
+    }
+  }
+
+  async claimThemeUnlockAd(theme: ThemeId, claimId: string): Promise<ThemeAdUnlockResult> {
+    await this.start();
+    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    if (!this.token) return { status: 'unavailable', unlocked: false, progress: 0, required, dailyRemaining: 0 };
+    try {
+      const data = await this.call('POST', '/themes/unlock/ad', { themeId: theme, claimId });
+      this.updatePlayer(data.player);
+      return {
+        status: data.limited === true ? 'limited' : data.granted === true ? 'granted' : 'duplicate',
+        unlocked: data.unlocked === true,
+        progress: safeCount(data.progress, required),
+        required: safeCount(data.required, required) || required,
+        dailyRemaining: safeCount(data.dailyRemaining, 2),
+      };
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return { status: 'unavailable', unlocked: false, progress: 0, required, dailyRemaining: 0 };
+    }
+  }
+
   async syncSoloProgressDetailed(
-    theme: 'kingdom' | 'palace',
+    theme: ThemeId,
     best: number,
     highest: number,
   ): Promise<SoloProgressSyncResult> {
@@ -266,7 +378,7 @@ export class DouyinAuthClient {
     }
   }
 
-  async syncSoloProgress(theme: 'kingdom' | 'palace', best: number, highest: number): Promise<boolean> {
+  async syncSoloProgress(theme: ThemeId, best: number, highest: number): Promise<boolean> {
     return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
   }
 
@@ -296,9 +408,12 @@ export class DouyinAuthClient {
   }
 
   private restoreSoloCache(player: PublicPlayer): void {
-    for (const theme of ['kingdom', 'palace'] as const) {
-      const best = theme === 'kingdom' ? player.solo.bestKingdom : player.solo.bestPalace;
-      const highest = theme === 'kingdom' ? player.solo.highestKingdom : player.solo.highestPalace;
+    for (const theme of THEME_IDS) {
+      const generic = player.soloByTheme?.[theme];
+      const best = generic?.best
+        ?? (theme === 'kingdom' ? player.solo.bestKingdom : theme === 'palace' ? player.solo.bestPalace : 0);
+      const highest = generic?.highest
+        ?? (theme === 'kingdom' ? player.solo.highestKingdom : theme === 'palace' ? player.solo.highestPalace : 2);
       const bestKey = `doublefight-best-${theme}`;
       const highestKey = `doublefight-highest-${theme}`;
       if (Number.isSafeInteger(best) && best > Number(this.platform.storage.getItem(bestKey) ?? 0)) {
@@ -308,12 +423,18 @@ export class DouyinAuthClient {
         this.platform.storage.setItem(highestKey, String(highest));
       }
     }
+    const ownedThemes = (player.themes?.owned ?? []).filter((theme): theme is ThemeId => THEME_IDS.includes(theme as ThemeId));
+    this.platform.storage.setItem('doublefight-owned-themes', JSON.stringify(ownedThemes));
   }
 
   private updatePlayer(value: unknown): void {
     if (this.isPlayer(value)) {
-      this.state = { status: 'authenticated', player: value };
-      this.restoreSoloCache(value);
+      const player: PublicPlayer = {
+        ...value,
+        displayName: reviewSafeDisplayName(value.displayName, value.id),
+      };
+      this.state = { status: 'authenticated', player };
+      this.restoreSoloCache(player);
     }
   }
 
@@ -321,6 +442,7 @@ export class DouyinAuthClient {
     return Boolean(value && typeof value === 'object'
       && typeof (value as PublicPlayer).id === 'string'
       && typeof (value as PublicPlayer).displayName === 'string'
+      && ((value as PublicPlayer).avatarUrl === undefined || typeof (value as PublicPlayer).avatarUrl === 'string')
       && typeof (value as PublicPlayer).solo?.bestKingdom === 'number'
       && typeof (value as PublicPlayer).solo?.highestKingdom === 'number'
       && typeof (value as PublicPlayer).solo?.bestPalace === 'number'
@@ -339,6 +461,7 @@ export class DouyinAuthClient {
       && candidate.entries.every(entry => entry
         && Number.isInteger(entry.rank)
         && typeof entry.displayName === 'string'
+        && (entry.avatarUrl === undefined || typeof entry.avatarUrl === 'string')
         && typeof entry.rating === 'number'
         && typeof entry.wins === 'number'
         && typeof entry.losses === 'number'
@@ -350,7 +473,8 @@ export class DouyinAuthClient {
     return Boolean(value && typeof value === 'object'
       && typeof (value as ThemeCatalogueEntry).id === 'string'
       && typeof (value as ThemeCatalogueEntry).free === 'boolean'
-      && typeof (value as ThemeCatalogueEntry).cost === 'number');
+      && typeof (value as ThemeCatalogueEntry).cost === 'number'
+      && ((value as ThemeCatalogueEntry).adViews === undefined || typeof (value as ThemeCatalogueEntry).adViews === 'number'));
   }
 
   private call(method: 'GET' | 'POST', path: string, data?: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -392,4 +516,10 @@ function safeJson(raw: string): unknown {
 
 function safeAmount(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function safeCount(value: unknown, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(max, Math.floor(value)))
+    : 0;
 }

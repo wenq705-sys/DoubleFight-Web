@@ -1,5 +1,6 @@
 import type {
   DouyinApi,
+  DouyinAdError,
   DouyinBannerAd,
   DouyinInterstitialAd,
   DouyinRewardedVideoAd,
@@ -10,20 +11,46 @@ export type RewardedResult = 'rewarded' | 'skipped' | 'unavailable';
 
 export class DouyinCommercial {
   private rewarded: DouyinRewardedVideoAd | null = null;
+  private rewardedBusy = false;
   private banner: DouyinBannerAd | null = null;
   private bannerVisible = false;
   private readonly startedAt = Date.now();
   private lastInterstitialAt = 0;
   private lastRewardedAt = 0;
+  private rewardedTriggerTimes: number[] = [];
   private interstitialBusy = false;
+  private lastAdError: DouyinAdError | null = null;
 
-  constructor(private readonly api: DouyinApi) {
-    this.prepareRewarded();
+  constructor(private readonly api: DouyinApi) {}
+
+  lastFailureHint(): string {
+    const error = this.lastAdError;
+    if (!error) return '';
+    const code = error.errNo ?? error.errCode;
+    return code !== undefined ? `（广告错误 ${code}）` : '（广告服务暂不可用）';
+  }
+
+  private rememberError(error: unknown): void {
+    if (error && typeof error === 'object') {
+      const value = error as DouyinAdError;
+      this.lastAdError = { errCode: value.errCode, errNo: value.errNo, errMsg: value.errMsg };
+      return;
+    }
+    this.lastAdError = { errMsg: String(error ?? 'unknown') };
   }
 
   async showRewarded(): Promise<RewardedResult> {
-    const ad = this.rewarded ?? this.prepareRewarded();
+    this.lastAdError = null;
+    // Douyin traffic-master rules require the rewarded ad request to be
+    // created only after the user's explicit tap. Never pre-create it.
+    if (this.rewardedBusy) return 'unavailable';
+    const now = Date.now();
+    this.rewardedTriggerTimes = this.rewardedTriggerTimes.filter(timestamp => now - timestamp < 60_000);
+    if (this.rewardedTriggerTimes.length >= 5) return 'unavailable';
+    const ad = this.prepareRewarded();
     if (!ad) return 'unavailable';
+    this.rewardedTriggerTimes.push(now);
+    this.rewardedBusy = true;
 
     return new Promise<RewardedResult>(async (resolve) => {
       let settled = false;
@@ -32,13 +59,17 @@ export class DouyinCommercial {
         settled = true;
         ad.offClose?.(onClose);
         ad.offError?.(onError);
+        this.rewardedBusy = false;
         resolve(value);
       };
       const onClose = (result: { isEnded?: boolean; count?: number }) => {
         this.lastRewardedAt = Date.now();
         finish(result.isEnded ? 'rewarded' : 'skipped');
       };
-      const onError = () => finish('unavailable');
+      const onError = (error: DouyinAdError) => {
+        this.rememberError(error);
+        finish('unavailable');
+      };
 
       ad.onClose(onClose);
       ad.onError(onError);
@@ -46,13 +77,15 @@ export class DouyinCommercial {
       try {
         await ad.load();
         await ad.show();
-      } catch {
+      } catch (error) {
+        this.rememberError(error);
         finish('unavailable');
       }
     });
   }
 
   async maybeShowInterstitial(force = false): Promise<boolean> {
+    this.lastAdError = null;
     if (!this.api.createInterstitialAd || this.interstitialBusy) return false;
     const now = Date.now();
     if (!force) {
@@ -70,7 +103,8 @@ export class DouyinCommercial {
       instance.onClose(() => {
         try { instance.destroy(); } catch { /* native instance may already be invalid */ }
       });
-      instance.onError(() => {
+      instance.onError((error) => {
+        this.rememberError(error);
         try { instance.destroy(); } catch { /* native instance may already be invalid */ }
       });
       await instance.load();
@@ -78,7 +112,8 @@ export class DouyinCommercial {
       shown = true;
       this.lastInterstitialAt = Date.now();
       return true;
-    } catch {
+    } catch (error) {
+      this.rememberError(error);
       return false;
     } finally {
       this.interstitialBusy = false;
@@ -92,7 +127,8 @@ export class DouyinCommercial {
     if (this.bannerVisible) return;
     if (this.banner) {
       try {
-        void this.banner.show().then(() => { this.bannerVisible = true; }).catch(() => {
+        void this.banner.show().then(() => { this.bannerVisible = true; }).catch((error) => {
+          this.rememberError(error);
           this.bannerVisible = false;
         });
       } catch {
@@ -120,7 +156,8 @@ export class DouyinCommercial {
         banner.style.left = Math.max(0, (windowWidth - size.width) / 2);
         banner.style.top = Math.max(0, windowHeight - size.height);
       });
-      banner.onError(() => {
+      banner.onError((error) => {
+        this.rememberError(error);
         if (this.banner === banner) {
           this.bannerVisible = false;
           this.banner = null;
@@ -129,12 +166,14 @@ export class DouyinCommercial {
       });
       banner.onLoad(() => {
         if (this.banner !== banner) return;
-        void banner.show().then(() => { this.bannerVisible = true; }).catch(() => {
+        void banner.show().then(() => { this.bannerVisible = true; }).catch((error) => {
+          this.rememberError(error);
           this.bannerVisible = false;
         });
       });
       this.banner = banner;
-    } catch {
+    } catch (error) {
+      this.rememberError(error);
       this.banner = null;
       this.bannerVisible = false;
     }
@@ -153,17 +192,24 @@ export class DouyinCommercial {
 
   dispose(): void {
     this.destroyBanner();
+    this.rewardedBusy = false;
+    try { this.rewarded?.destroy?.(); } catch { /* optional native cleanup */ }
     this.rewarded = null;
   }
 
   private prepareRewarded(): DouyinRewardedVideoAd | null {
-    if (!this.api.createRewardedVideoAd) return null;
+    if (this.rewarded) return this.rewarded;
+    if (!this.api.createRewardedVideoAd) {
+      this.rememberError({ errMsg: 'createRewardedVideoAd unavailable' });
+      return null;
+    }
     try {
       this.rewarded = this.api.createRewardedVideoAd({
         adUnitId: DOUYIN_PRODUCT_CONFIG.ads.rewarded,
       });
       return this.rewarded;
-    } catch {
+    } catch (error) {
+      this.rememberError(error);
       this.rewarded = null;
       return null;
     }

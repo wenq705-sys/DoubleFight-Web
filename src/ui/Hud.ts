@@ -1,4 +1,4 @@
-import { KINGDOM_RANKS, PALACE_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
+import { THEMES, pieceName, type ThemeId, type ThemeMeta } from '../config/themes';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 export class Hud {
@@ -81,9 +81,7 @@ export class Hud {
   }
 
   setHighest(value: number, theme: ThemeId): void {
-    this.highestValue.textContent = theme === 'palace'
-      ? (PALACE_RANKS[value] ?? '凤仪')
-      : (KINGDOM_RANKS[value] ?? '王国奇观');
+    this.highestValue.textContent = pieceName(theme, value);
   }
 
   setTheme(theme: ThemeMeta): void {
@@ -104,19 +102,18 @@ export class Hud {
   }
 
   showMerge(value: number, chain: number, theme: ThemeId): void {
-    if (theme === 'palace') {
-      this.toast.textContent =
-        value >= 2048 ? '母仪天下!' :
-        value >= 512 ? '凤仪晋升!' :
-        chain >= 2 ? `连升 ×${chain}` :
-        '晋升!';
-    } else {
-      this.toast.textContent =
-        value >= 2048 ? 'KINGDOM WONDER!' :
-        value >= 1024 ? 'ROYAL ASCENSION!' :
-        chain >= 2 ? `COMBO ×${chain}` :
-        'MERGE!';
-    }
+    const finalCopy: Record<ThemeId, string> = {
+      kingdom: '王国奇观!',
+      palace: '母仪天下!',
+      zodiac: '神龙降临!',
+      candy: '糖果奇迹!',
+      dreamhouse: '梦想成真!',
+    };
+    this.toast.textContent =
+      value >= 2048 ? finalCopy[theme] :
+      value >= 1024 ? `${THEMES[theme].highestLabel}在望!` :
+      chain >= 2 ? `连升 ×${chain}` :
+      '合成!';
     this.toast.classList.remove('hud__toast--show');
     void this.toast.offsetWidth;
     this.toast.classList.add('hud__toast--show');

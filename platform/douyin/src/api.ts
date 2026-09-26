@@ -2,6 +2,7 @@ export interface DouyinTouchPoint { identifier: number; clientX: number; clientY
 export interface DouyinTouchEvent {
   touches: DouyinTouchPoint[];
   changedTouches: DouyinTouchPoint[];
+  preventDefault?(): void;
 }
 
 export interface DouyinSocketTask {
@@ -13,13 +14,27 @@ export interface DouyinSocketTask {
   onError(listener: (error: { errMsg?: string }) => void): void;
 }
 
+export interface DouyinImage {
+  src: string;
+  width: number;
+  height: number;
+  addEventListener(type: 'load' | 'error', listener: (event: { type?: string; target?: unknown }) => void): void;
+  removeEventListener?(type: 'load' | 'error', listener: (event: { type?: string; target?: unknown }) => void): void;
+}
+
 export interface DouyinCanvas {
   width: number;
   height: number;
+  style?: {
+    touchAction?: string;
+    msTouchAction?: string;
+    userSelect?: string;
+    webkitUserSelect?: string;
+  };
   getContext(kind: '2d', options?: object): CanvasRenderingContext2D | null;
   getContext(kind: 'webgl2' | 'webgl' | 'experimental-webgl', options?: object): WebGLRenderingContext | null;
-  addEventListener?: (name: string, listener: EventListener) => void;
-  removeEventListener?: (name: string, listener: EventListener) => void;
+  addEventListener?: (name: string, listener: EventListener, options?: AddEventListenerOptions | boolean) => void;
+  removeEventListener?: (name: string, listener: EventListener, options?: EventListenerOptions | boolean) => void;
 }
 
 export interface DouyinInnerAudioContext {
@@ -40,6 +55,7 @@ export interface DouyinAdError { errCode?: number; errNo?: number; errMsg?: stri
 export interface DouyinRewardedVideoAd {
   load(): Promise<void>;
   show(): Promise<void>;
+  destroy?(): void;
   onLoad(listener: () => void): void;
   offLoad?(listener: () => void): void;
   onError(listener: (error: DouyinAdError) => void): void;
@@ -82,12 +98,17 @@ export interface DouyinLaunchOptions extends DouyinShowOptions {
 
 export interface DouyinApi {
   createCanvas(): DouyinCanvas;
+  createImage?(): DouyinImage;
   getSystemInfoSync(): {
     screenWidth: number;
     screenHeight: number;
     windowWidth?: number;
     windowHeight?: number;
     pixelRatio?: number;
+    platform?: 'ios' | 'android' | 'devtools' | string;
+    model?: string;
+    brand?: string;
+    system?: string;
     safeArea?: { top: number; left: number; right: number; bottom: number };
   };
   getMenuButtonLayout?(): { width: number; height: number; top: number; right: number; bottom: number; left: number };
@@ -106,6 +127,32 @@ export interface DouyinApi {
     fail: (error: { errMsg?: string }) => void;
   }): void;
   checkSession?(options: { success?: () => void; fail?: (error: { errMsg?: string }) => void }): void;
+  getUserInfo?(options: {
+    withCredentials?: boolean;
+    success?: (result: {
+      errMsg?: string;
+      userInfo?: { nickName?: string; avatarUrl?: string; gender?: number };
+      rawData?: string;
+      signature?: string;
+      encryptedData?: string;
+      iv?: string;
+    }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
+  getUserProfile?(options: {
+    force?: boolean;
+    success?: (result: {
+      errMsg?: string;
+      userInfo?: { nickName?: string; avatarUrl?: string; gender?: number };
+      rawData?: string;
+      signature?: string;
+      encryptedData?: string;
+      iv?: string;
+    }) => void;
+    fail?: (error: { errMsg?: string; errorCode?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
   request?(options: {
     url: string;
     method: 'GET' | 'POST';
@@ -187,7 +234,7 @@ export interface DouyinApi {
     extra?: string;
     zoneId: string;
     success?: (result?: unknown) => void;
-    fail?: (error: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number; errorCode?: number }) => void;
   }): void;
   getImRankList?(options: {
     rankType: string;
@@ -197,6 +244,6 @@ export interface DouyinApi {
     rankTitle: string;
     zoneId: string;
     success?: (result?: unknown) => void;
-    fail?: (error: { errMsg?: string }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number; errorCode?: number }) => void;
   }): void;
 }
