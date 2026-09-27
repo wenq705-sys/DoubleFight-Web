@@ -62,6 +62,17 @@ export class DouyinSoloScene {
   private readonly camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   private readonly duelCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 80);
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly worldTarget = new THREE.WebGLRenderTarget(1, 1, {
+    depthBuffer: true,
+    stencilBuffer: false,
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    generateMipmaps: false,
+  });
+  private readonly compositeScene = new THREE.Scene();
+  private readonly compositeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private readonly compositeMaterial: THREE.MeshBasicMaterial;
+  private readonly compositePlane: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   private readonly clock = new THREE.Clock();
   private readonly cameraHome = new THREE.Vector3();
   private readonly cameraTarget = new THREE.Vector3();
@@ -93,6 +104,7 @@ export class DouyinSoloScene {
   // Start conservatively on mobile. Promote to high only after sustained real-frame evidence.
   private quality: 'high' | 'medium' | 'low' = 'medium';
   private currentDpr = 1.75;
+  private screenDpr = 1;
   private frameWidth = 1;
   private frameHeight = 1;
   private devicePixelRatio = 1;
@@ -127,7 +139,10 @@ export class DouyinSoloScene {
   private homeSlide: { direction: -1 | 1; target: ThemeId; elapsed: number; switched: boolean } | null = null;
   private startupPreloadTasks: Array<() => void> = [];
   private startupPreloadDone = 0;
+  private homeWarmupTasks: Array<{ theme: ThemeId; final: boolean; run: () => void }> = [];
   private readonly homePreparedThemes = new Set<ThemeId>();
+  private pendingHomeSlideDirection: -1 | 1 | null = null;
+  private nextHomeWarmupAt = 0;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -164,6 +179,17 @@ export class DouyinSoloScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.autoClear = false;
+    this.renderer.info.autoReset = false;
+
+    this.compositeMaterial = new THREE.MeshBasicMaterial({
+      map: this.worldTarget.texture,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: true,
+    });
+    this.compositePlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.compositeMaterial);
+    this.compositePlane.position.z = -0.5;
+    this.compositeScene.add(this.compositePlane);
 
     this.onboardingOpen = this.platform.storage.getItem('doublefight-onboarding-complete') !== '1';
     this.soundEnabled = this.platform.storage.getItem('doublefight-sound-enabled') !== '0';
@@ -202,14 +228,17 @@ export class DouyinSoloScene {
     if (!this.uiContext) throw new Error('Douyin Canvas2D is required for the product HUD.');
     this.uiTexture = new THREE.CanvasTexture(this.uiCanvas as unknown as HTMLCanvasElement);
     this.uiTexture.colorSpace = THREE.SRGBColorSpace;
-    this.uiTexture.minFilter = THREE.LinearFilter;
-    this.uiTexture.magFilter = THREE.LinearFilter;
+    // HUD backing pixels already match the high-DPR screen framebuffer.
+    // Nearest sampling avoids an extra linear blur pass over anti-aliased Canvas2D text.
+    this.uiTexture.minFilter = THREE.NearestFilter;
+    this.uiTexture.magFilter = THREE.NearestFilter;
     this.uiTexture.generateMipmaps = false;
     this.uiMaterial = new THREE.MeshBasicMaterial({
       map: this.uiTexture,
       transparent: true,
       depthTest: false,
       depthWrite: false,
+      toneMapped: false,
     });
     this.uiPlane = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.uiMaterial);
     this.uiPlane.position.z = -1;
@@ -264,6 +293,14 @@ export class DouyinSoloScene {
     if (this.disposed) return;
     this.resize();
     this.refreshHud();
+  }
+
+  suspendRuntime(): void {
+    this.audio.suspend();
+  }
+
+  resumeRuntime(): void {
+    if (!this.healthNoticeOpen) this.audio.resume();
   }
 
   openSharedRoom(code: string): void {
@@ -384,6 +421,9 @@ export class DouyinSoloScene {
       const button = this.healthNoticeButton(info.width, info.height);
       if (this.startupPreloadTasks.length === 0 && this.hit(x, y, button)) {
         this.healthNoticeOpen = false;
+        if (this.boardView.theme !== this.currentTheme) this.boardView.setTheme(this.currentTheme);
+        this.boardView.reset(HOME_TILES);
+        this.applyThemeLook();
         this.resize();
         this.audio.resume();
         this.platform.haptics.trigger('light');
@@ -423,55 +463,103 @@ export class DouyinSoloScene {
   }
 
   private prepareStartupPreload(): void {
+    const theme = this.currentTheme;
+    this.startupPreloadTasks = [
+      () => this.boardView.prewarmEnvironment(theme),
+      ...[32, 64, 128, 256, 512, 1024].map(value => () => this.boardView.prewarmTheme(theme, [value])),
+      () => this.homePreparedThemes.add(theme),
+      () => this.prewarmThemeGpu(theme),
+      () => {
+        if (this.boardView.theme !== theme) this.boardView.setTheme(theme);
+        this.boardView.reset(HOME_TILES);
+        this.applyThemeLook();
+      },
+    ];
+    this.startupPreloadDone = 0;
+    this.prepareHomeThemeWarmup();
+  }
+
+  private prepareHomeThemeWarmup(): void {
     const start = THEME_IDS.indexOf(this.currentTheme);
-    const ordered: ThemeId[] = [this.currentTheme];
-    for (let offset = 1; ordered.length < THEME_IDS.length; offset += 1) {
+    const ordered: ThemeId[] = [];
+    for (let offset = 1; ordered.length < THEME_IDS.length - 1; offset += 1) {
       for (const sign of [1, -1] as const) {
         const candidate = THEME_IDS[(start + sign * offset + THEME_IDS.length * 4) % THEME_IDS.length];
-        if (!ordered.includes(candidate)) ordered.push(candidate);
-        if (ordered.length >= THEME_IDS.length) break;
+        if (candidate !== this.currentTheme && !ordered.includes(candidate)) ordered.push(candidate);
+        if (ordered.length >= THEME_IDS.length - 1) break;
       }
     }
 
-    const adjacent = new Set<ThemeId>(ordered.slice(0, Math.min(3, ordered.length)));
-    const tasks: Array<() => void> = [];
+    this.homeWarmupTasks = [];
     for (const theme of ordered) {
-      tasks.push(() => this.boardView.prewarmEnvironment(theme));
+      this.homeWarmupTasks.push({ theme, final: false, run: () => this.boardView.prewarmEnvironment(theme) });
       for (const value of [32, 64, 128, 256, 512, 1024]) {
-        tasks.push(() => this.boardView.prewarmTheme(theme, [value]));
+        this.homeWarmupTasks.push({
+          theme,
+          final: false,
+          run: () => this.boardView.prewarmTheme(theme, [value]),
+        });
       }
-      // Never permanently lock navigation if one optional prewarm item fails.
-      // The theme remains switchable; any missing cached item can be created on demand.
-      tasks.push(() => this.homePreparedThemes.add(theme));
-      if (adjacent.has(theme)) tasks.push(() => this.prewarmThemeGpu(theme));
+      this.homeWarmupTasks.push({
+        theme,
+        final: false,
+        run: () => this.prewarmThemeGpu(theme),
+      });
+      this.homeWarmupTasks.push({ theme, final: true, run: () => {} });
     }
-    tasks.push(() => {
-      if (this.boardView.theme !== this.currentTheme) this.boardView.setTheme(this.currentTheme);
-      this.boardView.reset(HOME_TILES);
-      this.applyThemeLook();
-    });
-
-    this.startupPreloadTasks = tasks;
-    this.startupPreloadDone = 0;
   }
 
   private stepStartupPreload(): void {
     const task = this.startupPreloadTasks.shift();
     if (!task) return;
-    try { task(); } catch { /* Preload failure must not trap the player on startup. */ }
+    try { task(); } catch { /* Critical preload failure falls back to lazy creation. */ }
     this.startupPreloadDone += 1;
     this.refreshHud();
   }
 
+  private stepHomeThemeWarmup(): void {
+    if (this.homeWarmupTasks.length === 0) return;
+    const urgent = this.pendingHomeSlideDirection !== null;
+    if (!urgent && this.visualTime < this.nextHomeWarmupAt) return;
+
+    const task = this.homeWarmupTasks.shift();
+    if (!task) return;
+    try { task.run(); } catch { /* Missing cache entries can still be created on demand. */ }
+    if (task.final) this.homePreparedThemes.add(task.theme);
+    this.nextHomeWarmupAt = urgent ? this.visualTime : this.visualTime + 0.08;
+
+    if (this.pendingHomeSlideDirection !== null) {
+      const direction = this.pendingHomeSlideDirection;
+      const target = adjacentTheme(this.currentTheme, direction === -1 ? 1 : -1);
+      if (this.homePreparedThemes.has(target)) {
+        this.pendingHomeSlideDirection = null;
+        this.notice = null;
+        this.beginHomeSlide(direction, target);
+      }
+    }
+  }
+
   private prewarmThemeGpu(theme: ThemeId): void {
-    this.boardView.setTheme(theme);
-    this.boardView.reset(HOME_TILES);
-    this.camera.position.copy(this.cameraHome);
-    this.camera.lookAt(this.cameraTarget);
-    this.renderer.setScissorTest(false);
-    this.renderer.setViewport(0, 0, this.frameWidth, this.frameHeight);
-    this.renderer.compile(this.scene, this.camera);
-    this.renderer.render(this.scene, this.camera);
+    const previousTheme = this.boardView.theme;
+    const previousTarget = this.renderer.getRenderTarget();
+    try {
+      this.boardView.setTheme(theme);
+      this.boardView.reset(HOME_TILES);
+      this.camera.position.copy(this.cameraHome);
+      this.camera.lookAt(this.cameraTarget);
+      this.worldTarget.viewport.set(0, 0, this.worldTarget.width, this.worldTarget.height);
+      this.worldTarget.scissor.set(0, 0, this.worldTarget.width, this.worldTarget.height);
+      this.worldTarget.scissorTest = false;
+      this.renderer.setRenderTarget(this.worldTarget);
+      this.renderer.compile(this.scene, this.camera);
+      this.renderer.render(this.scene, this.camera);
+    } finally {
+      this.renderer.setRenderTarget(previousTarget);
+      if (this.boardView.theme !== previousTheme) {
+        this.boardView.setTheme(previousTheme);
+        this.boardView.reset(HOME_TILES);
+      }
+    }
   }
 
   private startupPreloadProgress(): number {
@@ -497,11 +585,13 @@ export class DouyinSoloScene {
 
   render(): void {
     if (this.disposed) return;
+    this.renderer.info.reset();
     const delta = Math.min(0.033, this.clock.getDelta());
     this.visualTime += delta;
 
     if (this.healthNoticeOpen) {
-      this.stepStartupPreload();
+      if (this.startupPreloadTasks.length > 0) this.stepStartupPreload();
+      else this.stepHomeThemeWarmup();
       this.renderer.setScissorTest(false);
       this.renderer.setViewport(0, 0, this.frameWidth, this.frameHeight);
       this.renderer.setClearColor(0xe9aa72, 1);
@@ -522,9 +612,11 @@ export class DouyinSoloScene {
     }
 
     this.updateHomeAmbient();
+    if (this.mode === 'home' && !this.homeSlide) this.stepHomeThemeWarmup();
     this.updateHomeSlide(delta);
     this.updateMomentLighting();
 
+    this.beginWorldPass();
     if (duel && online) {
       online.local.update(delta);
       online.remote.update(delta);
@@ -556,18 +648,19 @@ export class DouyinSoloScene {
       this.camera.position.copy(home);
       this.camera.lookAt(this.cameraTarget);
       this.renderer.setScissorTest(false);
-      this.renderer.setViewport(0, 0, this.frameWidth, this.frameHeight);
+      this.renderer.setViewport(0, 0, this.worldTarget.width, this.worldTarget.height);
       this.renderer.setClearColor(this.boardView.presentation.sky, 1);
       this.renderer.clear();
       this.renderer.render(this.scene, this.camera);
     }
+    this.presentWorld();
 
     if (this.mode === 'solo' && this.mergeBurst) {
       if (this.visualTime >= this.mergeBurst.until) {
         this.mergeBurst = null;
         this.refreshHud();
       } else if (this.visualTime >= this.nextDynamicHudAt) {
-        this.nextDynamicHudAt = this.visualTime + 1 / 15;
+        this.nextDynamicHudAt = this.visualTime + 1 / 10;
         this.refreshHud();
       }
     }
@@ -603,6 +696,9 @@ export class DouyinSoloScene {
     this.uiTexture.dispose();
     this.uiMaterial.dispose();
     this.uiPlane.geometry.dispose();
+    this.compositeMaterial.dispose();
+    this.compositePlane.geometry.dispose();
+    this.worldTarget.dispose();
     this.renderer.dispose();
     this.commercial.dispose();
     this.audio.dispose();
@@ -1258,12 +1354,13 @@ export class DouyinSoloScene {
     this.frameWidth = width;
     this.frameHeight = height;
     this.devicePixelRatio = Math.max(1, info.pixelRatio);
-    const dpr = this.healthNoticeOpen
+    this.screenDpr = this.healthNoticeOpen
       ? Math.min(3, this.devicePixelRatio)
-      : Math.min(this.currentDpr, this.devicePixelRatio);
-    if (!this.healthNoticeOpen) this.currentDpr = dpr;
-    this.renderer.setPixelRatio(dpr);
+      : Math.min(2.25, this.devicePixelRatio);
+    this.currentDpr = Math.min(this.currentDpr, this.devicePixelRatio);
+    this.renderer.setPixelRatio(this.screenDpr);
     this.renderer.setSize(width, height, false);
+    this.resizeWorldTarget();
 
     this.camera.aspect = width / height;
     this.camera.fov = 42;
@@ -1318,8 +1415,31 @@ export class DouyinSoloScene {
     const targetDpr = Math.min(Math.max(1, info.pixelRatio), maxDpr);
     if (Math.abs(this.currentDpr - targetDpr) < 0.04) return;
     this.currentDpr = targetDpr;
-    this.renderer.setPixelRatio(targetDpr);
-    this.renderer.setSize(Math.max(1, info.width), Math.max(1, info.height), false);
+    this.resizeWorldTarget();
+  }
+
+  private resizeWorldTarget(): void {
+    const width = Math.max(1, Math.round(this.frameWidth * this.currentDpr));
+    const height = Math.max(1, Math.round(this.frameHeight * this.currentDpr));
+    if (this.worldTarget.width !== width || this.worldTarget.height !== height) {
+      this.worldTarget.setSize(width, height);
+    }
+  }
+
+  private beginWorldPass(): void {
+    this.worldTarget.viewport.set(0, 0, this.worldTarget.width, this.worldTarget.height);
+    this.worldTarget.scissor.set(0, 0, this.worldTarget.width, this.worldTarget.height);
+    this.worldTarget.scissorTest = false;
+    this.renderer.setRenderTarget(this.worldTarget);
+  }
+
+  private presentWorld(): void {
+    this.renderer.setRenderTarget(null);
+    this.renderer.setScissorTest(false);
+    this.renderer.setViewport(0, 0, this.frameWidth, this.frameHeight);
+    this.renderer.setClearColor(0x000000, 1);
+    this.renderer.clear(true, true, true);
+    this.renderer.render(this.compositeScene, this.compositeCamera);
   }
 
   private applyQuality(quality: 'high' | 'medium' | 'low'): void {
@@ -1345,16 +1465,17 @@ export class DouyinSoloScene {
   }
 
   private renderDuel(): void {
-    const info = this.platform.getSystemInfo();
-    const width = Math.max(1, info.width);
-    const height = Math.max(1, info.height);
+    const width = Math.max(1, this.worldTarget.width);
+    const height = Math.max(1, this.worldTarget.height);
     const localHeight = Math.round(height * 0.56);
     const remoteHeight = height - localHeight;
 
-    this.renderer.setScissorTest(true);
     this.renderDuelBoard('local', 0, width, localHeight);
     this.renderDuelBoard('remote', localHeight, width, remoteHeight);
-    this.renderer.setScissorTest(false);
+    this.worldTarget.viewport.set(0, 0, width, height);
+    this.worldTarget.scissor.set(0, 0, width, height);
+    this.worldTarget.scissorTest = false;
+    this.renderer.setRenderTarget(this.worldTarget);
     this.online!.local.root.visible = true;
     this.online!.remote.root.visible = true;
   }
@@ -1374,8 +1495,10 @@ export class DouyinSoloScene {
     this.duelCamera.lookAt(0, 0.6, 0.18);
     this.duelCamera.updateProjectionMatrix();
 
-    this.renderer.setViewport(0, bottom, width, height);
-    this.renderer.setScissor(0, bottom, width, height);
+    this.worldTarget.viewport.set(0, bottom, width, height);
+    this.worldTarget.scissor.set(0, bottom, width, height);
+    this.worldTarget.scissorTest = true;
+    this.renderer.setRenderTarget(this.worldTarget);
     this.scene.background = new THREE.Color(board.presentation.sky);
     this.scene.fog = new THREE.Fog(board.presentation.fog, 20, 48);
     this.renderer.clear(true, true, false);
@@ -1427,10 +1550,20 @@ export class DouyinSoloScene {
     if (this.mode !== 'home' || this.homeSlide) return;
     const target = adjacentTheme(this.currentTheme, direction === -1 ? 1 : -1);
     if (!this.homePreparedThemes.has(target)) {
-      this.notice = { text: '主题资源仍在准备，请稍候', until: this.visualTime + 0.8 };
+      this.pendingHomeSlideDirection = direction;
+      const priority = this.homeWarmupTasks.filter(task => task.theme === target);
+      const rest = this.homeWarmupTasks.filter(task => task.theme !== target);
+      this.homeWarmupTasks = [...priority, ...rest];
+      this.notice = { text: '正在准备主题资源…', until: this.visualTime + 6 };
+      this.nextHomeWarmupAt = this.visualTime;
       this.refreshHud();
       return;
     }
+    this.beginHomeSlide(direction, target);
+  }
+
+  private beginHomeSlide(direction: -1 | 1, target: ThemeId): void {
+    if (this.mode !== 'home' || this.homeSlide) return;
     this.homeSlide = { direction, target, elapsed: 0, switched: false };
     this.platform.haptics.trigger('light');
   }
@@ -1567,7 +1700,7 @@ export class DouyinSoloScene {
     const height = Math.max(1, Math.round(info.height));
     const scale = this.healthNoticeOpen
       ? Math.min(3, Math.max(1, this.devicePixelRatio))
-      : Math.min(2, Math.max(1, this.currentDpr));
+      : Math.min(2.25, Math.max(1, this.screenDpr));
     const targetCanvasWidth = Math.round(width * scale);
     const targetCanvasHeight = Math.round(height * scale);
     if (this.uiCanvas.width !== targetCanvasWidth) this.uiCanvas.width = targetCanvasWidth;
@@ -1650,7 +1783,7 @@ export class DouyinSoloScene {
     ctx.stroke();
 
     ctx.fillStyle = '#5d3024';
-    ctx.font = '900 18px sans-serif';
+    ctx.font = '900 18px "PingFang SC", "Microsoft YaHei", sans-serif';
     ctx.fillText('《健康游戏忠告》', width / 2, panelY + 36);
 
     const lines = [
@@ -1659,7 +1792,7 @@ export class DouyinSoloScene {
       '适度游戏益脑，沉迷游戏伤身。',
       '合理安排时间，享受健康生活。',
     ];
-    ctx.font = '800 15px sans-serif';
+    ctx.font = '800 15px "PingFang SC", "Microsoft YaHei", sans-serif';
     lines.forEach((line, index) => {
       ctx.fillStyle = index % 2 === 0 ? '#5f3529' : '#6b3c2f';
       ctx.fillText(line, width / 2, panelY + 80 + index * 42);
@@ -1687,7 +1820,7 @@ export class DouyinSoloScene {
       ctx.fill();
     }
     ctx.fillStyle = '#71402e';
-    ctx.font = '800 12px sans-serif';
+    ctx.font = '800 12px "PingFang SC", "Microsoft YaHei", sans-serif';
     ctx.fillText(progress >= 1 ? '资源加载完成' : `正在加载游戏资源 ${Math.round(progress * 100)}%`, width / 2, progressY - 12);
 
     const buttonGradient = ctx.createLinearGradient(button.x, button.y, button.x + button.width, button.y);
@@ -1706,7 +1839,7 @@ export class DouyinSoloScene {
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.fillStyle = progress >= 1 ? '#6d3a1e' : '#9a7b63';
-    ctx.font = '900 18px sans-serif';
+    ctx.font = '900 18px "PingFang SC", "Microsoft YaHei", sans-serif';
     ctx.fillText(progress >= 1 ? '进入游戏' : '加载中…', width / 2, button.y + button.height / 2);
     ctx.restore();
   }

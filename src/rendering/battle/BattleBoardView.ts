@@ -308,12 +308,16 @@ export class BattleBoardView {
     this.tileLayer.rotation.set(this.dragCurrent.y * 0.014, 0, -this.dragCurrent.x * 0.018);
     if (this.hitStopRemaining > 0) { this.hitStopRemaining -= dt; return; }
     this.visualTime += dt;
-    for (const tween of [...this.tweens]) {
+    for (let index = this.tweens.length - 1; index >= 0; index -= 1) {
+      const tween = this.tweens[index];
       tween.elapsed += dt;
       if (tween.elapsed < 0) continue;
       const t = Math.min(1, tween.elapsed / tween.duration);
       tween.update(t);
-      if (t >= 1) { this.tweens.splice(this.tweens.indexOf(tween), 1); tween.complete?.(); }
+      if (t >= 1) {
+        this.tweens.splice(index, 1);
+        tween.complete?.();
+      }
     }
     this.tiles.forEach(tile => constrainTileMotion(tile.root));
     this.environment.update(this.visualTime, dt);

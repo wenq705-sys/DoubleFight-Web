@@ -27,7 +27,20 @@ export class DouyinSocial {
     const error = this.lastRankError;
     if (!error) return '';
     const code = error.errNo ?? error.errorCode;
-    return code !== undefined ? `（排行错误 ${code}）` : '（排行服务暂不可用）';
+    const known: Record<number, string> = {
+      10601: '账号未登录',
+      10301: '当前抖音版本不支持',
+      20000: '排行能力不可用',
+      20001: '排行参数错误',
+      21101: '账号未登录',
+      21102: '排行环境异常',
+      21103: '排行服务异常',
+      21104: '榜单分区数量超限',
+      21105: '榜单已经打开',
+    };
+    return code !== undefined
+      ? `（排行错误 ${code}${known[code] ? `：${known[code]}` : ''}）`
+      : '（排行服务暂不可用）';
   }
 
   private ensureRankLogin(): Promise<boolean> {
@@ -38,7 +51,7 @@ export class DouyinSocial {
     return new Promise(resolve => {
       try {
         this.api.login?.({
-          force: false,
+          force: true,
           success: result => {
             // Native IM rankings require a real logged-in Douyin account.
             // anonymousCode is not sufficient for getImRankList/setImRankData.
@@ -268,7 +281,9 @@ export class DouyinSocial {
   }
 
   async setPvpRank(rating: number): Promise<boolean> {
+    this.lastRankError = null;
     if (!this.api.setImRankData || !Number.isFinite(rating) || rating < 0) return false;
+    if (!(await this.ensureRankLogin())) return false;
     return new Promise(resolve => {
       try {
         this.api.setImRankData?.({
@@ -277,16 +292,19 @@ export class DouyinSocial {
           priority: 0,
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.pvpZone,
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => { this.lastRankError = error; resolve(false); },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });
   }
 
   async openPvpRank(): Promise<boolean> {
+    this.lastRankError = null;
     if (!this.api.getImRankList) return false;
+    if (!(await this.ensureRankLogin())) return false;
     return new Promise(resolve => {
       try {
         this.api.getImRankList?.({
@@ -297,9 +315,10 @@ export class DouyinSocial {
           rankTitle: '双数对决 · 竞技好友榜',
           zoneId: DOUYIN_PRODUCT_CONFIG.ranking.pvpZone,
           success: () => resolve(true),
-          fail: () => resolve(false),
+          fail: (error) => { this.lastRankError = error; resolve(false); },
         });
-      } catch {
+      } catch (error) {
+        this.lastRankError = { errMsg: String(error) };
         resolve(false);
       }
     });

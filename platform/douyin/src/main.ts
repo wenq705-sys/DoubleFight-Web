@@ -108,6 +108,12 @@ const unsubscribeRoomInvite = DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled
 const touch = platform.createSwipeInput(
   (direction: Direction) => game.handleDirection(direction),
   (x, y) => game.handleTap(x, y),
+  () => {
+    requestAnimationFrame(() => {
+      platform.refreshSystemInfo();
+      game.refreshSystemLayout();
+    });
+  },
 );
 
 client.subscribe((_state, message) => {
@@ -125,6 +131,7 @@ const loop = new DouyinRenderLoop(
     touch.setActive(true);
     platform.refreshSystemInfo();
     game.refreshSystemLayout();
+    game.resumeRuntime();
     void auth.refresh().then(() => {
       if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled) client.connect();
       else client.close();
@@ -132,6 +139,7 @@ const loop = new DouyinRenderLoop(
   },
   () => {
     touch.setActive(false);
+    game.suspendRuntime();
     client.close();
   },
 );

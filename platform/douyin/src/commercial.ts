@@ -26,14 +26,30 @@ export class DouyinCommercial {
   lastFailureHint(): string {
     const error = this.lastAdError;
     if (!error) return '';
-    const code = error.errNo ?? error.errCode;
-    return code !== undefined ? `（广告错误 ${code}）` : '（广告服务暂不可用）';
+    const code = error.errNo ?? error.errCode ?? error.errorCode;
+    const known: Record<number, string> = {
+      1001: '参数错误',
+      1002: '广告位无效',
+      1004: '暂无合适广告',
+      1005: '广告位审核中',
+      1006: '广告位审核未通过',
+      1007: '广告能力已禁用',
+      1008: '广告位已关闭',
+      20001: '广告参数错误',
+      20002: '当前宿主不支持',
+      10301: '当前抖音版本不支持',
+      120002: '今日广告次数已达上限',
+      21300: '广告环境异常',
+    };
+    if (code !== undefined) return `（广告错误 ${code}${known[code] ? `：${known[code]}` : ''}）`;
+    if (/frequent|rate/i.test(error.errMsg ?? '')) return '（广告请求过于频繁）';
+    return '（广告服务暂不可用）';
   }
 
   private rememberError(error: unknown): void {
     if (error && typeof error === 'object') {
       const value = error as DouyinAdError;
-      this.lastAdError = { errCode: value.errCode, errNo: value.errNo, errMsg: value.errMsg };
+      this.lastAdError = { errCode: value.errCode, errorCode: value.errorCode, errNo: value.errNo, errMsg: value.errMsg };
       return;
     }
     this.lastAdError = { errMsg: String(error ?? 'unknown') };
@@ -43,10 +59,16 @@ export class DouyinCommercial {
     this.lastAdError = null;
     // Douyin traffic-master rules require the rewarded ad request to be
     // created only after the user's explicit tap. Never pre-create it.
-    if (this.rewardedBusy) return 'unavailable';
+    if (this.rewardedBusy) {
+      this.rememberError({ errMsg: 'rewarded busy' });
+      return 'unavailable';
+    }
     const now = Date.now();
     this.rewardedTriggerTimes = this.rewardedTriggerTimes.filter(timestamp => now - timestamp < 60_000);
-    if (this.rewardedTriggerTimes.length >= 5) return 'unavailable';
+    if (this.rewardedTriggerTimes.length >= 5) {
+      this.rememberError({ errMsg: 'rewarded rate limited' });
+      return 'unavailable';
+    }
     const ad = this.prepareRewarded();
     if (!ad) return 'unavailable';
     this.rewardedTriggerTimes.push(now);

@@ -50,7 +50,7 @@ export interface DouyinInnerAudioContext {
   onError?(listener: (error: { errMsg?: string; errCode?: number }) => void): void;
 }
 
-export interface DouyinAdError { errCode?: number; errNo?: number; errMsg?: string }
+export interface DouyinAdError { errCode?: number; errorCode?: number; errNo?: number; errMsg?: string }
 
 export interface DouyinRewardedVideoAd {
   load(): Promise<void>;
@@ -122,7 +122,7 @@ export interface DouyinApi {
   vibrateShort?(options?: { fail?: (error: { errMsg?: string }) => void }): void;
   createInnerAudioContext?(): DouyinInnerAudioContext;
   login?(options: {
-    force: false;
+    force: boolean;
     success: (result: { isLogin: boolean; code?: string; anonymousCode?: string }) => void;
     fail: (error: { errMsg?: string }) => void;
   }): void;

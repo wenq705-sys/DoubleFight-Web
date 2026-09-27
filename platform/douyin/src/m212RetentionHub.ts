@@ -321,7 +321,7 @@ export function installM212RetentionHub(
     const ctx = scene.uiContext as CanvasRenderingContext2D;
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, number(scene.currentDpr)));
+    const scale = Math.min(2.25, Math.max(1, number(scene.screenDpr ?? scene.currentDpr)));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.onboardingOpen || scene.profilePageOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
@@ -357,7 +357,7 @@ export function installM212RetentionHub(
         state.coinBurst = null;
         scene.refreshHud();
       } else if (now >= state.nextCoinBurstHudAt) {
-        state.nextCoinBurstHudAt = now + 1 / 15;
+        state.nextCoinBurstHudAt = now + 1 / 10;
         scene.refreshHud();
       }
     }
@@ -369,7 +369,8 @@ export function installM212RetentionHub(
     engagement.track('performance_sample', {
       fps,
       quality: String(scene.quality ?? 'unknown'),
-      dpr: Math.round(number(scene.currentDpr) * 100) / 100,
+      worldDpr: Math.round(number(scene.currentDpr) * 100) / 100,
+      uiDpr: Math.round(number(scene.screenDpr ?? scene.currentDpr) * 100) / 100,
       calls: Number(rendererInfo?.calls ?? 0),
       triangles: Number(rendererInfo?.triangles ?? 0),
       mode: game.currentMode,

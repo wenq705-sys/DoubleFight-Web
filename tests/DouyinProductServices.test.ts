@@ -84,7 +84,7 @@ describe('Douyin commercial services', () => {
     await Promise.resolve();
     onError?.({ errCode: 1005, errMsg: 'ad unit reviewing' });
     await expect(pending).resolves.toBe('unavailable');
-    expect(commercial.lastFailureHint()).toBe('（广告错误 1005）');
+    expect(commercial.lastFailureHint()).toBe('（广告错误 1005：广告位审核中）');
   });
 
   it('returns skipped when rewarded video is closed early', async () => {
@@ -217,7 +217,7 @@ describe('Douyin social retention services', () => {
     });
     const social = new DouyinSocial(minimalApi({ getImRankList }));
     await expect(social.openSoloRank()).resolves.toBe(false);
-    expect(social.rankFailureHint()).toBe('（排行错误 21101）');
+    expect(social.rankFailureHint()).toBe('（排行错误 21101：账号未登录）');
   });
 
   it('does not treat an anonymous Douyin session as eligible for native rankings', async () => {
@@ -228,7 +228,7 @@ describe('Douyin social retention services', () => {
     const social = new DouyinSocial(minimalApi({ login, getImRankList }));
     await expect(social.openSoloRank()).resolves.toBe(false);
     expect(getImRankList).not.toHaveBeenCalled();
-    expect(social.rankFailureHint()).toBe('（排行错误 21101）');
+    expect(social.rankFailureHint()).toBe('（排行错误 21101：账号未登录）');
   });
 
   it('checks/navigates sidebar and writes/opens the Solo rank', async () => {
@@ -248,6 +248,10 @@ describe('Douyin social retention services', () => {
     expect(navigateToScene).toHaveBeenCalledWith(expect.objectContaining({ scene: 'sidebar' }));
     await expect(social.setSoloRank(2048)).resolves.toBe(true);
     await expect(social.openSoloRank()).resolves.toBe(true);
+    const login = api.login as ReturnType<typeof vi.fn>;
+    expect(login).toHaveBeenCalledTimes(2);
+    expect(login).toHaveBeenNthCalledWith(1, expect.objectContaining({ force: true }));
+    expect(login).toHaveBeenNthCalledWith(2, expect.objectContaining({ force: true }));
 
     expect(setImRankData).toHaveBeenCalledWith(expect.objectContaining({
       dataType: 0,

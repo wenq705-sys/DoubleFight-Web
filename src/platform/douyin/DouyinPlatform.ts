@@ -170,5 +170,6 @@ export class DouyinPlatform implements Platform {
   createSwipeInput(
     onDirection: (direction: Direction) => void,
     onTap?: (x: number, y: number) => void,
-  ): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection, onTap); }
+    onMultiTouchReset?: () => void,
+  ): DouyinSwipeInput { return new DouyinSwipeInput(this.api, onDirection, onTap, onMultiTouchReset); }
 }

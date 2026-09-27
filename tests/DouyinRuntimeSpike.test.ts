@@ -68,7 +68,8 @@ describe('Douyin runtime spike adapters', () => {
     const moves: string[] = [];
     const taps: Array<[number, number]> = [];
     const preventDefault = vi.fn();
-    const touch = new DouyinSwipeInput(api, direction => moves.push(direction), (x, y) => taps.push([x, y]));
+    const resetViewport = vi.fn();
+    const touch = new DouyinSwipeInput(api, direction => moves.push(direction), (x, y) => taps.push([x, y]), resetViewport);
     touch.setActive(true);
 
     handlers.get('start')!({
@@ -100,6 +101,7 @@ describe('Douyin runtime spike adapters', () => {
     expect(moves).toEqual([]);
     expect(taps).toEqual([]);
     expect(preventDefault).toHaveBeenCalledTimes(4);
+    expect(resetViewport).toHaveBeenCalledTimes(1);
 
     handlers.get('start')!({
       touches: [{ identifier: 3, clientX: 0, clientY: 0 }],

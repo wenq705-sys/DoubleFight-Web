@@ -159,7 +159,7 @@ export function installM212ProductPass(
     const ctx = scene.uiContext as CanvasRenderingContext2D;
     const width = Math.max(1, Math.round(info.width));
     const height = Math.max(1, Math.round(info.height));
-    const scale = Math.min(2, Math.max(1, number(scene.currentDpr)));
+    const scale = Math.min(2.25, Math.max(1, number(scene.screenDpr ?? scene.currentDpr)));
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
@@ -177,7 +177,7 @@ export function installM212ProductPass(
     originalRender();
     const now = number(scene.visualTime);
     if (state.flight && now >= state.nextFlightHudAt) {
-      state.nextFlightHudAt = now + 1 / 15;
+      state.nextFlightHudAt = now + 1 / 10;
       scene.refreshHud();
       if (now - state.flight.startedAt >= state.flight.duration) state.flight = null;
     }

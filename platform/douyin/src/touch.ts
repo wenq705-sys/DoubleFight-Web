@@ -12,11 +12,12 @@ export class DouyinSwipeInput {
     private readonly api: DouyinApi,
     private readonly onDirection: (direction: Direction) => void,
     private readonly onTap?: (x: number, y: number) => void,
+    private readonly onMultiTouchReset?: () => void,
   ) {
     api.onTouchStart(event => this.onStart(event));
     api.onTouchMove(event => this.onMove(event));
     api.onTouchEnd(event => this.onEnd(event));
-    api.onTouchCancel(() => this.cancel(true));
+    api.onTouchCancel(event => { if (this.active) event?.preventDefault?.(); this.cancel(true); });
   }
 
   setActive(active: boolean): void {
@@ -64,7 +65,10 @@ export class DouyinSwipeInput {
   private onEnd(event: DouyinTouchEvent): void {
     if (this.active) event.preventDefault?.();
     if (this.multiTouchBlocked) {
-      if (event.touches.length === 0) this.multiTouchBlocked = false;
+      if (event.touches.length === 0) {
+        this.multiTouchBlocked = false;
+        this.onMultiTouchReset?.();
+      }
       this.cancel();
       return;
     }
