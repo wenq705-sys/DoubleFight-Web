@@ -238,8 +238,12 @@ describe('Douyin profile permission adapter', () => {
       expect(options.withCredentials).toBe(false);
       options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/avatar.png' } });
     });
+    const login = vi.fn((options: Parameters<NonNullable<DouyinApi['login']>>[0]) => {
+      expect(options.force).toBe(true);
+      options.success({ isLogin: true, code: 'profile-login' });
+    });
     const getUserProfile = vi.fn();
-    const account = new DouyinAccountBootstrap({ getUserInfo, getUserProfile });
+    const account = new DouyinAccountBootstrap({ login, getUserInfo, getUserProfile });
     await expect(account.requestProfile()).resolves.toEqual({
       status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/avatar.png',
     });
@@ -251,7 +255,11 @@ describe('Douyin profile permission adapter', () => {
     const getUserProfile = vi.fn((options: Parameters<NonNullable<DouyinApi['getUserProfile']>>[0]) => {
       options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/fallback.png' } });
     });
-    const account = new DouyinAccountBootstrap({ getUserProfile });
+    const login = vi.fn((options: Parameters<NonNullable<DouyinApi['login']>>[0]) => {
+      expect(options.force).toBe(true);
+      options.success({ isLogin: true, code: 'profile-login' });
+    });
+    const account = new DouyinAccountBootstrap({ login, getUserProfile });
     await expect(account.requestProfile()).resolves.toMatchObject({
       status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/fallback.png',
     });
@@ -260,6 +268,7 @@ describe('Douyin profile permission adapter', () => {
 
   it('maps user cancellation and unavailable hosts without throwing', async () => {
     const cancelled = new DouyinAccountBootstrap({
+      login: options => options.success({ isLogin: true, code: 'profile-login' }),
       getUserInfo: options => options.fail?.({ errMsg: 'getUserInfo:fail auth deny' }),
     });
     await expect(cancelled.requestProfile()).resolves.toMatchObject({ status: 'cancelled' });

@@ -116,7 +116,9 @@ export function installM212ProductPass(
         platform.haptics.trigger('light');
         scene.refreshHud();
         void auth.bindDouyinProfile().then(result => {
-          state.profileMessage = result === 'updated' ? '已更新抖音资料' : result === 'cancelled' ? '已取消授权' : result === 'unavailable' ? '当前环境暂不支持' : '更新失败，请稍后重试';
+          state.profileMessage = result === 'updated'
+            ? '已同步抖音资料'
+            : auth.profileFailureHint();
           if (result === 'updated') {
             platform.haptics.trigger('success');
             scene.refreshAccountState();
@@ -164,10 +166,10 @@ export function installM212ProductPass(
 
     const nativeModal = Boolean(scene.settingsOpen || scene.exitConfirm || scene.joinPadOpen || scene.healthNoticeOpen || scene.themeUnlockOpen);
     if (!nativeModal && !scene.onboardingOpen) {
-      if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform);
+      if (game.currentMode === 'home') drawHomeMeta(ctx, width, scene.hudTop(), game, auth, platform, () => scene.refreshHud());
       if (game.currentMode === 'solo') drawSoloMeta(ctx, width, height, state, number(scene.visualTime));
       if (game.currentMode === 'online') drawOnlineMeta(ctx, width, height, scene);
-      if (state.profileOpen) drawProfile(ctx, width, height, auth, platform, game.theme, scene.hudTop(), state);
+      if (state.profileOpen) drawProfile(ctx, width, height, auth, platform, game.theme, scene.hudTop(), state, () => scene.refreshHud());
     }
     scene.uiTexture.needsUpdate = true;
   };
@@ -212,6 +214,7 @@ function drawHomeMeta(
   game: DouyinSoloScene,
   auth: DouyinAuthClient,
   platform: DouyinPlatform,
+  invalidate: () => void,
 ): void {
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const mastery = loadThemeMastery(platform.storage, game.theme);
@@ -223,7 +226,7 @@ function drawHomeMeta(
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,225,145,.35)';
   ctx.stroke();
-  drawDouyinAvatar(ctx, platform, player?.avatarUrl, profile.x + 22, profile.y + profile.height / 2, 30, player?.displayName ?? '游客', '#236B83');
+  drawDouyinAvatar(ctx, platform, player?.avatarUrl, profile.x + 22, profile.y + profile.height / 2, 30, player?.displayName ?? '游客', '#236B83', '#FFF7E7', invalidate);
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff0bf';
   ctx.font = '900 11px sans-serif';
@@ -355,6 +358,7 @@ function drawProfile(
   theme: ThemeId,
   hudTop: number,
   state: PassState,
+  invalidate: () => void,
 ): void {
   const bg = THEMES[theme].ui.background;
   const ink = '#17343C';
@@ -384,7 +388,7 @@ function drawProfile(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  drawDouyinAvatar(ctx, platform, player?.avatarUrl, cardX + 42, headerY + 72, 48, player?.displayName ?? '游客', accent);
+  drawDouyinAvatar(ctx, platform, player?.avatarUrl, cardX + 42, headerY + 72, 48, player?.displayName ?? '游客', accent, '#FFF7E7', invalidate);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = ink;

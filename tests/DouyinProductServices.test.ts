@@ -220,6 +220,22 @@ describe('Douyin social retention services', () => {
     expect(social.rankFailureHint()).toBe('（排行错误 21101：账号未登录）');
   });
 
+  it('retries a 21102 default rank failure with the official total-rank-only mode', async () => {
+    const relations: string[] = [];
+    const getImRankList = vi.fn((options: Parameters<NonNullable<DouyinApi['getImRankList']>>[0]) => {
+      relations.push(options.relationType);
+      if (options.relationType === 'default') {
+        options.fail?.({ errMsg: 'framework internal', errNo: 21102 });
+      } else {
+        options.success?.();
+      }
+    });
+    const social = new DouyinSocial(minimalApi({ getImRankList }));
+    await expect(social.openSoloRank()).resolves.toBe(true);
+    expect(relations).toEqual(['default', 'all']);
+    expect(social.rankFailureHint()).toBe('');
+  });
+
   it('does not treat an anonymous Douyin session as eligible for native rankings', async () => {
     const getImRankList = vi.fn();
     const login = vi.fn((options: Parameters<NonNullable<DouyinApi['login']>>[0]) => {

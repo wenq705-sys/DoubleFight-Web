@@ -103,7 +103,7 @@ export class DouyinSoloScene {
   private goodPerfWindows = 0;
   // Start conservatively on mobile. Promote to high only after sustained real-frame evidence.
   private quality: 'high' | 'medium' | 'low' = 'medium';
-  private currentDpr = 1.75;
+  private currentDpr = 2;
   private screenDpr = 1;
   private frameWidth = 1;
   private frameHeight = 1;
@@ -180,6 +180,9 @@ export class DouyinSoloScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
+    // Real Douyin devices use WebGL2: keep the 3D world edge clean without
+    // forcing the whole screen/UI to an excessive DPR. Helium WebGL1 stays at 0.
+    this.worldTarget.samples = this.renderer.capabilities.isWebGL2 ? 2 : 0;
 
     this.compositeMaterial = new THREE.MeshBasicMaterial({
       map: this.worldTarget.texture,
@@ -468,7 +471,6 @@ export class DouyinSoloScene {
       () => this.boardView.prewarmEnvironment(theme),
       ...[32, 64, 128, 256, 512, 1024].map(value => () => this.boardView.prewarmTheme(theme, [value])),
       () => this.homePreparedThemes.add(theme),
-      () => this.prewarmThemeGpu(theme),
       () => {
         if (this.boardView.theme !== theme) this.boardView.setTheme(theme);
         this.boardView.reset(HOME_TILES);
@@ -500,11 +502,6 @@ export class DouyinSoloScene {
           run: () => this.boardView.prewarmTheme(theme, [value]),
         });
       }
-      this.homeWarmupTasks.push({
-        theme,
-        final: false,
-        run: () => this.prewarmThemeGpu(theme),
-      });
       this.homeWarmupTasks.push({ theme, final: true, run: () => {} });
     }
   }
@@ -535,29 +532,6 @@ export class DouyinSoloScene {
         this.pendingHomeSlideDirection = null;
         this.notice = null;
         this.beginHomeSlide(direction, target);
-      }
-    }
-  }
-
-  private prewarmThemeGpu(theme: ThemeId): void {
-    const previousTheme = this.boardView.theme;
-    const previousTarget = this.renderer.getRenderTarget();
-    try {
-      this.boardView.setTheme(theme);
-      this.boardView.reset(HOME_TILES);
-      this.camera.position.copy(this.cameraHome);
-      this.camera.lookAt(this.cameraTarget);
-      this.worldTarget.viewport.set(0, 0, this.worldTarget.width, this.worldTarget.height);
-      this.worldTarget.scissor.set(0, 0, this.worldTarget.width, this.worldTarget.height);
-      this.worldTarget.scissorTest = false;
-      this.renderer.setRenderTarget(this.worldTarget);
-      this.renderer.compile(this.scene, this.camera);
-      this.renderer.render(this.scene, this.camera);
-    } finally {
-      this.renderer.setRenderTarget(previousTarget);
-      if (this.boardView.theme !== previousTheme) {
-        this.boardView.setTheme(previousTheme);
-        this.boardView.reset(HOME_TILES);
       }
     }
   }
@@ -1101,8 +1075,8 @@ export class DouyinSoloScene {
       this.refreshHud();
       return;
     }
-    if (this.hit(x, y, layout.back) || this.hit(x, y, layout.done)) {
-      this.flashTap(this.hit(x, y, layout.back) ? layout.back : layout.done);
+    if (this.hit(x, y, layout.back)) {
+      this.flashTap(layout.back);
       this.settingsOpen = false;
       this.refreshHud();
     }
@@ -1388,20 +1362,20 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyDpr(1.4);
+      this.applyDpr(1.65);
       this.applyQuality('low');
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyDpr(1.75);
+      this.applyDpr(2);
       this.applyQuality('medium');
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
       if (this.goodPerfWindows >= 3) {
-        this.applyDpr(2);
+        this.applyDpr(2.25);
         this.applyQuality('high');
         this.goodPerfWindows = 0;
       }
@@ -2491,25 +2465,23 @@ export class DouyinSoloScene {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#17343C';
-    ctx.font = '900 25px sans-serif';
-    ctx.fillText('设置', width / 2, layout.back.y + 22);
+    ctx.font = '900 25px "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillText('设置', width / 2, layout.back.y + 20);
     ctx.fillStyle = '#46636A';
-    ctx.font = '800 10px sans-serif';
-    ctx.fillText('声音与游戏反馈', width / 2, layout.back.y + 47);
+    ctx.font = '800 10px "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillText('声音与触感', width / 2, layout.back.y + 46);
 
-    this.drawSettingRow(ctx, layout.music, '背景音乐', this.musicEnabled);
-    this.drawSettingRow(ctx, layout.sound, '音效', this.soundEnabled);
-    this.drawSettingRow(ctx, layout.haptics, '震动', this.hapticsEnabled);
+    this.drawSettingRow(ctx, layout.music, '背景音乐', '游戏内主题音乐', this.musicEnabled);
+    this.drawSettingRow(ctx, layout.sound, '音效', '合成、按钮与反馈音效', this.soundEnabled);
+    this.drawSettingRow(ctx, layout.haptics, '震动', '合成与操作震动反馈', this.hapticsEnabled);
 
-    ctx.textAlign = 'left';
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#46636A';
-    ctx.font = '800 10px sans-serif';
-    ctx.fillText('随时可以回来修改', layout.music.x + 4, layout.haptics.y + layout.haptics.height + 26);
-
-    this.drawPillButton(ctx, layout.done, '完成', 'primary');
+    ctx.font = '800 9.5px "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillText('设置自动保存', width / 2, layout.haptics.y + layout.haptics.height + 28);
   }
 
-  private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, enabled: boolean): void {
+  private drawSettingRow(ctx: CanvasRenderingContext2D, rect: Rect, label: string, detail: string, enabled: boolean): void {
     ctx.save();
     ctx.shadowColor = 'rgba(28,49,53,.15)';
     ctx.shadowOffsetY = 3;
@@ -2524,11 +2496,11 @@ export class DouyinSoloScene {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#17343C';
-    ctx.font = '900 15px sans-serif';
-    ctx.fillText(label, rect.x + 18, rect.y + rect.height * .38);
+    ctx.font = '900 15px "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillText(label, rect.x + 18, rect.y + rect.height * .36);
     ctx.fillStyle = '#46636A';
-    ctx.font = '800 9.5px sans-serif';
-    ctx.fillText(enabled ? '已开启' : '已关闭', rect.x + 18, rect.y + rect.height * .68);
+    ctx.font = '750 9.5px "PingFang SC", "Microsoft YaHei", sans-serif';
+    ctx.fillText(detail, rect.x + 18, rect.y + rect.height * .67);
 
     const switchW = 52;
     const switchH = 28;
@@ -2830,10 +2802,9 @@ export class DouyinSoloScene {
     const firstY = Math.max(metrics.top + 96, 176);
     return {
       back: { x: 12, y: Math.max(72, metrics.top + 2), width: 58, height: 58 },
-      music: { x: edge, y: firstY, width: cardW, height: 68 },
-      sound: { x: edge, y: firstY + 78, width: cardW, height: 68 },
-      haptics: { x: edge, y: firstY + 156, width: cardW, height: 68 },
-      done: { x: width / 2 - Math.min(132, width * .34), y: firstY + 254, width: Math.min(264, width * .68), height: 54 },
+      music: { x: edge, y: firstY, width: cardW, height: 62 },
+      sound: { x: edge, y: firstY + 72, width: cardW, height: 62 },
+      haptics: { x: edge, y: firstY + 144, width: cardW, height: 62 },
     };
   }
 

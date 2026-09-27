@@ -1,7 +1,7 @@
 import type { DouyinPlatform } from '../../../src/platform/douyin/DouyinPlatform';
 import type { DouyinImage } from './api';
 
-type AvatarCacheEntry = { image: DouyinImage; state: 'loading' | 'ready' | 'error' };
+type AvatarCacheEntry = { image: DouyinImage; state: 'loading' | 'ready' | 'error'; onSettled?: () => void };
 const avatarCache = new Map<string, AvatarCacheEntry>();
 
 export type UiRect = { x: number; y: number; width: number; height: number };
@@ -96,6 +96,7 @@ export function drawDouyinAvatar(
   fallbackLabel: string,
   fallbackFill = '#236B83',
   fallbackText = '#FFF7E7',
+  onSettled?: () => void,
 ): void {
   const radius = Math.max(8, diameter / 2);
   let entry: AvatarCacheEntry | undefined;
@@ -104,12 +105,28 @@ export function drawDouyinAvatar(
     if (!entry) {
       const image = platform.createImage();
       if (image) {
-        entry = { image, state: 'loading' };
+        entry = { image, state: 'loading', onSettled };
         avatarCache.set(avatarUrl, entry);
-        image.addEventListener('load', () => { if (entry) entry.state = 'ready'; });
-        image.addEventListener('error', () => { if (entry) entry.state = 'error'; });
+        image.addEventListener('load', () => {
+          if (!entry) return;
+          entry.state = 'ready';
+          const invalidate = entry.onSettled;
+          entry.onSettled = undefined;
+          invalidate?.();
+        });
+        image.addEventListener('error', () => {
+          if (!entry) return;
+          entry.state = 'error';
+          const invalidate = entry.onSettled;
+          entry.onSettled = undefined;
+          invalidate?.();
+        });
         image.src = avatarUrl;
       }
+    } else if (entry.state === 'loading' && onSettled) {
+      // Keep only the latest invalidation callback while the native image loads.
+      // This avoids callback growth when a static HUD is redrawn several times.
+      entry.onSettled = onSettled;
     }
   }
 

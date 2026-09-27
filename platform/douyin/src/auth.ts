@@ -87,9 +87,7 @@ const TOKEN_KEY = 'doublefight-session-token';
 
 export function reviewSafeDisplayName(displayName: string | undefined, seed = ''): string {
   const trimmed = displayName?.trim() ?? '';
-  // Review-facing names deliberately allow only CJK Unified Ideographs,
-  // common Chinese middle dots and decimal digits. Any Latin/emoji/other
-  // script falls back to a deterministic Chinese+numeric guest label.
+  // Generated/unbound player names stay review-safe and fully Chinese/numeric.
   if (trimmed && /^[\u3400-\u9FFF0-9·]{1,10}$/.test(trimmed)) return trimmed;
 
   let hash = 2166136261;
@@ -101,12 +99,19 @@ export function reviewSafeDisplayName(displayName: string | undefined, seed = ''
   return `玩家${String(hash % 10000).padStart(4, '0')}`;
 }
 
+function boundDouyinDisplayName(displayName: string, seed: string): string {
+  const cleaned = displayName.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  if (!cleaned) return reviewSafeDisplayName(undefined, seed);
+  return Array.from(cleaned).slice(0, 16).join('');
+}
+
 export class DouyinAuthClient {
   private token: string | null = null;
   private state: AuthState = { status: 'local' };
   private starting: Promise<AuthState> | null = null;
   private pendingDailyLoginGrant: DailyLoginGrant | null = null;
   private dailyLoginListeners = new Set<(grant: DailyLoginGrant) => void>();
+  private lastProfileFailure: string | null = null;
 
   constructor(
     private readonly api: Pick<DouyinApi, 'request'>,
@@ -117,6 +122,22 @@ export class DouyinAuthClient {
 
   get current(): AuthState { return this.state; }
   get requiresServerLedger(): boolean { return this.token !== null; }
+
+  profileFailureHint(): string {
+    const message = this.lastProfileFailure?.toLowerCase() ?? '';
+    if (!message) return '同步失败，请稍后重试';
+    if (message.includes('10201') || message.includes('not authorized') || message.includes('privacy permission') || message.includes('deny')) {
+      return '请在右上角“…”→设置中允许用户信息权限';
+    }
+    if (message.includes('10202') || message.includes('scope is not declared')) {
+      return '当前版本未声明用户信息权限';
+    }
+    if (message.includes('10601') || message.includes('not login')) return '请先登录抖音账号后重试';
+    if (message.includes('10603') || message.includes('invalid session')) return '登录状态已失效，请重新尝试';
+    if (message.includes('network') || message.includes('10103')) return '网络异常，请稍后重试';
+    if (message.includes('missing nickname')) return '未获取到抖音昵称，请检查授权';
+    return '同步失败，请稍后重试';
+  }
 
   consumeDailyLoginGrant(): DailyLoginGrant | null {
     const grant = this.pendingDailyLoginGrant;
@@ -206,18 +227,40 @@ export class DouyinAuthClient {
   }
 
   async bindDouyinProfile(): Promise<'updated' | 'cancelled' | 'failed' | 'unavailable'> {
-    if (!this.token || !this.platform.account.requestProfile) return 'unavailable';
+    this.lastProfileFailure = null;
+    if (!this.token) {
+      this.lastProfileFailure = '10601 user not login';
+      return 'unavailable';
+    }
+    if (!this.platform.account.requestProfile) {
+      this.lastProfileFailure = 'Douyin user profile API unavailable';
+      return 'unavailable';
+    }
+
     const profile = await this.platform.account.requestProfile();
-    if (profile.status !== 'granted') return profile.status === 'cancelled' ? 'cancelled' : profile.status === 'unavailable' ? 'unavailable' : 'failed';
+    if (profile.status !== 'granted') {
+      this.lastProfileFailure = profile.error ?? profile.status;
+      return profile.status === 'cancelled'
+        ? 'cancelled'
+        : profile.status === 'unavailable'
+          ? 'unavailable'
+          : 'failed';
+    }
+
     try {
       const data = await this.call('POST', '/profile', {
         displayName: profile.nickName,
         ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
       });
-      if (!this.isPlayer(data.player)) return 'failed';
+      if (!this.isPlayer(data.player)) {
+        this.lastProfileFailure = 'server returned invalid player profile';
+        return 'failed';
+      }
       this.updatePlayer(data.player);
+      this.lastProfileFailure = null;
       return 'updated';
     } catch (error) {
+      this.lastProfileFailure = String(error);
       this.handleSessionFailure(error);
       return 'failed';
     }
@@ -431,7 +474,9 @@ export class DouyinAuthClient {
     if (this.isPlayer(value)) {
       const player: PublicPlayer = {
         ...value,
-        displayName: reviewSafeDisplayName(value.displayName, value.id),
+        displayName: value.avatarUrl
+          ? boundDouyinDisplayName(value.displayName, value.id)
+          : reviewSafeDisplayName(value.displayName, value.id),
       };
       this.state = { status: 'authenticated', player };
       this.restoreSoloCache(player);

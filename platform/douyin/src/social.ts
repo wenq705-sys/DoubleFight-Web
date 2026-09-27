@@ -71,6 +71,45 @@ export class DouyinSocial {
     });
   }
 
+  private openNativeRank(options: {
+    rankType: string;
+    dataType: 0 | 1;
+    relationType: 'default' | 'all';
+    suffix: string;
+    rankTitle: string;
+    zoneId: string;
+  }): Promise<boolean> {
+    return new Promise(resolve => {
+      const run = (relationType: 'default' | 'all', canRetry: boolean) => {
+        try {
+          this.api.getImRankList?.({
+            ...options,
+            relationType,
+            success: () => {
+              this.lastRankError = null;
+              resolve(true);
+            },
+            fail: error => {
+              const code = error.errNo ?? error.errorCode;
+              // 21102/21103 may be framework/service failures. The default
+              // mode also requests the friend graph, so retry total-rank-only.
+              if (canRetry && relationType === 'default' && (code === 21102 || code === 21103)) {
+                run('all', false);
+                return;
+              }
+              this.lastRankError = error;
+              resolve(false);
+            },
+          });
+        } catch (error) {
+          this.lastRankError = { errMsg: String(error) };
+          resolve(false);
+        }
+      };
+      run(options.relationType, true);
+    });
+  }
+
   launchRoomCode(): string | null {
     return this.roomCodeFrom(this.latestShow) ?? this.roomCodeFrom(this.safeLaunchOptions());
   }
@@ -196,25 +235,13 @@ export class DouyinSocial {
       return false;
     }
     if (!(await this.ensureRankLogin())) return false;
-    return new Promise(resolve => {
-      try {
-        this.api.getImRankList?.({
-          relationType: 'default',
-          dataType: 0,
-          rankType: 'week',
-          suffix: '分',
-          rankTitle: '双数对决 · 本周最高分',
-          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
-          success: () => resolve(true),
-          fail: (error) => {
-            this.lastRankError = error;
-            resolve(false);
-          },
-        });
-      } catch (error) {
-        this.lastRankError = { errMsg: String(error) };
-        resolve(false);
-      }
+    return this.openNativeRank({
+      relationType: 'default',
+      dataType: 0,
+      rankType: 'week',
+      suffix: '分',
+      rankTitle: '双数对决 · 本周最高分',
+      zoneId: DOUYIN_PRODUCT_CONFIG.ranking.soloZone,
     });
   }
 
@@ -258,25 +285,13 @@ export class DouyinSocial {
       return false;
     }
     if (!(await this.ensureRankLogin())) return false;
-    return new Promise(resolve => {
-      try {
-        this.api.getImRankList?.({
-          relationType: 'default',
-          dataType: 1,
-          rankType: 'all',
-          suffix: '',
-          rankTitle: `${THEMES[theme].label} · 登顶竞速`,
-          zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
-          success: () => resolve(true),
-          fail: (error) => {
-            this.lastRankError = error;
-            resolve(false);
-          },
-        });
-      } catch (error) {
-        this.lastRankError = { errMsg: String(error) };
-        resolve(false);
-      }
+    return this.openNativeRank({
+      relationType: 'default',
+      dataType: 1,
+      rankType: 'all',
+      suffix: '',
+      rankTitle: `${THEMES[theme].label} · 登顶竞速`,
+      zoneId: DOUYIN_PRODUCT_CONFIG.ranking.ascensionZones[theme],
     });
   }
 

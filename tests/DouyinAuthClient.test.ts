@@ -140,6 +140,35 @@ describe('Douyin account session bootstrap', () => {
 });
 
 describe('Douyin public profile binding', () => {
+  it('keeps an explicitly bound Douyin nickname even when it contains Latin or emoji', async () => {
+    const values = new Map<string, string>();
+    const updated = { ...player, displayName: 'Rona✨', avatarUrl: 'https://example.com/rona.png' };
+    const request = vi.fn((options: Parameters<NonNullable<DouyinApi['request']>>[0]) => {
+      if (options.url.endsWith('/auth/douyin')) options.success({ statusCode: 200, data: { token: 'signed.session', player } });
+      else if (options.url.endsWith('/profile')) options.success({ statusCode: 200, data: { player: updated } });
+      else options.fail({ errMsg: 'unexpected request' });
+    });
+    const platform = {
+      account: {
+        bootstrap: vi.fn(async () => ({ status: 'logged_in' as const, isLoggedIn: true as const, code: 'one-use-code' })),
+        requestProfile: vi.fn(async () => ({ status: 'granted' as const, nickName: 'Rona✨', avatarUrl: 'https://example.com/rona.png' })),
+      },
+      storage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    } as Pick<Platform, 'account' | 'storage'>;
+    const auth = new DouyinAuthClient({ request }, platform, 'https://game.example');
+    await auth.start();
+    await expect(auth.bindDouyinProfile()).resolves.toBe('updated');
+    expect(auth.current.status).toBe('authenticated');
+    if (auth.current.status === 'authenticated') {
+      expect(auth.current.player.displayName).toBe('Rona✨');
+      expect(auth.current.player.avatarUrl).toBe('https://example.com/rona.png');
+    }
+  });
+
   it('posts an authorized Douyin nickname/avatar to the signed player profile', async () => {
     const values = new Map<string, string>();
     const updated = { ...player, displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' };

@@ -45,6 +45,8 @@ interface RetentionState {
   seasonLeaderboard: PvpLeaderboard | null;
   seasonLoading: boolean;
   busyAction: 'shortcut' | 'sync' | 'sidebar' | null;
+  rankBusy: boolean;
+  rankMessage: string | null;
   coinBurst: { amount: number; startedAt: number } | null;
   nextCoinBurstHudAt: number;
 }
@@ -79,6 +81,8 @@ export function installM212RetentionHub(
     seasonLeaderboard: null,
     seasonLoading: false,
     busyAction: null,
+    rankBusy: false,
+    rankMessage: null,
     coinBurst: null,
     nextCoinBurstHudAt: 0,
   };
@@ -289,6 +293,8 @@ export function installM212RetentionHub(
       }
       if (hit(x, y, utility.rank)) {
         state.screen = 'rankings';
+        state.rankMessage = null;
+        state.rankBusy = false;
         platform.haptics.trigger('light');
         engagement.track('ranking_center_open', { theme: game.theme });
         scene.refreshHud();
@@ -336,7 +342,7 @@ export function installM212RetentionHub(
       if (state.screen === 'collection') drawCollection(ctx, width, height, platform, state);
       if (state.screen === 'daily') drawDailyCenter(ctx, width, height, scene, auth, state);
       if (state.screen === 'sidebar') drawSidebarGuide(ctx, width, height, scene, auth, state);
-      if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform);
+      if (state.screen === 'rankings') drawRankingCenter(ctx, width, height, game, platform, state);
       if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && state.screen === 'season') {
         drawSeasonLeaderboard(ctx, width, height, state, auth, platform);
       }
@@ -493,10 +499,16 @@ function handleHubTap(
     const layout = rankingCenterLayout(info.width, info.height);
     if (hit(x, y, layout.close)) {
       state.screen = null;
+      state.rankBusy = false;
+      state.rankMessage = null;
       scene.refreshHud();
       return;
     }
+    if (state.rankBusy) return;
     if (hit(x, y, layout.ascension)) {
+      state.rankBusy = true;
+      state.rankMessage = '正在打开登顶榜…';
+      scene.refreshHud();
       void (async () => {
         await auth.start();
         const mastery = loadThemeMastery(platform.storage, game.theme);
@@ -504,32 +516,33 @@ function handleHubTap(
           ? await social.setAscensionRank(game.theme, mastery.bestAscensionMs)
           : true;
         const ok = await social.openAscensionRank(game.theme);
-        scene.notice = {
-          text: ok
-            ? (synced ? '已打开登顶竞速榜' : '已打开登顶榜 · 本机成绩稍后同步')
-            : `当前环境暂不支持登顶榜${social.rankFailureHint()}`,
-          until: number(scene.visualTime) + 1.4,
-        };
+        state.rankMessage = ok
+          ? (synced ? '登顶榜已打开' : '登顶榜已打开，本机成绩稍后同步')
+          : rankUiFailure(social);
         engagement.track('rank_open', { board: 'ascension', success: ok, synced, theme: game.theme });
-        scene.refreshHud();
-      })();
+      })().finally(() => {
+        state.rankBusy = false;
+        if (!scene.disposed && state.screen === 'rankings') scene.refreshHud();
+      });
       return;
     }
     if (hit(x, y, layout.solo)) {
+      state.rankBusy = true;
+      state.rankMessage = '正在打开最高分榜…';
+      scene.refreshHud();
       void (async () => {
         await auth.start();
         const weekly = loadWeeklySolo(platform.storage);
         const synced = weekly.best > 0 ? await social.setSoloRank(weekly.best) : true;
         const ok = await social.openSoloRank();
-        scene.notice = {
-          text: ok
-            ? (synced ? '已打开最高分榜' : '已打开最高分榜 · 本机成绩稍后同步')
-            : `当前环境暂不支持最高分榜${social.rankFailureHint()}`,
-          until: number(scene.visualTime) + 1.4,
-        };
+        state.rankMessage = ok
+          ? (synced ? '最高分榜已打开' : '最高分榜已打开，本机成绩稍后同步')
+          : rankUiFailure(social);
         engagement.track('rank_open', { board: 'solo_weekly', success: ok, synced });
-        scene.refreshHud();
-      })();
+      })().finally(() => {
+        state.rankBusy = false;
+        if (!scene.disposed && state.screen === 'rankings') scene.refreshHud();
+      });
       return;
     }
     if (DOUYIN_PRODUCT_CONFIG.launch.pvpRankingsEnabled && hit(x, y, layout.pvp)) {
@@ -750,6 +763,7 @@ function drawRankingCenter(
   height: number,
   game: DouyinSoloScene,
   platform: DouyinPlatform,
+  state: RetentionState,
 ): void {
   const layout = rankingCenterLayout(width, height);
   shade(ctx, width, height);
@@ -775,9 +789,23 @@ function drawRankingCenter(
     'rank',
   );
   ctx.textAlign = 'center';
-  ctx.fillStyle = PAGE_MUTED;
-  ctx.font = '800 10px sans-serif';
-  ctx.fillText('选择一个榜单查看详细排名', width / 2, Math.min(height - 44, layout.solo.y + layout.solo.height + 34));
+  ctx.fillStyle = state.rankMessage
+    ? (state.rankMessage.includes('暂不可用') || state.rankMessage.includes('请先') ? '#A25C17' : PAGE_INK)
+    : PAGE_MUTED;
+  ctx.font = '800 10px "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.fillText(
+    state.rankMessage ?? '选择一个榜单查看详细排名',
+    width / 2,
+    Math.min(height - 44, layout.solo.y + layout.solo.height + 34),
+  );
+}
+
+function rankUiFailure(social: DouyinSocial): string {
+  const hint = social.rankFailureHint();
+  if (hint.includes('21101') || hint.includes('10601')) return '请先登录抖音账号后重试';
+  if (hint.includes('21102') || hint.includes('21103')) return '排行榜服务暂不可用，请稍后重试';
+  if (hint.includes('10301')) return '当前抖音版本暂不支持排行榜';
+  return '排行榜暂不可用，请稍后重试';
 }
 
 function drawSeasonLeaderboard(

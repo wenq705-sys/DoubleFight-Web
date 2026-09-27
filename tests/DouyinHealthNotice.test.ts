@@ -30,7 +30,9 @@ describe('Douyin startup health reminder', () => {
     expect(source).toContain('正在加载游戏资源');
     expect(source).toContain('this.startupPreloadTasks.length === 0 && this.hit(x, y, button)');
     expect(source).toContain('this.prepareStartupPreload()');
-    expect(source).toContain('this.prewarmThemeGpu(theme)');
+    expect(source).not.toContain('this.prewarmThemeGpu(theme)');
+    expect(source).toContain('this.boardView.prewarmEnvironment(theme)');
+    expect(source).toContain('this.boardView.prewarmTheme(theme, [value])');
     expect(source).toContain('if (this.healthNoticeOpen) {');
     expect(source).toContain('this.drawHealthNotice(ctx, width, height);');
     expect(source).toContain('this.uiTexture.needsUpdate = true;');

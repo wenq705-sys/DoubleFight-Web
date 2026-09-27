@@ -7,18 +7,19 @@ const browserScene = readFileSync(new URL('../src/rendering/GameScene.ts', impor
 const themePreview = readFileSync(new URL('../src/rendering/themes/ThemePreview.ts', import.meta.url), 'utf8');
 
 describe('mobile release performance rescue', () => {
-  it('keeps readable gameplay DPR while rendering the static health notice at device resolution', () => {
-    expect(scene).toContain('private currentDpr = 1.75');
+  it('keeps a crisp 3D world DPR while rendering UI and the static health notice independently', () => {
+    expect(scene).toContain('private currentDpr = 2');
     expect(scene).toContain('private screenDpr = 1');
     expect(scene).toContain('? Math.min(3, this.devicePixelRatio)');
     expect(scene).toContain(': Math.min(2.25, this.devicePixelRatio)');
     expect(scene).toContain('private readonly worldTarget = new THREE.WebGLRenderTarget');
+    expect(scene).toContain('this.worldTarget.samples = this.renderer.capabilities.isWebGL2 ? 2 : 0');
     expect(scene).toContain('this.renderer.setRenderTarget(this.worldTarget)');
     expect(scene).toContain('this.renderer.render(this.compositeScene, this.compositeCamera)');
     expect(scene).toContain('toneMapped: false');
-    expect(scene).toContain('this.applyDpr(1.4)');
-    expect(scene).toContain('this.applyDpr(1.75)');
+    expect(scene).toContain('this.applyDpr(1.65)');
     expect(scene).toContain('this.applyDpr(2)');
+    expect(scene).toContain('this.applyDpr(2.25)');
     expect(scene).toContain("this.applyQuality('high')");
     expect(productPass).not.toContain('scene.samplePerformance =');
     expect(productPass).not.toContain('scene.applyQuality =');
@@ -37,9 +38,8 @@ describe('mobile release performance rescue', () => {
     expect(scene).toContain('private stepHomeThemeWarmup(): void');
     expect(scene).toContain("text: '正在准备主题资源…'");
     expect(scene).toContain('this.homeWarmupTasks = [...priority, ...rest]');
-    const gpuStart = scene.indexOf('private prewarmThemeGpu(theme: ThemeId): void');
-    const gpuEnd = scene.indexOf('\n  private startupPreloadProgress', gpuStart);
-    expect(scene.slice(gpuStart, gpuEnd)).toContain('this.boardView.reset(HOME_TILES)');
+    expect(scene).not.toContain('private prewarmThemeGpu(theme: ThemeId): void');
+    expect(scene).not.toContain('this.renderer.compile(this.scene, this.camera)');
   });
 
   it('pauses browser WebGL on Home and defers generated theme previews', () => {

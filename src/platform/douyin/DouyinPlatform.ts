@@ -59,21 +59,50 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
         if (!nickName) { resolve({ status: 'failed', error: 'profile missing nickname' }); return; }
         resolve({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
       };
-      const failure = (error: { errMsg?: string }) => {
-        const message = error.errMsg ?? 'Douyin user profile failed';
-        resolve({ status: /deny|cancel|auth deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+      const failure = (error: { errMsg?: string; errNo?: number; errorCode?: number }) => {
+        const code = error.errNo ?? error.errorCode;
+        const message = `${code ?? ''} ${error.errMsg ?? 'Douyin user profile failed'}`.trim();
+        resolve({ status: /deny|cancel|not authorized|privacy permission/i.test(message) ? 'cancelled' : 'failed', error: message });
       };
+      const requestUserInfo = () => {
+        try {
+          if (this.api.getUserInfo) {
+            this.api.getUserInfo({ withCredentials: false, success, fail: failure });
+            return;
+          }
+          if (this.api.getUserProfile) {
+            this.api.getUserProfile({ force: true, success, fail: failure });
+            return;
+          }
+          resolve({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
+        } catch (error) {
+          resolve({ status: 'failed', error: String(error) });
+        }
+      };
+
+      if (!this.api.login) {
+        resolve({ status: 'unavailable', error: 'tt.login unavailable' });
+        return;
+      }
+
       try {
-        if (this.api.getUserInfo) {
-          this.api.getUserInfo({ withCredentials: false, success, fail: failure });
-          return;
-        }
-        if (this.api.getUserProfile) {
-          this.api.getUserProfile({ force: false, success, fail: failure });
-          return;
-        }
-        resolve({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
-      } catch (error) { resolve({ status: 'failed', error: String(error) }); }
+        this.api.login({
+          force: true,
+          success: result => {
+            if (!result.isLogin) {
+              resolve({ status: 'cancelled', error: '10601 user not login' });
+              return;
+            }
+            requestUserInfo();
+          },
+          fail: error => {
+            const message = error.errMsg ?? 'tt.login failed';
+            resolve({ status: /cancel|deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+          },
+        });
+      } catch (error) {
+        resolve({ status: 'failed', error: String(error) });
+      }
     });
   }
   bootstrap(): Promise<AccountBootstrapResult> {
