@@ -17,14 +17,25 @@ export class ProviderError extends Error {
 const ENDPOINT = 'https://developer.toutiao.com/api/apps/v2/jscode2session';
 
 export class OfficialDouyinProvider implements DouyinProvider {
+  private available = true;
+  private observed = false;
+  status(): 'unknown' | 'available' | 'unavailable' { return !this.observed ? 'unknown' : this.available ? 'available' : 'unavailable'; }
+  isReady(): boolean { return Boolean(this.appId?.trim() && this.appSecret?.trim() && this.available); }
+
   constructor(
     private readonly appId: string | undefined,
     private readonly appSecret: string | undefined,
     private readonly request: typeof fetch = fetch,
   ) {}
 
-  async exchange({ code, anonymousCode }: { code?: string; anonymousCode?: string }): Promise<DouyinIdentity> {
-    if (!this.appId || !this.appSecret) throw new ProviderError('configuration');
+  async exchange(credential: { code?: string; anonymousCode?: string }): Promise<DouyinIdentity> {
+    this.observed = true;
+    try { const identity = await this.exchangeCode(credential); this.available = true; return identity; }
+    catch (error) { this.available = error instanceof ProviderError && error.category === 'invalid_code'; throw error; }
+  }
+
+  private async exchangeCode({ code, anonymousCode }: { code?: string; anonymousCode?: string }): Promise<DouyinIdentity> {
+    if (!this.appId?.trim() || !this.appSecret?.trim()) throw new ProviderError('configuration');
     let response: Response;
     try {
       response = await this.request(ENDPOINT, {

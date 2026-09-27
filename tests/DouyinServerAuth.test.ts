@@ -77,16 +77,17 @@ describe('durable accounts and reward ledger', () => {
     expect((await reopened.findById(account.id))?.rewards.currency).toBe(20);
   });
 
-  it('keeps recent ad replay protection while bounding the ledger after reopen', async () => {
+  it('keeps all ad replay protection after reopen', async () => {
     const { folder, repository } = await repo();
     const { account } = await repository.findOrCreate('ad-player');
     for (let index = 0; index < MAX_RECENT_AD_CLAIMS + 30; index += 1) {
       expect((await repository.claimAd(account.id, 'solo_skill_refill', `ad-claim-${index + 100000}`)).granted).toBe(true);
     }
-    expect((await repository.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS);
+    expect((await repository.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS + 30);
     const reopened = await JsonAccountRepository.open(join(folder, 'accounts.json'));
+    expect((await reopened.claimAd(account.id, 'daily_s_coin', 'ad-claim-100000')).granted).toBe(false);
     expect((await reopened.claimAd(account.id, 'solo_skill_refill', `ad-claim-${MAX_RECENT_AD_CLAIMS + 29 + 100000}`)).granted).toBe(false);
-    expect((await reopened.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS);
+    expect((await reopened.findById(account.id))?.adClaims).toHaveLength(MAX_RECENT_AD_CLAIMS + 30);
   });
 
   it('max-merges Solo progress per theme across repository reopen', async () => {
@@ -208,7 +209,7 @@ describe('account HTTP endpoints', () => {
     const site = await fixture();
     try {
       const auth = await (await post(site.base, '/auth/douyin', { code: 'temporary-code' })).json() as { token: string };
-      expect((await post(site.base, '/themes/unlock', { themeId: 'unknown-theme', requestId: 'unlock-0001' }, auth.token)).status).toBe(400);
+      for (const themeId of ['unknown-theme', 'constructor', '__proto__', 'toString']) expect((await post(site.base, '/themes/unlock', { themeId, requestId: 'unlock-0001' }, auth.token)).status).toBe(400);
       expect((await post(site.base, '/themes/unlock', { themeId: 'future_theme', requestId: 'short' }, auth.token)).status).toBe(400);
 
       const seasonResponse = await fetch(site.base + '/season/current');

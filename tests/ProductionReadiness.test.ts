@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { dataDirectoryWritable, productionReadiness, validateProductionEnvironment } from '../server/ops/Readiness';
-import { DOUYIN_PRODUCT_CONFIG } from '../platform/douyin/src/config';
 
 const folders: string[] = [];
 afterEach(async () => { await Promise.all(folders.splice(0).map(folder => rm(folder, { recursive: true, force: true }))); });
@@ -64,10 +63,10 @@ describe('safe production readiness', () => {
     const signingKey = 'mock-only-signing-key-over-32-bytes';
     const check = (appId: string) => spawnSync(process.execPath, ['--import', 'tsx', 'scripts/check-production-env.ts'], {
       cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, DOUYIN_APP_ID: appId,
-        DOUYIN_APP_SECRET: providerSecret, DOUBLEFIGHT_SESSION_SECRET: signingKey,
+        DOUBLEFIGHT_EXPECTED_APP_ID: 'tt-server-contract-fixture', DOUYIN_APP_SECRET: providerSecret, DOUBLEFIGHT_SESSION_SECRET: signingKey,
         DOUBLEFIGHT_SESSION_SECRET_PREVIOUS: '' },
     });
-    const valid = check(DOUYIN_PRODUCT_CONFIG.appId);
+    const valid = check('tt-server-contract-fixture');
     expect(valid.status).toBe(0);
     expect(JSON.parse(valid.stdout)).toEqual({ authConfigured: true, sessionSigningConfigured: true, appIdMatchesRelease: true });
     expect(valid.stdout + valid.stderr).not.toContain(providerSecret);

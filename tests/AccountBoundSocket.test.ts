@@ -69,18 +69,35 @@ async function connect(base: string, bearer?: string) {
 }
 
 describe('real WebSocket account handshake without Protocol v6 changes', () => {
+  it.skipIf(process.platform === 'win32')('closes live sockets and exits cleanly on SIGTERM', async () => {
+    const server = await runServer();
+    const connected = await connect(server.base, server.token);
+    try {
+      const closed = once(connected.socket, 'close');
+      const exited = once(server.child, 'exit');
+      server.child.kill('SIGTERM');
+      expect((await closed)[0]).toBe(1001);
+      expect((await exited)[0]).toBe(0);
+    } finally {
+      connected.socket.terminate();
+      if (server.child.exitCode === null) server.child.kill();
+      await rm(server.folder, { recursive: true, force: true });
+    }
+  }, 10000);
   it('keeps /health compatible while /ready signals production auth status safely', async () => {
     for (const configured of [false, true]) {
       const server = await runServer(configured);
       try {
         const health = await fetch(server.base + '/health');
         expect(health.status).toBe(200);
+        expect(health.headers.get('cache-control')).toBe('no-store');
+        expect((await fetch(server.base + '/health', { method: 'POST' })).status).toBe(405);
         expect((await health.json()).ok).toBe(true);
         const response = await fetch(server.base + '/ready');
         expect(response.status).toBe(configured ? 200 : 503);
         const readiness = await response.json();
         expect(readiness).toEqual({ ready: configured, authConfigured: configured,
-          sessionSigningConfigured: true, dataDirectoryWritable: true, protocolVersion: 6 });
+          sessionSigningConfigured: true, dataDirectoryWritable: true, databaseReady: true, providerReady: configured, providerStatus: 'unknown', protocolVersion: 6 });
         expect(response.headers.get('cache-control')).toBe('no-store');
         expect(JSON.stringify(readiness)).not.toContain('mock-only-provider-secret');
         expect((await fetch(server.base + '/ready?operator=1')).status).toBe(configured ? 200 : 503);

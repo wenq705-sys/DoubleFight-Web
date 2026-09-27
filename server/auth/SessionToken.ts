@@ -12,16 +12,16 @@ export class SessionToken {
     return { token: `${payload}.${this.sign(payload, secret)}`, expiresAt };
   }
 
-  assertConfigured(): void { this.requireSecret(); }
+  assertConfigured(): void { this.requireSecret(); if (this.previous && (!this.previous.trim() || Buffer.byteLength(this.previous) < 32)) throw new Error('invalid previous signing key'); }
 
   verify(token: string, now = Date.now()): string | null {
-    if (!this.current || Buffer.byteLength(this.current) < 32 || token.length > 2048) return null;
+    if (!this.current?.trim() || Buffer.byteLength(this.current) < 32 || token.length > 2048) return null;
     const parts = token.split('.');
     if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1])) return null;
     const [payload, signature] = parts;
     const actual = Buffer.from(signature, 'base64url');
     const valid = [this.current, this.previous]
-      .filter((key): key is string => Boolean(key) && Buffer.byteLength(key!) >= 32)
+      .filter((key): key is string => Boolean(key?.trim()) && Buffer.byteLength(key!) >= 32)
       .some(key => {
       const expected = Buffer.from(this.sign(payload, key), 'base64url');
       return actual.length === expected.length && timingSafeEqual(actual, expected);
@@ -37,7 +37,7 @@ export class SessionToken {
   }
 
   private requireSecret(): string {
-    if (!this.current || Buffer.byteLength(this.current) < 32) throw new Error('DOUBLEFIGHT_SESSION_SECRET must be at least 32 bytes');
+    if (!this.current?.trim() || Buffer.byteLength(this.current) < 32) throw new Error('DOUBLEFIGHT_SESSION_SECRET must be at least 32 bytes');
     return this.current;
   }
 

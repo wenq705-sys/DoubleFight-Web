@@ -25,13 +25,23 @@ const manager = new RoomManager(result => {
   });
 });
 const sessions = new SessionToken(process.env.DOUBLEFIGHT_SESSION_SECRET, process.env.DOUBLEFIGHT_SESSION_SECRET_PREVIOUS);
+let shuttingDown = false;
+const provider = new OfficialDouyinProvider(process.env.DOUYIN_APP_ID, process.env.DOUYIN_APP_SECRET);
 const authHandler = createAuthHandler({
   repository: accountRepository,
-  provider: new OfficialDouyinProvider(process.env.DOUYIN_APP_ID, process.env.DOUYIN_APP_SECRET),
+  provider,
   sessions,
 });
 
-const httpServer = createServer(async (request, response) => {
+const httpServer = createServer((request, response) => {
+ void handleHttp(request, response).catch(() => {
+   console.error(JSON.stringify({ area: 'http', event: 'request_failure' }));
+   if (!response.headersSent) response.writeHead(503, { 'content-type': 'application/json' });
+   response.end(JSON.stringify({ error: 'service_unavailable' }));
+ });
+});
+async function handleHttp(request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse) {
+  if (shuttingDown) { response.writeHead(503, { 'connection': 'close' }).end(); return; }
   if (await authHandler(request, response)) return;
   const path = request.url?.split('?')[0];
   if (path === '/ready') {
@@ -41,11 +51,13 @@ const httpServer = createServer(async (request, response) => {
       response.writeHead(405).end(JSON.stringify({ error: 'method_not_allowed' }));
       return;
     }
-    const status = await productionReadiness(process.env, dataDirectory, PROTOCOL_VERSION);
-    response.writeHead(status.ready ? 200 : 503).end(JSON.stringify(status));
+    const status = await productionReadiness(process.env, dataDirectory, PROTOCOL_VERSION, { databaseReady: () => accountRepository.checkReady(), providerReady: () => provider.isReady(), shuttingDown: () => shuttingDown });
+    response.writeHead(status.ready ? 200 : 503).end(JSON.stringify({ ...status, providerStatus: provider.status() }));
     return;
   }
   if (path === '/health' || path === '/healthz') {
+    response.setHeader('cache-control', 'no-store');
+    if (request.method !== 'GET') { response.writeHead(405).end(); return; }
     response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
     response.end(JSON.stringify({
       ok: true,
@@ -63,7 +75,7 @@ const httpServer = createServer(async (request, response) => {
     websocket: '/ws',
     protocolVersion: PROTOCOL_VERSION,
   }));
-});
+}
 
 const websocketServer = new WebSocketServer({
   server: httpServer,
@@ -119,7 +131,7 @@ websocketServer.on('connection', (socket, request) => {
     connection = manager.register(message => send(socket, message), identity);
     for (const entry of buffered) handleMessage(entry.raw, entry.isBinary);
     buffered.length = 0;
-  });
+  }).catch(() => { socket.close(1011, 'service unavailable'); });
 });
 
 const heartbeat = setInterval(() => {
@@ -150,10 +162,14 @@ function readPort(value: string | undefined, fallback: number): number {
 }
 
 function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log(`[doublefight] received ${signal}; shutting down`);
   clearInterval(heartbeat);
-  websocketServer.close(() => {
-    httpServer.close(() => process.exit(0));
+  for (const socket of websocketServer.clients) socket.close(1001, 'server shutdown');
+  websocketServer.close();
+  httpServer.close(() => {
+    void accountRepository.drain().then(() => process.exit(0), () => process.exit(1));
   });
 
   setTimeout(() => process.exit(1), 5_000).unref();

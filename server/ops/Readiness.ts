@@ -12,7 +12,7 @@ export interface ReadinessStatus {
 
 export function validateProductionEnvironment(env: NodeJS.ProcessEnv): Pick<ReadinessStatus, 'authConfigured' | 'sessionSigningConfigured'> {
   const present = (value: string | undefined) => Boolean(value?.trim());
-  const keyValid = (value: string | undefined) => Boolean(value && Buffer.byteLength(value) >= 32);
+  const keyValid = (value: string | undefined) => Boolean(value?.trim() && Buffer.byteLength(value) >= 32);
   return {
     authConfigured: present(env.DOUYIN_APP_ID) && present(env.DOUYIN_APP_SECRET),
     sessionSigningConfigured: keyValid(env.DOUBLEFIGHT_SESSION_SECRET)
@@ -33,11 +33,14 @@ export async function dataDirectoryWritable(directory: string): Promise<boolean>
   finally { if (probe) await rm(probe, { force: true }).catch(() => undefined); }
 }
 
-export async function productionReadiness(env: NodeJS.ProcessEnv, directory: string, protocolVersion: number): Promise<ReadinessStatus> {
+export async function productionReadiness(env: NodeJS.ProcessEnv, directory: string, protocolVersion: number, dependencies?: { databaseReady: () => Promise<boolean>; providerReady: () => boolean; shuttingDown: () => boolean }): Promise<ReadinessStatus> {
   const configuration = validateProductionEnvironment(env);
   const writable = await dataDirectoryWritable(directory);
+  const databaseReady = dependencies ? await dependencies.databaseReady().catch(() => false) : writable;
+  const providerReady = dependencies ? dependencies.providerReady() : configuration.authConfigured;
   return {
-    ready: configuration.authConfigured && configuration.sessionSigningConfigured && writable,
+    ...(dependencies ? { databaseReady, providerReady } : {}),
+    ready: databaseReady && providerReady && !dependencies?.shuttingDown() && configuration.authConfigured && configuration.sessionSigningConfigured && writable,
     ...configuration,
     dataDirectoryWritable: writable,
     protocolVersion,

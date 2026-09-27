@@ -14,4 +14,6 @@ ENV HOST=0.0.0.0
 ENV PORT=8787
 EXPOSE 8787
 
-CMD ["npm", "run", "server"]
+USER node
+ENV DOUBLEFIGHT_DATA_DIR=/data
+CMD ["node", "--import", "tsx", "server/index.ts"]

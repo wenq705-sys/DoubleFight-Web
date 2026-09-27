@@ -108,7 +108,7 @@ export function createAuthHandler(deps: AuthDependencies) {
 
       const body = await readBody(request);
       if (path === '/themes/unlock') {
-        if (typeof body.themeId !== 'string' || !(body.themeId in THEME_REGISTRY)
+        if (typeof body.themeId !== 'string' || !Object.hasOwn(THEME_REGISTRY, body.themeId)
           || typeof body.requestId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.requestId)) {
           throw new RequestError(400, 'invalid_theme_request');
         }
@@ -117,7 +117,7 @@ export function createAuthHandler(deps: AuthDependencies) {
         return true;
       }
       if (path === '/themes/unlock/ad') {
-        if (typeof body.themeId !== 'string' || !(body.themeId in THEME_REGISTRY)
+        if (typeof body.themeId !== 'string' || !Object.hasOwn(THEME_REGISTRY, body.themeId)
           || typeof body.claimId !== 'string' || !/^[A-Za-z0-9_-]{8,100}$/.test(body.claimId)) {
           throw new RequestError(400, 'invalid_theme_ad_request');
         }
