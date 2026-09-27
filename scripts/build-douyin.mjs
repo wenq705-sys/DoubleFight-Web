@@ -7,6 +7,16 @@ const projectConfigSource = release
   ? 'platform/douyin/project.release.config.json'
   : 'platform/douyin/project.config.json';
 
+const EXPECTED_THREE_VERSION = '0.162.0';
+const installedThreeVersion = JSON.parse(
+  await readFile('node_modules/three/package.json', 'utf8'),
+).version;
+if (installedThreeVersion !== EXPECTED_THREE_VERSION) {
+  throw new Error(
+    `Douyin build requires three@${EXPECTED_THREE_VERSION} for Helium/WebGL1 compatibility; installed three@${installedThreeVersion}.`,
+  );
+}
+
 await build({
   configFile: false,
   publicDir: false,
