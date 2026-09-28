@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { RELEASE_THEME_IDS, type ReleaseThemeId } from '../../shared/index';
 import type { AccountRepository } from './AccountRepository';
-import { currentSeason, ownedThemes, publicPlayer, THEME_REGISTRY } from './AccountRepository';
+import { currentSeason, isValidSoloAscensionMs, ownedThemes, publicPlayer, THEME_REGISTRY } from './AccountRepository';
 import type { DouyinProvider } from './DouyinProvider';
 import { ProviderError } from './DouyinProvider';
 import { SessionToken } from './SessionToken';
@@ -14,7 +14,7 @@ export interface AuthDependencies {
   log?: (event: Record<string, string | boolean>) => void;
 }
 
-const routes = new Set(['/auth/douyin', '/me', '/profile', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/themes/unlock/ad', '/season/current', '/leaderboards/pvp']);
+const routes = new Set(['/auth/douyin', '/me', '/profile', '/progress/solo', '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock', '/themes/unlock/ad', '/season/current', '/leaderboards/pvp', '/leaderboards/solo']);
 const audit = (event: Record<string, string | boolean>) => console.info(JSON.stringify({ area: 'account', ...event }));
 
 export function createAuthHandler(deps: AuthDependencies) {
@@ -28,7 +28,7 @@ export function createAuthHandler(deps: AuthDependencies) {
     response.setHeader('access-control-allow-headers', 'authorization, content-type');
     response.setHeader('cache-control', 'no-store');
     if (request.method === 'OPTIONS') { response.writeHead(204).end(); return true; }
-    if (request.method !== (path === '/me' || path === '/themes' || path === '/season/current' || path === '/leaderboards/pvp' ? 'GET' : 'POST')) {
+    if (request.method !== (path === '/me' || path === '/themes' || path === '/season/current' || path === '/leaderboards/pvp' || path === '/leaderboards/solo' ? 'GET' : 'POST')) {
       json(response, 405, { error: 'method_not_allowed' }); return true;
     }
 
@@ -53,6 +53,16 @@ export function createAuthHandler(deps: AuthDependencies) {
         const limit = rawLimit ? Number(rawLimit) : 50;
         if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new RequestError(400, 'invalid_limit');
         json(response, 200, await deps.repository.leaderboard(now(), limit)); return true;
+      }
+
+      if (path === '/leaderboards/solo') {
+        const params = new URL(request.url ?? '/', 'http://localhost').searchParams;
+        const theme = params.get('theme'), kind = params.get('kind'), rawLimit = params.get('limit');
+        if (!theme || !(RELEASE_THEME_IDS as readonly string[]).includes(theme)) throw new RequestError(400, 'invalid_theme');
+        if (kind !== 'score' && kind !== 'ascension') throw new RequestError(400, 'invalid_kind');
+        const limit = rawLimit === null ? 50 : Number(rawLimit);
+        if ((rawLimit !== null && !/^[0-9]+$/.test(rawLimit)) || !Number.isSafeInteger(limit) || limit < 1 || limit > 50) throw new RequestError(400, 'invalid_limit');
+        json(response, 200, await deps.repository.soloLeaderboard(theme as ReleaseThemeId, kind, limit)); return true;
       }
 
       const bearer = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(request.headers.authorization ?? '');
@@ -88,10 +98,11 @@ export function createAuthHandler(deps: AuthDependencies) {
           || body.highest > 1_048_576 || !Number.isInteger(Math.log2(body.highest))) {
           throw new RequestError(400, 'invalid_progress');
         }
+        if (body.bestAscensionMs !== undefined && !isValidSoloAscensionMs(body.bestAscensionMs)) throw new RequestError(400, 'invalid_progress');
         // Validate the request shape before authorization so malformed payloads
         // keep the stable 400 contract; valid requests for locked themes are 403.
         if (!ownedThemes(account).includes(theme)) throw new RequestError(403, 'theme_locked');
-        const updated = await deps.repository.mergeSoloProgress(account.id, theme, body.best, body.highest, now());
+        const updated = await deps.repository.mergeSoloProgress(account.id, theme, body.best, body.highest, now(), body.bestAscensionMs as number | undefined);
         json(response, 200, { player: publicPlayer(updated.account, now()), discoveryAmount: updated.discoveryAmount, taskAmount: updated.taskAmount });
         return true;
       }
