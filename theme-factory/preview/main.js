@@ -13,14 +13,26 @@ const root=new THREE.Group();scene.add(root);const loader=new GLTFLoader();const
 const url=(name)=>import.meta.env.BASE_URL+'theme-factory/dist/night-market/'+name+'.glb';
 const load=(name)=>new Promise((ok,fail)=>loader.load(url(name),g=>ok(g.scene),undefined,fail));
 let active=null,angle=0,drag=false,last=0;
+const perf=document.querySelector('#perf'),quality=document.querySelector('#quality');
+const mobile=matchMedia('(pointer:coarse)').matches;
+const presets=[{name:'省电',dpr:1,shadow:false},{name:'标准',dpr:1.3,shadow:true},{name:'精细',dpr:1.8,shadow:true}];
+let qualityIndex=mobile?0:1,frames=0,lastSample=performance.now();
+function setQuality(i){
+ qualityIndex=i;const p=presets[i];renderer.setPixelRatio(Math.min(devicePixelRatio,p.dpr));
+ renderer.shadowMap.enabled=p.shadow;renderer.shadowMap.needsUpdate=true;
+ key.shadow.mapSize.set(i===2?2048:1024,i===2?2048:1024);
+ if(key.shadow.map)key.shadow.map.dispose();key.shadow.map=null;
+ renderer.setSize(innerWidth,innerHeight,false);quality.textContent='画质：'+p.name;
+}
+quality.onclick=()=>setQuality((qualityIndex+1)%presets.length);setQuality(qualityIndex);
 try{
 const board=await load('board');board.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});root.add(board);const environment=await load('environment');environment.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});root.add(environment);
 const pieces=await Promise.all(['premium-dumpling','premium-panda','premium-ox'].map(load));
 pieces.forEach(p=>{p.visible=false;p.position.set(0,.35,0);p.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});root.add(p)});
 function choose(i){if(active)active.visible=false;active=pieces[i];active.visible=true;status.textContent='拖动旋转 · 当前：'+['街头团子','熊猫大厨','夜市牛王'][i]}
-document.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>choose(i));choose(1);
+document.querySelectorAll('.toolbar button').forEach((b,i)=>b.onclick=()=>choose(i));choose(1);
 }catch(e){status.textContent='资源加载失败：'+e.message;console.error(e)}
 canvas.addEventListener('pointerdown',e=>{drag=true;last=e.clientX;canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(drag){angle+=(e.clientX-last)*.007;last=e.clientX}});
 canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointercancel',()=>drag=false);
-function frame(){const w=innerWidth,h=innerHeight;if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio()))renderer.setSize(w,h,false);const aspect=w/h,span=Math.max(9.8,9.5/aspect);camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;camera.updateProjectionMatrix();root.rotation.y=angle;if(active)active.position.y=.35+Math.sin(clock.getElapsedTime()*1.7)*.025;renderer.render(scene,camera);requestAnimationFrame(frame)}frame();
+function frame(){const w=innerWidth,h=innerHeight;if(canvas.width!==Math.floor(w*renderer.getPixelRatio())||canvas.height!==Math.floor(h*renderer.getPixelRatio()))renderer.setSize(w,h,false);const aspect=w/h,span=Math.max(9.8,9.5/aspect);camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;camera.updateProjectionMatrix();root.rotation.y=angle;if(active)active.position.y=.35+Math.sin(clock.getElapsedTime()*1.7)*.025;renderer.render(scene,camera);frames++;const now=performance.now();if(now-lastSample>=1000){const fps=Math.round(frames*1000/(now-lastSample));frames=0;lastSample=now;const info=renderer.info.render;perf.textContent=fps+' FPS | '+info.calls+' Draws\n'+info.triangles.toLocaleString()+' triangles | DPR '+renderer.getPixelRatio().toFixed(1);}requestAnimationFrame(frame)}frame();
