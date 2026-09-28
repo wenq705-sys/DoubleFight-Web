@@ -86,6 +86,28 @@ stairs(0,-2.65)
 for x in (-3.53,3.53):
  for y in (-3.43,3.43):
   lantern(x,y,.04,.7)
+# Layered artisan details: hanging banners, bridge lamps, water plants, market merchandise.
+navy=material('night market banner indigo',(.045,.10,.19))
+jade=material('jade ceramics',(.13,.49,.35))
+for x in (-2.82,2.82):
+ for y in (-1.30,0,1.30):
+  pole((x,y,-.17),(x,y,1.38),.025,wood,'banner mast')
+  box('embroidered hanging pennant',(x,y,1.06),(.27,.045,.52),navy,.012)
+  box('gold pennant edging',(x,y,1.32),(.31,.055,.035),gold,.008)
+  lantern(x,y,.68,.57)
+for x in (-3.50,3.50):
+ for y in (-2.65,-1.75,-.85,.05,.95,1.85,2.75):
+  ball('canal lotus leaf',(x,y,-.36),(.15,.11,.018),green)
+  if random.random()>.48:
+   ball('floating pink lotus',(x+.035,y,-.32),(.065,.055,.055),pink)
+for x,y in [(-2.92,-1.48),(2.92,-1.48),(-2.92,1.48),(2.92,1.48)]:
+ for i in range(5):
+  xx=x+(i-2)*.14
+  ball('market ceramic bowl',(xx,y-.61,.39),(.062,.062,.038),jade)
+  ball('steaming food',(xx,y-.61,.43),(.045,.044,.026),cream)
+for x in (-2.12,2.12):
+ for y in (-2.12,2.12):
+  box('ornamental corner bronze plate',(x,y,.02),(.19,.19,.025),gold,.015)
 # Export environment without cameras, lamps, or gameplay pieces.
 bpy.ops.export_scene.gltf(filepath=str(out/'environment.glb'),export_format='GLB',export_apply=True)
 print('PREMIUM ENVIRONMENT', (out/'environment.glb').stat().st_size)
