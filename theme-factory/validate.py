@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 path=Path(__file__).parent/"themes/night-market.json"
-data=json.loads(path.read_text())
+data=json.loads(path.read_text(encoding='utf-8'))
 assert data["schemaVersion"]==1
 assert data["numericLabels"] is False, "Tile silhouettes, not numeric overlays, identify levels"
 assert data["board"]["cells"]==4

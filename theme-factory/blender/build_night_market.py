@@ -8,7 +8,7 @@ from mathutils import Vector
 args = sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv else []
 out = Path(args[args.index("--out")+1]) if "--out" in args else Path("theme-factory/dist/night-market")
 out.mkdir(parents=True, exist_ok=True)
-manifest = json.loads((Path(__file__).resolve().parent.parent/"themes/night-market.json").read_text())
+manifest = json.loads((Path(__file__).resolve().parent.parent/"themes/night-market.json").read_text(encoding='utf-8'))
 report = {"theme": manifest["id"], "assets": []}
 
 def reset():
@@ -115,7 +115,7 @@ def preview():
     bpy.ops.object.camera_add(location=(5,-7,6))
     camera=bpy.context.object; target=Vector((0,0,.45)); camera.rotation_euler=(target-camera.location).to_track_quat("-Z","Y").to_euler()
     camera.data.type="ORTHO"; camera.data.ortho_scale=2.5; bpy.context.scene.camera=camera
-    scene=bpy.context.scene; scene.render.engine="BLENDER_EEVEE_NEXT"
+    scene=bpy.context.scene; scene.render.engine="BLENDER_EEVEE"
     scene.render.resolution_x=640; scene.render.resolution_y=640; scene.render.resolution_percentage=100
     scene.render.image_settings.file_format="PNG"
 
