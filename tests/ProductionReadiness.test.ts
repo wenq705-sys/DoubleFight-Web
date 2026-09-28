@@ -40,13 +40,21 @@ describe('safe production readiness', () => {
     expect(await dataDirectoryWritable(file)).toBe(false);
   });
 
-  it('proxies every release account/reward surface through the production Nginx config', async () => {
+  it('proxies all current release endpoints rather than only matching regex source fragments', async () => {
     const nginx = await readFile('ops/doublefight-tls.conf', 'utf8');
-    for (const route of [
-      'auth/douyin', 'me', 'profile', 'progress/solo', 'rewards/(sidebar|ad)',
-      'themes(/unlock(/ad)?)?', 'season/current', 'leaderboards/pvp',
+    const expression = nginx.match(/location ~ (\S+) \{/);
+    expect(expression).not.toBeNull();
+    const route = new RegExp(expression![1]);
+    for (const path of [
+      '/auth/douyin', '/me', '/profile', '/progress/solo',
+      '/rewards/sidebar', '/rewards/ad', '/themes', '/themes/unlock',
+      '/themes/unlock/ad', '/season/current', '/leaderboards/pvp',
+      '/leaderboards/solo',
     ]) {
-      expect(nginx).toContain(route);
+      expect(route.test(path), `Nginx must proxy ${path}`).toBe(true);
+    }
+    for (const path of ['/admin', '/themes/unlock/ad/extra', '/leaderboards/unknown']) {
+      expect(route.test(path), `Nginx must not proxy ${path}`).toBe(false);
     }
   });
 
