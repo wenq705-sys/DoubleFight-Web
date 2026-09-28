@@ -115,6 +115,27 @@ for x,y in [(-2.92,-1.48),(2.92,-1.48),(-2.92,1.48),(2.92,1.48)]:
 for x in (-2.12,2.12):
  for y in (-2.12,2.12):
   box('ornamental corner bronze plate',(x,y,.02),(.19,.19,.025),gold,.015)
+# Mobile batching: apply modifiers, then join static meshes by their single material.
+# Geometry remains identical; GLB draw calls drop from hundreds to material-count scale.
+bpy.ops.object.select_all(action='DESELECT')
+meshes=[o for o in bpy.context.scene.objects if o.type=='MESH']
+for o in meshes:
+ bpy.context.view_layer.objects.active=o
+ for modifier in list(o.modifiers):
+  try:bpy.ops.object.modifier_apply(modifier=modifier.name)
+  except RuntimeError:pass
+groups={}
+for o in meshes:
+ key=tuple(m.name for m in o.data.materials)
+ groups.setdefault(key,[]).append(o)
+for key,objects in groups.items():
+ if len(objects)<2:continue
+ bpy.ops.object.select_all(action='DESELECT')
+ for o in objects:o.select_set(True)
+ bpy.context.view_layer.objects.active=objects[0]
+ bpy.ops.object.join()
+ bpy.context.object.name='batched static '+('-'.join(key) if key else 'plain')
+print('BATCHED STATIC MESHES',len(meshes),'->',len([o for o in bpy.context.scene.objects if o.type=='MESH']))
 # Export environment without cameras, lamps, or gameplay pieces.
 bpy.ops.export_scene.gltf(filepath=str(out/'environment.glb'),export_format='GLB',export_apply=True)
 print('PREMIUM ENVIRONMENT', (out/'environment.glb').stat().st_size)
