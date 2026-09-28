@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "night-market-prototype",
+  "displayName": "夜市江湖",
+  "visualStyle": "premium-toy-diorama",
+  "numericLabels": false,
+  "levels": [
+    {"value": 2, "id": "skewer", "label": "街头烤串", "palette": ["#D78547", "#6E3C2A", "#F8DFA4"], "scale": 0.72},
+    {"value": 128, "id": "cart", "label": "夜市小推车", "palette": ["#C54B36", "#EFC36B", "#503B39"], "scale": 0.88},
+    {"value": 2048, "id": "festival", "label": "夜市盛典", "palette": ["#E6B454", "#C94538", "#3A5462"], "scale": 1.0}
+  ],
+  "budgets": {"maxTrianglesPerTile": 3000, "maxMaterialsPerTile": 4, "maxAssetBytes": 180000, "maxBoardTriangles": 12000},
+  "board": {"cells": 4, "cellPitch": 1.0, "theme": "warm-street-market", "peripheralDecorOnly": true}
+}
