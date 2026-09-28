@@ -1,0 +1,33 @@
+{
+  "theme": "night-market-prototype",
+  "assets": [
+    {
+      "id": "skewer",
+      "triangles": 700,
+      "materials": 3,
+      "bytes": 24320,
+      "pass": true
+    },
+    {
+      "id": "cart",
+      "triangles": 1132,
+      "materials": 3,
+      "bytes": 54112,
+      "pass": true
+    },
+    {
+      "id": "festival",
+      "triangles": 1152,
+      "materials": 3,
+      "bytes": 52464,
+      "pass": true
+    },
+    {
+      "id": "board",
+      "triangles": 3600,
+      "materials": 3,
+      "bytes": 151384,
+      "pass": true
+    }
+  ]
+}
