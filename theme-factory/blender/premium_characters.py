@@ -29,6 +29,22 @@ def eyes(y=-.40,z=.77,x=.17):
   ball('expressive dark eye',(xx,y,z),(.055,.036,.075),black)
   ball('eye highlight',(xx-.018,y-.032,z+.027),(.015,.009,.018),white,10)
 def export(n):
+ # Each collectible is a static pose: collapse material-identical parts to reduce draws.
+ meshes=[o for o in bpy.context.scene.objects if o.type=='MESH']
+ for o in meshes:
+  bpy.context.view_layer.objects.active=o
+  for modifier in list(o.modifiers):
+   try:bpy.ops.object.modifier_apply(modifier=modifier.name)
+   except RuntimeError:pass
+ groups={}
+ for o in meshes:groups.setdefault(tuple(m.name for m in o.data.materials),[]).append(o)
+ for key,items in groups.items():
+  if len(items)<2:continue
+  bpy.ops.object.select_all(action='DESELECT')
+  for o in items:o.select_set(True)
+  bpy.context.view_layer.objects.active=items[0];bpy.ops.object.join()
+  bpy.context.object.name=n+' batched '+('-'.join(key) if key else 'plain')
+ print('COLLECTIBLE BATCH',n,len(meshes),'->',len([o for o in bpy.context.scene.objects if o.type=='MESH']))
  bpy.ops.export_scene.gltf(filepath=str(out/(n+'.glb')),export_format='GLB',export_apply=True)
  print(n,(out/(n+'.glb')).stat().st_size)
 clear();base()
