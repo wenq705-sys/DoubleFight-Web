@@ -3,6 +3,7 @@ dist/
 platform/douyin/dist-release/
 .vite/
 coverage/
+theme-factory/site/
 playwright-report/
 test-results/
 .DS_Store

@@ -10,7 +10,7 @@ scene.add(new THREE.HemisphereLight(0xffe9c2,0x45384c,3.2));
 const key=new THREE.DirectionalLight(0xffd5a0,3.2);key.position.set(-3,8,4);key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;key.shadow.bias=-.0003;scene.add(key);
 const fill=new THREE.DirectionalLight(0x94b5ff,1.1);fill.position.set(4,5,-3);scene.add(fill);
 const root=new THREE.Group();scene.add(root);const loader=new GLTFLoader();const clock=new THREE.Clock();
-const url=(name)=>import.meta.env.BASE_URL+'theme-factory/dist/night-market/'+name+'.glb';
+const url=(name)=>import.meta.env.BASE_URL+'night-market/'+name+'.glb';
 const load=(name)=>new Promise((ok,fail)=>loader.load(url(name),g=>ok(g.scene),undefined,fail));
 let active=null,angle=0,drag=false,last=0;
 const perf=document.querySelector('#perf'),quality=document.querySelector('#quality');

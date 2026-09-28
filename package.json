@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:theme": "vite --config theme-factory/preview/vite.config.js",
+    "build:theme": "vite build --config theme-factory/preview/vite.config.js",
     "dev:server": "tsx watch server/index.ts",
     "server": "tsx server/index.ts",
     "smoke:auth": "node --import tsx scripts/smoke-auth.mjs",
