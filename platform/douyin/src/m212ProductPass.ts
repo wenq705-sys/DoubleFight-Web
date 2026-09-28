@@ -13,6 +13,7 @@ import type { DouyinAuthClient } from './auth';
 import type { DouyinCommercial } from './commercial';
 import { formatDuration, loadThemeMastery, recordAscension, recordDiscovery } from './metaProgress';
 import type { DouyinSoloScene } from './soloScene';
+import { drawPremiumPanel, drawSCoinIcon, drawUiIcon, fitText, hitTarget, uiMetrics, type UiIcon } from './uiSystem';
 
 type Rect = { x: number; y: number; width: number; height: number };
 type SceneInternals = Record<string, any>;
@@ -278,17 +279,16 @@ function drawHomeMeta(
   ctx.font = '700 10px sans-serif';
   ctx.fillText(competitiveRankLabel(rating), profile.x + 12, profile.y + 31);
 
-  const coinW = 74;
-  const coinX = width - 16 - coinW;
-  round(ctx, coinX, profile.y, coinW, 40, 18);
-  ctx.fillStyle = 'rgba(31,50,57,.92)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(242,205,105,.48)';
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#f7d66d';
-  ctx.font = '900 11px sans-serif';
-  ctx.fillText(`S ${balance}`, coinX + coinW / 2, profile.y + 20);
+  const metrics = uiMetrics(width, platform.getSystemInfo().height, platform.getSystemInfo().safeArea, platform.getSystemInfo().menuButton?.bottom ?? 0);
+  const coinW = metrics.compact ? 82 : 88;
+  const coinX = width - metrics.edge - coinW;
+  const coinRect = { x: coinX, y: profile.y, width: coinW, height: 40 };
+  drawPremiumPanel(ctx, coinRect, true);
+  drawSCoinIcon(ctx, coinX + 18, profile.y + 20, 24, true);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffe69a';
+  ctx.font = '900 12px sans-serif';
+  ctx.fillText(balance.toLocaleString('zh-CN'), coinX + 35, profile.y + 20);
 
   const y = Math.max(top + 72, platform.getSystemInfo().height * 0.56) + 60;
   ctx.fillStyle = 'rgba(12,28,36,.95)';
@@ -412,7 +412,8 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff0bd';
     ctx.font = '900 15px sans-serif';
-    ctx.fillText('⚔  寻找同级对手', width / 2, cy + 30);
+    drawUiIcon(ctx, 'pvp', width / 2 - 62, cy + 29, 16, '#ffe09a');
+    ctx.fillText('寻找同级对手', width / 2 + 9, cy + 30);
     const elapsed = snap.state.matchmaking.joinedAt
       ? Math.max(0, (Date.now() - snap.state.matchmaking.joinedAt) / 1000)
       : 0;
@@ -452,7 +453,7 @@ function drawOnlineMeta(ctx: CanvasRenderingContext2D, width: number, height: nu
 function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: number, auth: DouyinAuthClient, platform: DouyinPlatform): void {
   ctx.fillStyle = 'rgba(3,10,15,.78)';
   ctx.fillRect(0, 0, width, height);
-  const panelW = Math.min(318, width - 28);
+  const panelW = Math.min(326, width - 24);
   const x = (width - panelW) / 2;
   const y = height * 0.18;
   const panelH = Math.min(470, height * 0.66);
@@ -484,9 +485,12 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
     ctx.fill();
   }
 
-  ctx.fillStyle = '#f2cf70';
+  drawSCoinIcon(ctx, width / 2 - 35, y + 106, 24, true);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f8d979';
   ctx.font = '900 16px sans-serif';
-  ctx.fillText(`S ${player?.rewards.currency ?? 0}`, width / 2, y + 106);
+  ctx.fillText(String(player?.rewards.currency ?? 0), width / 2 - 18, y + 106);
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#d8e5e3';
   ctx.font = '800 11px sans-serif';
   ctx.fillText(`赛季  ${player?.season?.wins ?? player?.pvp.wins ?? 0}胜  ${player?.season?.losses ?? player?.pvp.losses ?? 0}负  ${player?.season?.draws ?? player?.pvp.draws ?? 0}平`, width / 2, y + 132);
@@ -533,10 +537,10 @@ function drawRankingHub(ctx: CanvasRenderingContext2D, width: number, height: nu
   ctx.fillText('探索 · Solo · 竞技', width / 2, layout.panel.y + 60);
 
   const mastery = loadThemeMastery(platform.storage, theme);
-  drawRankCard(ctx, layout.ascension, '⚡ 登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`);
-  drawRankCard(ctx, layout.solo, '🏆 Solo 周榜', '每周最高分 · 好友排行');
+  drawRankCard(ctx, layout.ascension, '登顶竞速', `${THEMES[theme].label} · ${mastery.bestAscensionMs ? formatDuration(mastery.bestAscensionMs) : '未登顶'}`, 'energy');
+  drawRankCard(ctx, layout.solo, 'Solo 周榜', '每周最高分 · 好友排行', 'rank');
   const rating = auth.current.status === 'authenticated' ? auth.current.player.pvp.rating : 1000;
-  drawRankCard(ctx, layout.pvp, '⚔ 竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`);
+  drawRankCard(ctx, layout.pvp, '竞技赛季', `14天赛季 · ${competitiveRankLabel(rating)} · ${rating}`, 'pvp');
   ctx.fillStyle = '#819799';
   ctx.font = '700 10px sans-serif';
   ctx.fillText('点击空白处返回', width / 2, layout.panel.y + layout.panel.height - 20);
@@ -562,19 +566,20 @@ function drawOnboardingMeta(ctx: CanvasRenderingContext2D, width: number, height
   ctx.fillText('相同棋子合成，解锁更高阶角色', width / 2 - 103, y + 124);
 }
 
-function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string): void {
+function drawRankCard(ctx: CanvasRenderingContext2D, rect: Rect, title: string, subtitle: string, icon: UiIcon): void {
   round(ctx, rect.x, rect.y, rect.width, rect.height, 18);
   ctx.fillStyle = 'rgba(21,54,64,.9)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(242,205,105,.28)';
   ctx.stroke();
+  drawUiIcon(ctx, icon, rect.x + 24, rect.y + rect.height / 2, 20, '#f4d67e');
   ctx.textAlign = 'left';
   ctx.fillStyle = '#fff0bd';
-  ctx.font = '850 13px sans-serif';
-  ctx.fillText(title, rect.x + 16, rect.y + 23);
+  fitText(ctx, title, rect.width - 58, 13, 850, 10);
+  ctx.fillText(title, rect.x + 44, rect.y + 23);
   ctx.fillStyle = '#a9bec0';
-  ctx.font = '700 10px sans-serif';
-  ctx.fillText(subtitle, rect.x + 16, rect.y + 43);
+  fitText(ctx, subtitle, rect.width - 58, 10, 700, 8);
+  ctx.fillText(subtitle, rect.x + 44, rect.y + 43);
 }
 
 function profileRect(width: number, top: number): Rect {
@@ -600,7 +605,7 @@ function number(value: unknown): number {
 }
 
 function hit(x: number, y: number, rect: Rect): boolean {
-  return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+  return hitTarget(x, y, rect, 44);
 }
 
 function round(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {

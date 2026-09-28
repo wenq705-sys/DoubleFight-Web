@@ -21,6 +21,7 @@ import { DouyinAudio } from './audio';
 import type { DouyinAuthClient } from './auth';
 import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
+import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
 
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
@@ -82,6 +83,7 @@ export class DouyinSoloScene {
   private hapticsEnabled = true;
   private rewardedSkillClaims = 0;
   private sidebarSupported = false;
+  private tapFlash: { rect: Rect; until: number } | null = null;
 
   constructor(
     private readonly platform: DouyinPlatform,
@@ -277,7 +279,13 @@ export class DouyinSoloScene {
   }
 
   handleTap(x: number, y: number): void {
-    if (this.disposed || this.inputLocked) return;
+    if (this.disposed) return;
+    if (this.inputLocked) {
+      this.platform.haptics.trigger('light');
+      if (!this.notice) this.notice = { text: '正在处理，请稍候…', until: this.visualTime + .8 };
+      this.refreshHud();
+      return;
+    }
     if (this.onboardingOpen) {
       const info = this.platform.getSystemInfo();
       const panelY = info.height * 0.34;
@@ -364,6 +372,10 @@ export class DouyinSoloScene {
 
     if (this.notice && this.visualTime >= this.notice.until) {
       this.notice = null;
+      this.refreshHud();
+    }
+    if (this.tapFlash && this.visualTime >= this.tapFlash.until) {
+      this.tapFlash = null;
       this.refreshHud();
     }
 
@@ -487,6 +499,7 @@ export class DouyinSoloScene {
     const layout = this.homeLayout(info.width, info.height, info.safeArea.bottom);
 
     if (this.hit(x, y, layout.settings)) {
+      this.flashTap(layout.settings);
       this.settingsOpen = true;
       this.platform.haptics.trigger('light');
       this.refreshHud();
@@ -494,13 +507,15 @@ export class DouyinSoloScene {
     }
 
     if (this.hit(x, y, layout.theme)) {
+      this.flashTap(layout.theme);
       this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
       this.platform.haptics.trigger('light');
       return;
     }
-    if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
-    if (this.hit(x, y, layout.online)) { this.openOnline(); return; }
+    if (this.hit(x, y, layout.solo)) { this.flashTap(layout.solo); this.startSolo(); return; }
+    if (this.hit(x, y, layout.online)) { this.flashTap(layout.online); this.openOnline(); return; }
     if (this.hit(x, y, layout.rank)) {
+      this.flashTap(layout.rank);
       void this.social.openSoloRank().then(ok => {
         if (!ok) {
           this.notice = { text: '排行榜暂不可用', until: this.visualTime + 1.2 };
@@ -510,6 +525,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, layout.daily)) {
+      this.flashTap(layout.daily);
       if (this.sidebarRewardReady()) {
         void this.claimSidebarReward();
       } else if (this.sidebarSupported) {
@@ -536,6 +552,7 @@ export class DouyinSoloScene {
     const close = { x: x0 + 42, y: y0 + 196, width: width - 84, height: 42 };
 
     if (this.hit(x, y, sound)) {
+      this.flashTap(sound);
       this.soundEnabled = !this.soundEnabled;
       this.platform.storage.setItem('doublefight-sound-enabled', this.soundEnabled ? '1' : '0');
       this.audio.setEnabled(this.soundEnabled);
@@ -544,6 +561,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, haptics)) {
+      this.flashTap(haptics);
       this.hapticsEnabled = !this.hapticsEnabled;
       this.platform.storage.setItem('doublefight-haptics-enabled', this.hapticsEnabled ? '1' : '0');
       this.platform.haptics.setEnabled(this.hapticsEnabled);
@@ -552,6 +570,7 @@ export class DouyinSoloScene {
       return;
     }
     if (this.hit(x, y, close)) {
+      this.flashTap(close);
       this.settingsOpen = false;
       this.refreshHud();
     }
@@ -569,6 +588,7 @@ export class DouyinSoloScene {
 
     const skill = this.soloSkillRect(info.width, info.height, safeBottom);
     if (this.hit(x, y, skill)) {
+      this.flashTap(skill);
       if (this.skillCharges > 0) void this.useRandomClear();
       else if (this.rewardedSkillClaims < 3) void this.rewardSoloSkill();
     }
@@ -601,6 +621,7 @@ export class DouyinSoloScene {
 
     const back = { x: 16, y: this.hudTop() + 5, width: 46, height: 46 };
     if (this.hit(x, y, back)) {
+      this.flashTap(back);
       if (snap.mode === 'playing') {
         this.exitConfirm = true;
         this.refreshHud();
@@ -615,24 +636,29 @@ export class DouyinSoloScene {
     if (snap.mode === 'lobby') {
       const layout = this.onlineLobbyLayout(info.width, info.height);
       if (this.hit(x, y, layout.theme)) {
+        this.flashTap(layout.theme);
         this.online.setTheme(snap.selectedTheme === 'kingdom' ? 'palace' : 'kingdom');
         return;
       }
       for (let i = 0; i < layout.skills.length; i++) if (this.hit(x, y, layout.skills[i])) {
+        this.flashTap(layout.skills[i]);
         this.online.cycleSkill(i);
         return;
       }
       if (this.hit(x, y, layout.quick)) {
+        this.flashTap(layout.quick);
         this.online.quickMatch();
         this.platform.haptics.trigger('medium');
         return;
       }
       if (this.hit(x, y, layout.create)) {
+        this.flashTap(layout.create);
         this.online.createRoom();
         this.platform.haptics.trigger('medium');
         return;
       }
       if (this.hit(x, y, layout.join)) {
+        this.flashTap(layout.join);
         this.joinPadOpen = true;
         this.joinCode = '';
         this.platform.haptics.trigger('light');
@@ -643,7 +669,7 @@ export class DouyinSoloScene {
 
     if (snap.mode === 'matching') {
       const cancel = this.matchingCancelRect(info.width, info.height);
-      if (this.hit(x, y, cancel)) this.online.cancelMatch();
+      if (this.hit(x, y, cancel)) { this.flashTap(cancel); this.online.cancelMatch(); }
       return;
     }
 
@@ -653,11 +679,15 @@ export class DouyinSoloScene {
       const share = this.roomShareRect(info.width, info.height);
       const ready = { x: 48, y: info.height - Math.max(18, info.safeArea.bottom + 14) - 62, width: info.width - 96, height: 48 };
       if (this.hit(x, y, share) && room?.code) {
+        this.flashTap(share);
+        this.notice = { text: '正在打开好友邀请…', until: this.visualTime + 2 };
+        this.refreshHud();
         void this.social.shareRoom(room.code).then(ok => {
           this.notice = { text: ok ? '已打开好友邀请' : '分享暂不可用', until: this.visualTime + 1.2 };
           this.refreshHud();
         });
       } else if (this.hit(x, y, ready) && me) {
+        this.flashTap(ready);
         this.online.toggleReady();
       }
       return;
@@ -669,6 +699,7 @@ export class DouyinSoloScene {
       const skillRects = this.duelSkillRects(info.width, info.height);
       for (let i = 0; i < skillRects.length; i++) {
         if (!this.hit(x, y, skillRects[i])) continue;
+        this.flashTap(skillRects[i]);
         const skillId = me.loadout[i];
         const result = this.online.castSkill(skillId);
         if (!result.ok && result.reason) {
@@ -686,14 +717,19 @@ export class DouyinSoloScene {
       const { primary, lobby, share } = this.resultActionRects(info.width, info.height);
       const opponentRoom = snap.state.room?.players.find(player => player.id !== snap.state.playerId);
       if (this.hit(x, y, primary)) {
+        this.flashTap(primary);
         if (opponentRoom) this.online.setRematchReady();
         else {
           this.online.leaveRoom();
           this.online.quickMatch();
         }
       } else if (this.hit(x, y, lobby)) {
+        this.flashTap(lobby);
         this.returnOnlineLobby();
       } else if (this.hit(x, y, share)) {
+        this.flashTap(share);
+        this.notice = { text: '正在打开分享…', until: this.visualTime + 2 };
+        this.refreshHud();
         const score = snap.state.match?.result?.players.find(player => player.playerId === snap.state.playerId)?.score ?? 0;
         const won = snap.state.match?.winnerId === snap.state.playerId;
         void this.social.shareResult(score, won).then(ok => {
@@ -934,6 +970,7 @@ export class DouyinSoloScene {
     else if (this.mode === 'solo') this.drawSoloHud(ctx, width, height);
     else this.drawOnlineHud(ctx, width, height);
 
+    if (this.tapFlash) this.drawTapFlash(ctx, this.tapFlash.rect);
     if (this.notice) this.drawNotice(ctx, width, height, this.notice.text);
     if (this.exitConfirm) this.drawExitConfirm(ctx, width, height);
     if (this.joinPadOpen) this.drawJoinPad(ctx, width, height);
@@ -955,8 +992,9 @@ export class DouyinSoloScene {
 
     if (this.auth.current.status === 'authenticated') {
       ctx.fillStyle = 'rgba(233,244,216,.78)';
-      ctx.font = '700 10px sans-serif';
-      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
+      const accountLabel = `● ${this.auth.current.player.displayName}`;
+      fitText(ctx, accountLabel, Math.max(120, width - 150), 10, 700, 8.5);
+      ctx.fillText(accountLabel, width / 2, titleTop + 68);
     }
 
     const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
@@ -972,10 +1010,7 @@ export class DouyinSoloScene {
     ctx.font = '750 10px sans-serif';
     ctx.fillText('DOUBLE FIGHT · 3D 2048', width / 2, titleTop + 50);
 
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(238,244,241,.78)';
-    ctx.font = '800 16px sans-serif';
-    ctx.fillText('⚙', 24, titleTop + 24);
+    drawUiIcon(ctx, 'settings', 34, titleTop + 24, 18, '#ffe9ab');
     ctx.textAlign = 'center';
 
     const metaY = Math.max(titleTop + 72, height * 0.56);
@@ -991,17 +1026,18 @@ export class DouyinSoloScene {
     ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
     ctx.fillStyle = '#f6e9c5';
     ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
+    ctx.fillText(`最高 · ${pieceName(this.currentTheme, highest)}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
 
-    this.drawPillButton(ctx, layout.theme, '‹   切换主题   ›', 'secondary');
-    this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
-    this.drawPillButton(ctx, layout.online, '⚔  在线对决', 'secondary');
-    this.drawPillButton(ctx, layout.rank, '🏆 排行榜', 'secondary');
+    this.drawPillButton(ctx, layout.theme, '切换世界', 'secondary', 'world');
+    this.drawPillButton(ctx, layout.solo, '进入世界', 'primary', 'solo');
+    this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
+    this.drawPillButton(ctx, layout.rank, '排行榜', 'secondary', 'rank');
     this.drawPillButton(
       ctx,
       layout.daily,
-      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 侧边栏福利',
+      this.sidebarRewardReady() ? '领取福利' : '侧边栏福利',
       this.sidebarRewardReady() ? 'primary' : 'secondary',
+      'gift',
     );
 
     ctx.fillStyle = 'rgba(255,255,255,.62)';
@@ -1023,10 +1059,8 @@ export class DouyinSoloScene {
     ctx.fill();
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffe9ab';
-    ctx.font = '900 24px sans-serif';
+    drawUiIcon(ctx, 'back', edge + 16, hudTop + 29, 18, '#ffe9ab');
     ctx.textAlign = 'left';
-    ctx.fillText('‹', edge + 16, hudTop + 29);
 
     ctx.fillStyle = '#fff1c9';
     ctx.font = '900 18px sans-serif';
@@ -1056,9 +1090,10 @@ export class DouyinSoloScene {
     this.drawSkillButton(
       ctx,
       skill,
-      canReward ? '▶ 补充清块' : '✦ 清块',
+      canReward ? '补充清块' : '清块',
       canReward ? '完整观看广告 · +1 次' : `剩余 ${this.skillCharges} 次 · 随机清除 2 格`,
       this.skillCharges > 0 || canReward,
+      'skill-clear',
     );
 
     ctx.fillStyle = 'rgba(255,255,255,.72)';
@@ -1113,7 +1148,9 @@ export class DouyinSoloScene {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#fff1c9';
         ctx.font = '800 13px sans-serif';
-        ctx.fillText(`${player.name}${me ? ' · 我' : ''}`, 50, y + 18);
+        const roomName = `${player.name}${me ? ' · 我' : ''}`;
+        fitText(ctx, roomName, Math.max(90, width - 150), 13, 800, 9);
+        ctx.fillText(roomName, 50, y + 18);
         ctx.fillStyle = '#bcd0d1';
         ctx.font = '650 10px sans-serif';
         ctx.fillText(THEMES[player.theme].label, 50, y + 34);
@@ -1125,7 +1162,7 @@ export class DouyinSoloScene {
       const me = players.find(player => player.id === snap.state.playerId);
       const share = this.roomShareRect(width, height);
       const ready = { x: 48, y: height - Math.max(18, this.platform.getSystemInfo().safeArea.bottom + 14) - 62, width: width - 96, height: 48 };
-      this.drawPillButton(ctx, share, '↗ 邀请抖音好友', 'secondary');
+      this.drawPillButton(ctx, share, '邀请抖音好友', 'secondary', 'share');
       this.drawPillButton(ctx, ready, me?.ready ? '取消准备' : '准备', 'primary');
       return;
     }
@@ -1146,12 +1183,12 @@ export class DouyinSoloScene {
     ctx.fillText('点击技能卡可轮换', width / 2, layout.skills[0].y - 14);
     snap.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
-      this.drawSkillButton(ctx, layout.skills[index], `${def.icon} ${def.shortLabel}`, `${def.cost}⚡`, true);
+      this.drawSkillButton(ctx, layout.skills[index], def.shortLabel, `${def.cost} 能量`, true, skillUiIcon(skillId));
     });
 
-    this.drawPillButton(ctx, layout.quick, '⚔  开始匹配', 'primary');
-    this.drawPillButton(ctx, layout.create, '创建好友房', 'secondary');
-    this.drawPillButton(ctx, layout.join, '加入好友房', 'secondary');
+    this.drawPillButton(ctx, layout.quick, '开始匹配', 'primary', 'pvp');
+    this.drawPillButton(ctx, layout.create, '创建好友房', 'secondary', 'room');
+    this.drawPillButton(ctx, layout.join, '加入好友房', 'secondary', 'room');
 
     if (snap.state.lastError) {
       ctx.fillStyle = '#ffb8ae';
@@ -1176,7 +1213,9 @@ export class DouyinSoloScene {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(me?.name ?? '我', 20, top + 66);
+    const myName = me?.name ?? '我';
+    fitText(ctx, myName, width * .34, 11, 800, 8.5);
+    ctx.fillText(myName, 20, top + 66);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
     ctx.fillText(this.online.controller.predictedScore.toLocaleString('zh-CN'), 20, top + 89);
@@ -1184,7 +1223,9 @@ export class DouyinSoloScene {
     ctx.textAlign = 'right';
     ctx.fillStyle = '#e3efee';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(opponent?.name ?? '对手', width - 20, top + 66);
+    const opponentName = opponent?.name ?? '对手';
+    fitText(ctx, opponentName, width * .34, 11, 800, 8.5);
+    ctx.fillText(opponentName, width - 20, top + 66);
     ctx.fillStyle = '#ffe58a';
     ctx.font = '900 22px sans-serif';
     ctx.fillText((opponent?.board.score ?? 0).toLocaleString('zh-CN'), width - 20, top + 89);
@@ -1195,7 +1236,8 @@ export class DouyinSoloScene {
     ctx.fillStyle = '#dce8e8';
     ctx.font = '650 9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`对手 ⚡ ${opponent?.energy ?? 0}`, width / 2, top + 119);
+    drawUiIcon(ctx, 'energy', width / 2 - 34, top + 119, 10, '#dce8e8');
+    ctx.fillText(`对手 ${opponent?.energy ?? 0}`, width / 2 + 8, top + 119);
 
     const safeBottom = Math.max(14, this.platform.getSystemInfo().safeArea.bottom + 10);
     const energyY = height - safeBottom - 106;
@@ -1203,14 +1245,15 @@ export class DouyinSoloScene {
     this.drawEnergyBar(ctx, { x: 28, y: energyY, width: width - 56, height: 8 }, localRatio, '#4fd4c8');
     ctx.fillStyle = '#fff0c8';
     ctx.font = '800 10px sans-serif';
-    ctx.fillText(`⚡ ${me?.energy ?? 0} / ${me?.maxEnergy ?? 100}`, width / 2, energyY - 10);
+    drawUiIcon(ctx, 'energy', width / 2 - 39, energyY - 10, 11, '#fff0c8');
+    ctx.fillText(`${me?.energy ?? 0} / ${me?.maxEnergy ?? 100}`, width / 2 + 8, energyY - 10);
 
     const rects = this.duelSkillRects(width, height);
     me?.loadout.forEach((skillId, index) => {
       const def = SKILL_DEFINITIONS[skillId];
       const remaining = Math.max(0, (me.skillCooldowns[skillId] ?? 0) - this.online.serverNow());
       const ready = remaining <= 0 && me.energy >= def.cost;
-      this.drawSkillButton(ctx, rects[index], `${def.icon} ${def.shortLabel}`, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost}⚡`, ready);
+      this.drawSkillButton(ctx, rects[index], def.shortLabel, remaining > 0 ? `${(remaining / 1000).toFixed(1)}s` : `${def.cost} 能量`, ready, skillUiIcon(skillId));
     });
 
     if (this.client.snapshot().status === 'reconnecting') {
@@ -1280,7 +1323,7 @@ export class DouyinSoloScene {
       'primary',
     );
     this.drawPillButton(ctx, lobby, '返回对战大厅', 'secondary');
-    this.drawPillButton(ctx, share, '↗ 分享战绩', 'secondary');
+    this.drawPillButton(ctx, share, '分享战绩', 'secondary', 'share');
 
     if (roomMe?.rematchReady && opponentRoom) {
       ctx.fillStyle = '#b9cacc';
@@ -1308,7 +1351,14 @@ export class DouyinSoloScene {
     ctx.fillText((this.joinCode + '······').slice(0, 6).split('').join(' '), width / 2, panel.y + 78);
 
     for (const entry of pad.keys) this.drawPillButton(ctx, entry.rect, entry.key, 'secondary');
-    this.drawPillButton(ctx, pad.join, this.joinCode.length === 6 ? '加入房间' : '输入 6 位房号', this.joinCode.length === 6 ? 'primary' : 'secondary');
+    this.drawPillButton(
+      ctx,
+      pad.join,
+      this.joinCode.length === 6 ? '加入房间' : '输入 6 位房号',
+      this.joinCode.length === 6 ? 'primary' : 'secondary',
+      'room',
+      this.joinCode.length !== 6,
+    );
 
     ctx.fillStyle = '#b9c9cb';
     ctx.font = '700 11px sans-serif';
@@ -1439,10 +1489,7 @@ export class DouyinSoloScene {
 
   private drawBack(ctx: CanvasRenderingContext2D): void {
     const top = this.hudTop();
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffe9ab';
-    ctx.font = '900 28px sans-serif';
-    ctx.fillText('‹', 27, top + 28);
+    drawUiIcon(ctx, 'back', 36, top + 28, 22, '#ffe9ab');
   }
 
   private drawEnergyBar(ctx: CanvasRenderingContext2D, rect: Rect, ratio: number, color: string): void {
@@ -1457,45 +1504,66 @@ export class DouyinSoloScene {
     }
   }
 
-  private drawSkillButton(ctx: CanvasRenderingContext2D, rect: Rect, label: string, meta: string, ready: boolean): void {
+  private drawSkillButton(
+    ctx: CanvasRenderingContext2D,
+    rect: Rect,
+    label: string,
+    meta: string,
+    ready: boolean,
+    icon?: UiIcon,
+  ): void {
     this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, Math.min(16, rect.height / 2));
-    ctx.fillStyle = ready ? 'rgba(24,86,95,.92)' : 'rgba(45,55,60,.78)';
-    ctx.fill();
-    ctx.strokeStyle = ready ? '#f1ce6a' : '#718084';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = ready ? '#fff0b6' : '#aeb9ba';
-    ctx.font = '800 11px sans-serif';
-    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height * 0.4);
-    ctx.font = '700 9px sans-serif';
-    ctx.fillText(meta, rect.x + rect.width / 2, rect.y + rect.height * 0.72);
-  }
-
-  private drawPillButton(ctx: CanvasRenderingContext2D, rect: Rect, label: string, kind: 'primary' | 'secondary'): void {
-    this.roundedRect(ctx, rect.x, rect.y, rect.width, rect.height, rect.height / 2);
-    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y);
-    if (kind === 'primary') {
-      gradient.addColorStop(0, '#f2cf70');
-      gradient.addColorStop(1, '#e49d55');
-      ctx.shadowColor = 'rgba(236,171,74,.38)';
-      ctx.shadowBlur = 14;
-    } else {
-      gradient.addColorStop(0, 'rgba(18,54,64,.94)');
-      gradient.addColorStop(1, 'rgba(28,64,77,.94)');
-      ctx.shadowColor = 'rgba(0,0,0,.22)';
-      ctx.shadowBlur = 8;
-    }
+    const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.height);
+    gradient.addColorStop(0, ready ? 'rgba(26,91,98,.98)' : 'rgba(47,58,63,.90)');
+    gradient.addColorStop(1, ready ? 'rgba(13,57,69,.98)' : 'rgba(32,43,48,.90)');
     ctx.fillStyle = gradient;
     ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = kind === 'primary' ? '#ffe7a1' : 'rgba(255,230,161,.52)';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = ready ? 'rgba(243,207,106,.78)' : 'rgba(130,146,148,.38)';
+    ctx.lineWidth = ready ? 1.35 : 1;
     ctx.stroke();
-    ctx.fillStyle = kind === 'primary' ? '#442d1c' : '#fff0c4';
-    ctx.font = kind === 'primary' ? '900 16px sans-serif' : '800 13px sans-serif';
+    if (icon) {
+      drawUiIcon(
+        ctx,
+        icon,
+        rect.x + Math.min(18, rect.width * .20),
+        rect.y + rect.height * .38,
+        Math.min(17, rect.height * .34),
+        ready ? '#ffe397' : '#849395',
+      );
+    }
     ctx.textAlign = 'center';
-    ctx.fillText(label, rect.x + rect.width / 2, rect.y + rect.height / 2 + 0.5);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ready ? '#fff0b6' : '#aeb9ba';
+    ctx.font = '900 10.5px sans-serif';
+    ctx.fillText(label, rect.x + rect.width / 2 + (icon ? 6 : 0), rect.y + rect.height * .34);
+    ctx.fillStyle = ready ? '#8ee4db' : '#7f9093';
+    ctx.font = '750 8.8px sans-serif';
+    ctx.fillText(meta, rect.x + rect.width / 2, rect.y + rect.height * .72);
+  }
+
+  private drawPillButton(
+    ctx: CanvasRenderingContext2D,
+    rect: Rect,
+    label: string,
+    kind: 'primary' | 'secondary',
+    icon?: UiIcon,
+    disabled = false,
+    loading = false,
+  ): void {
+    drawPremiumButton(ctx, rect, label, { kind, icon, disabled, loading, compact: rect.height < 42 });
+  }
+
+  private flashTap(rect: Rect): void {
+    this.tapFlash = { rect: { ...rect }, until: this.visualTime + .12 };
+    this.platform.haptics.trigger('light');
+    this.refreshHud();
+  }
+
+  private drawTapFlash(ctx: CanvasRenderingContext2D, rect: Rect): void {
+    this.roundedRect(ctx, rect.x - 2, rect.y - 2, rect.width + 4, rect.height + 4, Math.min(22, rect.height / 2 + 2));
+    ctx.strokeStyle = 'rgba(255,244,202,.72)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   private drawNotice(ctx: CanvasRenderingContext2D, width: number, height: number, text: string): void {
@@ -1572,36 +1640,42 @@ export class DouyinSoloScene {
 
   private hudTop(): number {
     const info = this.platform.getSystemInfo();
-    return Math.max(Math.max(12, info.safeArea.top + 8), (info.menuButton?.bottom ?? 0) + 8);
+    return uiMetrics(info.width, info.height, info.safeArea, info.menuButton?.bottom ?? 0).top;
   }
 
   private homeLayout(width: number, height: number, safeBottomInset: number) {
-    const safeBottom = Math.max(16, safeBottomInset + 12);
-    const primaryWidth = Math.min(252, width - 48);
-    const secondaryWidth = Math.min(226, width - 64);
-    const soloY = height - safeBottom - 218;
-    const utilityWidth = Math.min(112, (width - 64) / 2);
+    const info = this.platform.getSystemInfo();
+    const metrics = uiMetrics(width, height, { ...info.safeArea, bottom: safeBottomInset }, info.menuButton?.bottom ?? 0);
+    const primaryWidth = Math.min(metrics.compact ? 244 : 268, width - metrics.edge * 2);
+    const secondaryWidth = Math.min(metrics.compact ? 226 : 246, width - metrics.edge * 2 - 16);
+    const blockHeight = metrics.compact ? 196 : 218;
+    const soloY = height - metrics.bottom - blockHeight;
+    const utilityWidth = Math.min(118, (width - metrics.edge * 2 - 10) / 2);
     return {
-      settings: { x: 12, y: this.hudTop() + 5, width: 44, height: 40 },
-      theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
-      solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
-      online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },
-      rank: { x: width / 2 - utilityWidth - 5, y: soloY + 114, width: utilityWidth, height: 36 },
-      daily: { x: width / 2 + 5, y: soloY + 114, width: utilityWidth, height: 36 },
+      settings: { x: metrics.edge - 2, y: metrics.top + 4, width: metrics.minTouch, height: metrics.minTouch },
+      theme: { x: width / 2 - 79, y: soloY - 56, width: 158, height: 38 },
+      solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: metrics.compact ? 48 : 52 },
+      online: { x: width / 2 - secondaryWidth / 2, y: soloY + 61, width: secondaryWidth, height: 46 },
+      rank: { x: width / 2 - utilityWidth - 5, y: soloY + 118, width: utilityWidth, height: 42 },
+      daily: { x: width / 2 + 5, y: soloY + 118, width: utilityWidth, height: 42 },
     };
   }
 
   private onlineLobbyLayout(width: number, height: number) {
-    const top = this.hudTop();
-    const skillWidth = (width - 56) / 3;
-    const skillY = top + 190;
-    const quickY = height - 210;
+    const info = this.platform.getSystemInfo();
+    const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
+    const top = metrics.top;
+    const gap = metrics.compact ? 8 : 10;
+    const edge = metrics.edge;
+    const skillWidth = (width - edge * 2 - gap * 2) / 3;
+    const skillY = top + (metrics.compact ? 168 : 190);
+    const quickY = height - metrics.bottom - (metrics.compact ? 166 : 184);
     return {
-      theme: { x: width / 2 - 92, y: top + 92, width: 184, height: 40 },
-      skills: [0, 1, 2].map(index => ({ x: 16 + index * (skillWidth + 12), y: skillY, width: skillWidth, height: 58 })),
-      quick: { x: 34, y: quickY, width: width - 68, height: 52 },
-      create: { x: 34, y: quickY + 64, width: (width - 78) / 2, height: 42 },
-      join: { x: 44 + (width - 78) / 2, y: quickY + 64, width: (width - 78) / 2, height: 42 },
+      theme: { x: width / 2 - 96, y: top + 92, width: 192, height: 42 },
+      skills: [0, 1, 2].map(index => ({ x: edge + index * (skillWidth + gap), y: skillY, width: skillWidth, height: metrics.compact ? 54 : 60 })),
+      quick: { x: edge + 14, y: quickY, width: width - (edge + 14) * 2, height: 52 },
+      create: { x: edge + 14, y: quickY + 64, width: (width - (edge + 14) * 2 - 10) / 2, height: 46 },
+      join: { x: width / 2 + 5, y: quickY + 64, width: (width - (edge + 14) * 2 - 10) / 2, height: 46 },
     };
   }
 
@@ -1644,10 +1718,12 @@ export class DouyinSoloScene {
   }
 
   private joinPadLayout(width: number, height: number) {
-    const keySize = Math.min(62, (width - 100) / 3);
-    const gap = 12;
+    const info = this.platform.getSystemInfo();
+    const metrics = uiMetrics(width, height, info.safeArea, info.menuButton?.bottom ?? 0);
+    const keySize = Math.max(metrics.minTouch, Math.min(64, (width - metrics.edge * 2 - 48) / 3));
+    const gap = metrics.compact ? 9 : 12;
     const startX = (width - (keySize * 3 + gap * 2)) / 2;
-    const startY = height * 0.38;
+    const startY = Math.max(metrics.top + 108, height * (metrics.compact ? 0.29 : 0.36));
     const labels = ['1','2','3','4','5','6','7','8','9','⌫','0'];
     const keys = labels.map((key, index) => {
       const row = Math.floor(index / 3);
@@ -1662,7 +1738,7 @@ export class DouyinSoloScene {
   }
 
   private hit(x: number, y: number, rect: Rect): boolean {
-    return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+    return hitTarget(x, y, rect, 44);
   }
 
   private roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {

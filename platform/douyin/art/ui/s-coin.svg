@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="coin" cx="32%" cy="25%" r="75%">
+      <stop offset="0" stop-color="#FFF3AE"/>
+      <stop offset=".48" stop-color="#F2C755"/>
+      <stop offset="1" stop-color="#A86629"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feFlood flood-color="#F4CB5B" flood-opacity=".42"/>
+      <feComposite in2="b" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <circle cx="128" cy="128" r="98" fill="#F4CB5B" opacity=".22" filter="url(#glow)"/>
+  <circle cx="128" cy="128" r="92" fill="url(#coin)" stroke="#FFE89C" stroke-width="7"/>
+  <circle cx="128" cy="128" r="66" fill="none" stroke="#73451F" stroke-opacity=".52" stroke-width="6"/>
+  <path d="M151 83c-7-7-17-11-29-11-19 0-34 11-34 27 0 18 16 23 37 28 17 4 25 7 25 17 0 9-9 15-22 15-14 0-27-6-37-16l-13 17c12 12 27 19 45 20v18h17v-19c20-4 32-18 32-36 0-20-16-27-39-32-16-4-23-7-23-15 0-7 7-12 18-12 10 0 20 4 28 11l12-16c-9-8-19-13-31-15V48h-17v20c-19 3-32 16-32 33 0 20 16 27 38 32 16 4 24 7 24 15 0 8-8 14-20 14-14 0-27-6-38-16l-12 17c11 11 26 18 43 19v18h17v-19c20-3 34-18 34-37 0-21-17-28-40-34-15-4-22-7-22-14 0-7 7-11 17-11 9 0 18 3 26 9l12-15z" fill="#59361C"/>
+</svg>
