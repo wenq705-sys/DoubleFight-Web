@@ -245,7 +245,10 @@ describe('Douyin profile permission adapter', () => {
     const getUserProfile = vi.fn();
     const account = new DouyinAccountBootstrap({ login, getUserInfo, getUserProfile });
     await expect(account.requestProfile()).resolves.toEqual({
-      status: 'granted', nickName: '强哥', avatarUrl: 'https://example.com/avatar.png',
+      status: 'granted',
+      nickName: '强哥',
+      avatarUrl: 'https://example.com/avatar.png',
+      code: 'profile-login',
     });
     expect(getUserInfo).toHaveBeenCalledOnce();
     expect(getUserProfile).not.toHaveBeenCalled();
@@ -266,43 +269,53 @@ describe('Douyin profile permission adapter', () => {
     expect(getUserProfile).toHaveBeenCalledOnce();
   });
 
-  it('requests scope.userInfo before reading profile on first authorization', async () => {
+  it('lets the mini-game getUserInfo call own the first-use permission prompt after login', async () => {
     const order: string[] = [];
+    const getSetting = vi.fn();
+    const authorize = vi.fn();
     const account = new DouyinAccountBootstrap({
-      login: options => { order.push('login'); options.success({ isLogin: true, code: 'profile-login' }); },
-      getSetting: options => { order.push('getSetting'); options.success?.({ authSetting: {} }); },
-      authorize: options => {
-        order.push(`authorize:${options.scope}`);
-        options.success?.({ data: { 'scope.userInfo': true } });
+      login: options => {
+        order.push('login');
+        options.success({ isLogin: true, code: 'profile-login', anonymousCode: 'anon-profile' });
       },
+      getSetting,
+      authorize,
       getUserInfo: options => {
         order.push('getUserInfo');
         options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/avatar.png' } });
       },
     });
-    await expect(account.requestProfile()).resolves.toMatchObject({ status: 'granted', nickName: '强哥' });
-    expect(order).toEqual(['login', 'getSetting', 'authorize:scope.userInfo', 'getUserInfo']);
+    await expect(account.requestProfile()).resolves.toMatchObject({
+      status: 'granted',
+      nickName: '强哥',
+      code: 'profile-login',
+      anonymousCode: 'anon-profile',
+    });
+    expect(order).toEqual(['login', 'getUserInfo']);
+    expect(getSetting).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
   });
 
-  it('opens native settings after a previous userInfo denial and resumes when enabled', async () => {
+  it('returns a permission cancellation when getUserInfo was previously denied', async () => {
     const order: string[] = [];
+    const openSetting = vi.fn();
     const account = new DouyinAccountBootstrap({
-      login: options => { order.push('login'); options.success({ isLogin: true, code: 'profile-login' }); },
-      getSetting: options => {
-        order.push('getSetting');
-        options.success?.({ authSetting: { 'scope.userInfo': false } });
+      login: options => {
+        order.push('login');
+        options.success({ isLogin: true, code: 'profile-login' });
       },
-      openSetting: options => {
-        order.push('openSetting');
-        options.success?.({ authSetting: { 'scope.userInfo': true } });
-      },
+      openSetting,
       getUserInfo: options => {
         order.push('getUserInfo');
-        options.success?.({ userInfo: { nickName: 'Rona', avatarUrl: 'https://example.com/rona.png' } });
+        options.fail?.({ errNo: 10201, errMsg: 'getUserInfo:fail privacy permission is not authorized' });
       },
     });
-    await expect(account.requestProfile()).resolves.toMatchObject({ status: 'granted', nickName: 'Rona' });
-    expect(order).toEqual(['login', 'getSetting', 'openSetting', 'getUserInfo']);
+    await expect(account.requestProfile()).resolves.toMatchObject({
+      status: 'cancelled',
+      error: expect.stringContaining('10201'),
+    });
+    expect(order).toEqual(['login', 'getUserInfo']);
+    expect(openSetting).not.toHaveBeenCalled();
   });
 
   it('maps user cancellation and unavailable hosts without throwing', async () => {

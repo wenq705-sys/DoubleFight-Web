@@ -141,16 +141,31 @@ export class DouyinAuthClient {
   profileFailureHint(): string {
     const message = this.lastProfileFailure?.toLowerCase() ?? '';
     if (!message) return '同步失败，请稍后重试';
-    if (message.includes('10201') || message.includes('not authorized') || message.includes('privacy permission') || message.includes('deny')) {
+    if (
+      message.includes('10201')
+      || message.includes('111680')
+      || message.includes('111690')
+      || message.includes('not authorized')
+      || message.includes('privacy permission')
+      || message.includes('auth deny')
+      || message.includes('deny')
+    ) {
       return '请在右上角“…”→设置中允许用户信息权限';
     }
-    if (message.includes('10202') || message.includes('scope is not declared')) {
-      return '当前版本未声明用户信息权限';
+    if (message.includes('10202') || message.includes('111679') || message.includes('scope is not declared')) {
+      return '小游戏隐私协议未声明用户信息权限';
     }
-    if (message.includes('10601') || message.includes('not login')) return '请先登录抖音账号后重试';
-    if (message.includes('10603') || message.includes('invalid session')) return '登录状态已失效，请重新尝试';
-    if (message.includes('network') || message.includes('10103')) return '网络异常，请稍后重试';
+    if (message.includes('10601') || message.includes('111696') || message.includes('not login')) {
+      return '请先登录抖音账号后重试';
+    }
+    if (message.includes('10603') || message.includes('111698') || message.includes('invalid session')) {
+      return '登录状态已失效，请重新尝试';
+    }
+    if (message.includes('network') || message.includes('10103') || message.includes('111685')) {
+      return '网络异常，请稍后重试';
+    }
     if (message.includes('missing nickname')) return '未获取到抖音昵称，请检查授权';
+    if (message.includes('profile reauth')) return '抖音账号绑定失败，请重新尝试';
     return '同步失败，请稍后重试';
   }
 
@@ -263,6 +278,24 @@ export class DouyinAuthClient {
     }
 
     try {
+      // Profile binding is also an account-upgrade boundary. A player may have
+      // entered the game anonymously before explicitly logging into Douyin.
+      // Exchange the fresh login credential first so the backend can merge the
+      // old anonymous identity into the real Douyin account before saving profile.
+      if (profile.code) {
+        const authPayload = await this.call('POST', '/auth/douyin', {
+          code: profile.code,
+          ...(profile.anonymousCode ? { anonymousCode: profile.anonymousCode } : {}),
+        });
+        if (typeof authPayload.token !== 'string' || !this.isPlayer(authPayload.player)) {
+          this.lastProfileFailure = 'profile reauth returned invalid session';
+          return 'failed';
+        }
+        this.setToken(authPayload.token);
+        this.platform.storage.setItem(TOKEN_KEY, authPayload.token);
+        this.updatePlayer(authPayload.player);
+      }
+
       const data = await this.call('POST', '/profile', {
         displayName: profile.nickName,
         ...(profile.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),

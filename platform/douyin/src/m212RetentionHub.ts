@@ -524,7 +524,7 @@ function handleHubTap(
     if (state.rankBusy) return;
     if (hit(x, y, layout.ascension)) {
       state.rankBusy = true;
-      state.rankMessage = '正在打开登顶榜…';
+      state.rankMessage = '正在打开最快登顶榜…';
       scene.refreshHud();
       void (async () => {
         await auth.start();
@@ -532,30 +532,30 @@ function handleHubTap(
         const mastery = loadThemeMastery(platform.storage, rankTheme);
         const best = Math.max(0, Number(platform.storage.getItem(`doublefight-best-${rankTheme}`) ?? 0));
         const highest = Math.max(2, Number(platform.storage.getItem(`doublefight-highest-${rankTheme}`) ?? 2));
+        let synced = true;
         if (mastery.bestAscensionMs) {
-          await auth.syncSoloProgress(rankTheme, best, highest, mastery.bestAscensionMs);
+          synced = await auth.syncSoloProgress(rankTheme, best, highest, mastery.bestAscensionMs);
         }
-        const synced = mastery.bestAscensionMs
-          ? await social.setAscensionRank(rankTheme, mastery.bestAscensionMs)
-          : true;
-        const ok = await social.openAscensionRank(rankTheme);
-        if (ok) {
-          state.rankMessage = synced ? '登顶榜已打开' : '登顶榜已打开，本机成绩稍后同步';
+
+        // Ascension ranking is server-backed on purpose. Douyin native IM rank
+        // repeatedly returns framework error 21102 for the enum/priority zone,
+        // while our authoritative server already stores lower-is-better times.
+        const board = await auth.fetchSoloLeaderboard(rankTheme, 'ascension', 20);
+        if (board) {
+          state.soloLeaderboard = board;
+          state.soloRankKind = 'ascension';
+          state.soloRankTheme = rankTheme;
+          state.screen = 'soloRank';
+          state.rankMessage = null;
         } else {
-          state.rankMessage = '抖音榜暂不可用，正在切换服务器榜…';
-          if (!scene.disposed) scene.refreshHud();
-          const fallback = await auth.fetchSoloLeaderboard(rankTheme, 'ascension', 20);
-          if (fallback) {
-            state.soloLeaderboard = fallback;
-            state.soloRankKind = 'ascension';
-            state.soloRankTheme = rankTheme;
-            state.screen = 'soloRank';
-            state.rankMessage = null;
-          } else {
-            state.rankMessage = rankUiFailure(social);
-          }
+          state.rankMessage = '最快登顶榜暂时无法加载，请稍后重试';
         }
-        engagement.track('rank_open', { board: 'ascension', success: ok, synced, theme: rankTheme, fallback: !ok });
+        engagement.track('rank_open', {
+          board: 'ascension_server',
+          success: Boolean(board),
+          synced,
+          theme: rankTheme,
+        });
       })().finally(() => {
         state.rankBusy = false;
         if (!scene.disposed && (state.screen === 'rankings' || state.screen === 'soloRank')) scene.refreshHud();

@@ -169,6 +169,66 @@ describe('Douyin public profile binding', () => {
     }
   });
 
+  it('reauthenticates with the fresh profile login code before saving the Douyin profile', async () => {
+    const values = new Map<string, string>();
+    const rebound = { ...player, displayName: '玩家0257' };
+    const updated = { ...player, displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' };
+    const calls: Array<{ url: string; header?: Record<string, string>; data?: unknown }> = [];
+    let authCalls = 0;
+    const request = vi.fn((options: Parameters<NonNullable<DouyinApi['request']>>[0]) => {
+      calls.push({ url: options.url, header: options.header, data: options.data });
+      if (options.url.endsWith('/auth/douyin')) {
+        authCalls += 1;
+        if (authCalls === 1) {
+          options.success({ statusCode: 200, data: { token: 'old.session', player } });
+        } else {
+          expect(options.data).toEqual({ code: 'profile-upgrade-code', anonymousCode: 'anon-existing' });
+          options.success({ statusCode: 200, data: { token: 'upgraded.session', player: rebound } });
+        }
+        return;
+      }
+      if (options.url.endsWith('/profile')) {
+        expect(options.header).toMatchObject({ authorization: 'Bearer upgraded.session' });
+        options.success({ statusCode: 200, data: { player: updated } });
+        return;
+      }
+      options.fail({ errMsg: 'unexpected request' });
+    });
+    const platform = {
+      account: {
+        bootstrap: vi.fn(async () => ({
+          status: 'logged_in' as const,
+          isLoggedIn: true as const,
+          code: 'initial-code',
+          anonymousCode: 'anon-existing',
+        })),
+        requestProfile: vi.fn(async () => ({
+          status: 'granted' as const,
+          nickName: '强哥',
+          avatarUrl: 'https://example.com/avatar.png',
+          code: 'profile-upgrade-code',
+          anonymousCode: 'anon-existing',
+        })),
+      },
+      storage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => { values.set(key, value); },
+        removeItem: (key: string) => { values.delete(key); },
+      },
+    } as Pick<Platform, 'account' | 'storage'>;
+
+    const auth = new DouyinAuthClient({ request }, platform, 'https://game.example');
+    await auth.start();
+    await expect(auth.bindDouyinProfile()).resolves.toBe('updated');
+    expect(authCalls).toBe(2);
+    expect(values.get('doublefight-session-token')).toBe('upgraded.session');
+    expect(calls.at(-1)?.url).toMatch(/\/profile$/);
+    if (auth.current.status === 'authenticated') {
+      expect(auth.current.player.displayName).toBe('强哥');
+      expect(auth.current.player.avatarUrl).toBe('https://example.com/avatar.png');
+    }
+  });
+
   it('posts an authorized Douyin nickname/avatar to the signed player profile', async () => {
     const values = new Map<string, string>();
     const updated = { ...player, displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' };

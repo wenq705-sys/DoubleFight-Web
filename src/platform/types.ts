@@ -36,7 +36,13 @@ export type AccountBootstrapResult =
   | { status: 'anonymous'; isLoggedIn: false; anonymousCode: string }
   | { status: 'cancelled' | 'failed'; isLoggedIn: false; error?: string };
 export type AccountProfileResult =
-  | { status: 'granted'; nickName: string; avatarUrl?: string }
+  | {
+      status: 'granted';
+      nickName: string;
+      avatarUrl?: string;
+      code?: string;
+      anonymousCode?: string;
+    }
   | { status: 'cancelled' | 'failed' | 'unavailable'; error?: string };
 export interface AccountBootstrap {
   bootstrap(): Promise<AccountBootstrapResult>;

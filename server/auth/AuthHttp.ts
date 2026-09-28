@@ -133,6 +133,11 @@ export function createAuthHandler(deps: AuthDependencies) {
           throw new RequestError(400, 'invalid_theme_ad_request');
         }
         const result = await deps.repository.unlockThemeByAd(account.id, body.themeId, body.claimId, now());
+        log({
+          event: 'reward',
+          kind: 'theme_ad',
+          outcome: result.limited ? 'limited' : result.granted ? 'granted' : result.unlocked ? 'owned' : 'duplicate',
+        });
         json(response, 200, { granted: result.granted, unlocked: result.unlocked, limited: result.limited, progress: result.progress, required: result.required, dailyRemaining: result.dailyRemaining, player: publicPlayer(result.account, now()) });
         return true;
       }

@@ -59,99 +59,33 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
         settled = true;
         resolve(result);
       };
-      const success = (result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => {
-        const nickName = result.userInfo?.nickName?.trim();
-        const avatarUrl = result.userInfo?.avatarUrl?.trim();
-        if (!nickName) { finish({ status: 'failed', error: 'profile missing nickname' }); return; }
-        finish({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
-      };
       const failure = (error: { errMsg?: string; errNo?: number; errorCode?: number }) => {
         const code = error.errNo ?? error.errorCode;
         const message = `${code ?? ''} ${error.errMsg ?? 'Douyin user profile failed'}`.trim();
         finish({
-          status: /deny|cancel|not authorized|privacy permission|permission disabled|21102|21103/i.test(message)
+          status: /deny|cancel|not authorized|privacy permission|auth deny/i.test(message)
             ? 'cancelled'
             : 'failed',
           error: message,
         });
       };
-      const requestUserInfo = () => {
-        if (settled) return;
-        try {
-          if (this.api.getUserInfo) {
-            this.api.getUserInfo({ withCredentials: false, success, fail: failure });
-            return;
-          }
-          if (this.api.getUserProfile) {
-            this.api.getUserProfile({ force: true, success, fail: failure });
-            return;
-          }
-          finish({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
-        } catch (error) {
-          finish({ status: 'failed', error: String(error) });
-        }
-      };
-      const openUserInfoSetting = () => {
-        if (!this.api.openSetting) {
-          finish({ status: 'cancelled', error: '10201 scope.userInfo permission disabled' });
+      const finishProfile = (
+        result: { userInfo?: { nickName?: string; avatarUrl?: string } },
+        credential?: { code?: string; anonymousCode?: string },
+      ) => {
+        const nickName = result.userInfo?.nickName?.trim();
+        const avatarUrl = result.userInfo?.avatarUrl?.trim();
+        if (!nickName) {
+          finish({ status: 'failed', error: 'profile missing nickname' });
           return;
         }
-        try {
-          this.api.openSetting({
-            success: result => {
-              if (result.authSetting?.['scope.userInfo'] === true) requestUserInfo();
-              else finish({ status: 'cancelled', error: '10201 scope.userInfo permission disabled' });
-            },
-            fail: failure,
-          });
-        } catch (error) {
-          finish({ status: 'failed', error: String(error) });
-        }
-      };
-      const requestUserInfoPermission = () => {
-        if (!this.api.authorize) {
-          requestUserInfo();
-          return;
-        }
-        try {
-          this.api.authorize({
-            scope: 'scope.userInfo',
-            success: result => {
-              const granted = result.data?.['scope.userInfo'];
-              if (granted === false || granted === 'fail') {
-                openUserInfoSetting();
-                return;
-              }
-              requestUserInfo();
-            },
-            fail: error => {
-              const message = `${error.errNo ?? ''} ${error.errMsg ?? ''}`.trim();
-              if (/deny|21102|21103/i.test(message)) openUserInfoSetting();
-              else failure(error);
-            },
-          });
-        } catch (error) {
-          finish({ status: 'failed', error: String(error) });
-        }
-      };
-      const ensureUserInfoPermission = () => {
-        if (!this.api.getSetting) {
-          requestUserInfoPermission();
-          return;
-        }
-        try {
-          this.api.getSetting({
-            success: result => {
-              const granted = result.authSetting?.['scope.userInfo'];
-              if (granted === true) requestUserInfo();
-              else if (granted === false) openUserInfoSetting();
-              else requestUserInfoPermission();
-            },
-            fail: () => requestUserInfoPermission(),
-          });
-        } catch {
-          requestUserInfoPermission();
-        }
+        finish({
+          status: 'granted',
+          nickName,
+          ...(avatarUrl ? { avatarUrl } : {}),
+          ...(credential?.code ? { code: credential.code } : {}),
+          ...(credential?.anonymousCode ? { anonymousCode: credential.anonymousCode } : {}),
+        });
       };
 
       if (!this.api.login) {
@@ -159,24 +93,73 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
         return;
       }
 
-      try {
-        this.api.login({
-          force: true,
-          success: result => {
-            if (!result.isLogin) {
-              finish({ status: 'cancelled', error: '10601 user not login' });
-              return;
-            }
-            ensureUserInfoPermission();
-          },
-          fail: error => {
-            const message = error.errMsg ?? 'tt.login failed';
-            finish({ status: /cancel|deny/i.test(message) ? 'cancelled' : 'failed', error: message });
-          },
-        });
-      } catch (error) {
-        finish({ status: 'failed', error: String(error) });
+      // Mini-game user info: login first, then call getUserInfo directly.
+      // The user-info API itself owns the permission prompt on first use.
+      if (this.api.getUserInfo) {
+        try {
+          this.api.login({
+            force: true,
+            success: login => {
+              if (!login.isLogin || !login.code) {
+                finish({ status: 'cancelled', error: '10601 user not login' });
+                return;
+              }
+              try {
+                this.api.getUserInfo?.({
+                  withCredentials: false,
+                  success: profile => finishProfile(profile, {
+                    code: login.code,
+                    anonymousCode: login.anonymousCode,
+                  }),
+                  fail: failure,
+                });
+              } catch (error) {
+                finish({ status: 'failed', error: String(error) });
+              }
+            },
+            fail: error => {
+              const message = error.errMsg ?? 'tt.login failed';
+              finish({ status: /cancel|deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+            },
+          });
+        } catch (error) {
+          finish({ status: 'failed', error: String(error) });
+        }
+        return;
       }
+
+      // Compatibility fallback: getUserProfile must be invoked directly from
+      // the tap stack. After it succeeds, obtain a one-use login code for our
+      // own backend account/session upgrade.
+      if (this.api.getUserProfile) {
+        try {
+          this.api.getUserProfile({
+            force: true,
+            success: profile => {
+              this.api.login?.({
+                force: true,
+                success: login => {
+                  if (!login.isLogin || !login.code) {
+                    finish({ status: 'cancelled', error: '10601 user not login' });
+                    return;
+                  }
+                  finishProfile(profile, {
+                    code: login.code,
+                    anonymousCode: login.anonymousCode,
+                  });
+                },
+                fail: failure,
+              });
+            },
+            fail: failure,
+          });
+        } catch (error) {
+          finish({ status: 'failed', error: String(error) });
+        }
+        return;
+      }
+
+      finish({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
     });
   }
   bootstrap(): Promise<AccountBootstrapResult> {

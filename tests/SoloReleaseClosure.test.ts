@@ -45,15 +45,25 @@ describe('Solo 1.0 release closure', () => {
     expect(source).toContain('最多清除 2 枚最低阶');
   });
 
-  it('does not upload native Solo rank on every score tick', () => {
+  it('keeps rank writes at run boundaries and uses the authoritative server for fastest ascension', () => {
     const scene = readFileSync(new URL('../platform/douyin/src/soloScene.ts', import.meta.url), 'utf8');
     const retention = readFileSync(new URL('../platform/douyin/src/m212RetentionHub.ts', import.meta.url), 'utf8');
     expect(scene).not.toContain('void this.social.setSoloRank(this.score)');
     expect(retention).toContain('if (forceSync && weekly.progress.best > 0)');
     expect(retention).toContain('await social.setSoloRank(weekly.best)');
-    expect(retention).toContain('void social.setAscensionRank(game.theme, mastery.bestAscensionMs)');
-    expect(retention).toContain('void auth.syncSoloProgress(');
-    expect(retention).toContain('mastery.bestAscensionMs,');
+    expect(retention).not.toContain('await social.openAscensionRank(rankTheme)');
+    expect(retention).not.toContain('await social.setAscensionRank(rankTheme');
+    expect(retention).toContain("auth.fetchSoloLeaderboard(rankTheme, 'ascension', 20)");
+    expect(retention).toContain('await auth.syncSoloProgress(rankTheme, best, highest, mastery.bestAscensionMs)');
+  });
+
+  it('persists a completed theme-ad claim until the authoritative reward ledger confirms it', () => {
+    const scene = readFileSync(new URL('../platform/douyin/src/soloScene.ts', import.meta.url), 'utf8');
+    expect(scene).toContain("PENDING_THEME_AD_CLAIM_KEY = 'doublefight-pending-theme-ad-claim'");
+    expect(scene).toContain('const claim = await this.confirmThemeUnlockAd(theme, claimId, 3)');
+    expect(scene).toContain('this.platform.storage.setItem(PENDING_THEME_AD_CLAIM_KEY');
+    expect(scene).toContain('void this.recoverPendingThemeUnlockClaim()');
+    expect(scene).toContain('await this.confirmThemeUnlockAd(theme, pending.claimId, 2)');
   });
 
   it('rolls the weekly Solo cache at Monday 00:00 China Standard Time', () => {

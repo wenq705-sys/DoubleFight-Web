@@ -29,7 +29,7 @@ import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
 import { DouyinAudio } from './audio';
-import type { DouyinAuthClient } from './auth';
+import type { DouyinAuthClient, ThemeAdUnlockResult } from './auth';
 import { DOUYIN_PRODUCT_CONFIG, DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 import { drawPremiumButton, drawUiIcon, fitText, hitTarget, skillUiIcon, uiMetrics, type UiIcon } from './uiSystem';
@@ -44,6 +44,8 @@ type SoloResultState = {
 };
 type MergeBurst = { count: number; maxValue: number; startedAt: number; until: number };
 type HomeMote = { mesh: THREE.Mesh; baseX: number; baseY: number; baseZ: number; phase: number; speed: number };
+
+const PENDING_THEME_AD_CLAIM_KEY = 'doublefight-pending-theme-ad-claim';
 
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
@@ -304,6 +306,7 @@ export class DouyinSoloScene {
 
   resumeRuntime(): void {
     if (!this.healthNoticeOpen) this.audio.resume();
+    void this.recoverPendingThemeUnlockClaim();
   }
 
   openSharedRoom(code: string): void {
@@ -799,20 +802,75 @@ export class DouyinSoloScene {
       return;
     }
     const claimId = `theme_${theme}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    const claim = await this.auth.claimThemeUnlockAd(theme, claimId);
+    const claim = await this.confirmThemeUnlockAd(theme, claimId, 3);
     if (claim.unlocked) {
       this.themeUnlockOpen = false;
       this.themeUnlockMessage = null;
       this.notice = { text: `${THEMES[theme].label} 已永久解锁`, until: this.visualTime + 1.8 };
       this.platform.haptics.trigger('success');
     } else if (claim.status === 'granted') {
-      this.themeUnlockMessage = '奖励确认中，请稍后重试';
+      this.themeUnlockMessage = `解锁进度已记录 · ${claim.progress}/${claim.required}`;
     } else if (claim.status === 'limited') {
       this.themeUnlockMessage = `今日视频解锁次数已用完 · 每日最多 ${THEME_UNLOCK_AD_DAILY_CAP} 次`;
+    } else if (claim.status === 'duplicate') {
+      this.themeUnlockMessage = '该解锁奖励已记录';
     } else {
-      this.themeUnlockMessage = claim.status === 'duplicate' ? '该解锁奖励已记录' : '奖励确认失败，请稍后再试';
+      this.themeUnlockMessage = '广告已完成 · 奖励将在网络恢复后自动确认';
     }
     this.themeUnlockBusy = false;
+    this.refreshHud();
+  }
+
+  private async confirmThemeUnlockAd(
+    theme: ThemeId,
+    claimId: string,
+    attempts: number,
+  ): Promise<ThemeAdUnlockResult> {
+    this.platform.storage.setItem(PENDING_THEME_AD_CLAIM_KEY, JSON.stringify({ theme, claimId }));
+    let result: ThemeAdUnlockResult = {
+      status: 'unavailable',
+      unlocked: false,
+      progress: 0,
+      required: THEME_UNLOCK_ECONOMY[theme].adViewsRequired,
+      dailyRemaining: 0,
+    };
+    for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+      result = await this.auth.claimThemeUnlockAd(theme, claimId);
+      if (result.status !== 'unavailable') {
+        this.platform.storage.removeItem(PENDING_THEME_AD_CLAIM_KEY);
+        return result;
+      }
+      if (attempt + 1 < attempts) {
+        await new Promise<void>(resolve => setTimeout(resolve, 450 * (attempt + 1)));
+      }
+    }
+    return result;
+  }
+
+  private async recoverPendingThemeUnlockClaim(): Promise<void> {
+    const raw = this.platform.storage.getItem(PENDING_THEME_AD_CLAIM_KEY);
+    if (!raw || this.disposed) return;
+    let pending: { theme?: string; claimId?: string };
+    try {
+      pending = JSON.parse(raw) as { theme?: string; claimId?: string };
+    } catch {
+      this.platform.storage.removeItem(PENDING_THEME_AD_CLAIM_KEY);
+      return;
+    }
+    if (!pending.theme || !pending.claimId || !THEME_IDS.includes(pending.theme as ThemeId)) {
+      this.platform.storage.removeItem(PENDING_THEME_AD_CLAIM_KEY);
+      return;
+    }
+
+    const theme = pending.theme as ThemeId;
+    const claim = await this.confirmThemeUnlockAd(theme, pending.claimId, 2);
+    if (claim.status === 'unavailable' || this.disposed) return;
+    if (claim.unlocked) {
+      this.notice = { text: `${THEMES[theme].label} 广告奖励已补发 · 永久解锁`, until: this.visualTime + 2 };
+      this.platform.haptics.trigger('success');
+    } else if (claim.status === 'granted') {
+      this.notice = { text: `广告奖励已补发 · ${claim.progress}/${claim.required}`, until: this.visualTime + 1.8 };
+    }
     this.refreshHud();
   }
 
