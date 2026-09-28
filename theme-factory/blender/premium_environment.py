@@ -38,6 +38,13 @@ def house(x,y,face=1):
  for k in range(7):
   xx=x-.84+k*.28
   box('individual roof tile',(xx,y,z+1.29),(.24,d+.38,.055),roof,.018)
+ # Layered upturned eaves and gold roof-end caps, readable in an isometric view.
+ for side in (-1,1):
+  for k in range(5):
+   yy=y+(k-2)*.265
+   xx=x+side*(.79+.10*(abs(k-2)/2))
+   pole((x+side*.57,yy,z+1.19),(xx,yy,z+1.32),.024,roof,'swept eave rib')
+   ball('glazed ridge cap',(xx,yy,z+1.34),(.038,.045,.035),gold,8)
  for xx in (-.72,.72):
   lantern(xx+x,y-face*.79,z+.89,.8)
  for k in range(4):
