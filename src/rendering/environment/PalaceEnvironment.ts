@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Direction } from '../../game/board/types';
 import { ART } from '../../config/artDirection';
@@ -35,7 +36,7 @@ const C = {
   lantern: 0xffa63a,
 };
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+const toon = (color: number) => createToonMaterial({ color, gradientMap: gradient });
 const emissive = (color: number, intensity: number) =>
   new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.36 });
 

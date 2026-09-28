@@ -88,7 +88,10 @@ export function recordAscension(
 }
 
 export function currentWeekKey(now: number = Date.now()): string {
-  const date = new Date(now);
+  // The Douyin launch surface follows China Standard Time. Weekly local best
+  // therefore rolls at Monday 00:00 CST rather than Monday 00:00 UTC.
+  const chinaOffsetMs = 8 * 60 * 60 * 1000;
+  const date = new Date(now + chinaOffsetMs);
   const mondayOffset = (date.getUTCDay() + 6) % 7;
   date.setUTCDate(date.getUTCDate() - mondayOffset);
   return date.toISOString().slice(0, 10);

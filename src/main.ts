@@ -2,7 +2,7 @@ import './styles.css';
 import { SoloController } from './battle/SoloController';
 import type { Direction } from './game/board/types';
 import { ART } from './config/artDirection';
-import { THEMES, type ThemeId } from './config/themes';
+import { THEMES, isThemeId, type ThemeId } from './config/themes';
 import { GameScene } from './rendering/GameScene';
 import { Hud } from './ui/Hud';
 import { HomeScreen } from './ui/HomeScreen';
@@ -34,7 +34,8 @@ let inputLocked = false;
 let inGame = false;
 let pointerStart: { x: number; y: number; time: number } | null = null;
 let skillCharges = 3;
-let theme: ThemeId = storage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
+const savedTheme = storage.getItem('doublefight-theme');
+let theme: ThemeId = isThemeId(savedTheme) ? savedTheme : 'kingdom';
 
 const home = new HomeScreen(app, theme);
 const onlineEndpoint = resolveOnlineEndpoint();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { Direction } from '../../game/board/types';
 import { ART } from '../../config/artDirection';
@@ -14,7 +15,7 @@ const gradient = (() => {
   return texture;
 })();
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+const toon = (color: number) => createToonMaterial({ color, gradientMap: gradient });
 const standard = (color: number, roughness = 0.76, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 
@@ -621,8 +622,8 @@ export class KingdomEnvironment {
   }
 
   private createMountains(): void {
-    const a = new THREE.MeshToonMaterial({ color: 0x85c5d9, transparent: true, opacity: 0.7 });
-    const b = new THREE.MeshToonMaterial({ color: 0x81bfa2, transparent: true, opacity: 0.63 });
+    const a = createToonMaterial({ color: 0x85c5d9, transparent: true, opacity: 0.7 });
+    const b = createToonMaterial({ color: 0x81bfa2, transparent: true, opacity: 0.63 });
     const positions: [number, number, number][] = [
       [-8.4, -2.8, 2.25], [-6.7, -5.6, 1.9], [7.0, -5.0, 2.3],
       [8.8, -2.0, 2.0], [-7.7, 1.0, 1.75], [7.8, 0.8, 1.7],
@@ -660,7 +661,7 @@ export class KingdomEnvironment {
       g.position.set(x, y, z);
       g.scale.setScalar(scale);
       this.root.add(g);
-      const material = new THREE.MeshToonMaterial({ color: index % 2 ? 0xf8e8c7 : 0xe6f3f6, transparent: true, opacity: 0.62 });
+      const material = createToonMaterial({ color: index % 2 ? 0xf8e8c7 : 0xe6f3f6, transparent: true, opacity: 0.62 });
       [[0, 0, 0], [0.75, 0.05, 0], [-0.7, -0.04, 0], [0.2, 0.34, 0]].forEach(([px, py, pz], part) => {
         const cloud = addMesh(g, new THREE.SphereGeometry(part === 3 ? 0.62 : 0.72, 12, 8), material, [px, py, pz]);
         cloud.castShadow = false;

@@ -24,4 +24,18 @@ describe('Board2048',()=>{
     expect(board.tiles()).toHaveLength(before-2);
     expect(result.removed.map(tile=>tile.value)).toEqual([2,4]);
   });
+  it('solo clear removes the lowest tiles and protects one current highest tile',()=>{
+    const board=new Board2048(deterministicRandom);
+    board.load([[2,2,4,2048],[8,16,32,64],[0,0,0,0],[0,0,0,0]]);
+    const result=board.clearLowest(2,true);
+    expect(result.removed.map(tile=>tile.value)).toEqual([2,2]);
+    expect(board.tiles().some(tile=>tile.value===2048)).toBe(true);
+  });
+  it('solo clear keeps every current highest tile protected',()=>{
+    const board=new Board2048(deterministicRandom);
+    board.load([[512,1024,2048,2048],[0,0,0,0],[0,0,0,0],[0,0,0,0]]);
+    const result=board.clearLowest(2,true);
+    expect(result.removed.map(tile=>tile.value)).toEqual([512,1024]);
+    expect(board.tiles().map(tile=>tile.value)).toEqual([2048,2048]);
+  });
 });

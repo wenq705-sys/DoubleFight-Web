@@ -63,6 +63,58 @@ describe('Douyin runtime spike adapters', () => {
     expect(taps).toEqual([[126, 244]]);
   });
 
+  it('blocks multi-touch, suppresses native pinch defaults, and does not emit a tap or swipe', () => {
+    const { api, handlers } = fakeApi();
+    const moves: string[] = [];
+    const taps: Array<[number, number]> = [];
+    const preventDefault = vi.fn();
+    const touch = new DouyinSwipeInput(api, direction => moves.push(direction), (x, y) => taps.push([x, y]));
+    touch.setActive(true);
+
+    handlers.get('start')!({
+      touches: [
+        { identifier: 1, clientX: 100, clientY: 100 },
+        { identifier: 2, clientX: 200, clientY: 200 },
+      ],
+      changedTouches: [{ identifier: 2, clientX: 200, clientY: 200 }],
+      preventDefault,
+    });
+    handlers.get('move')!({
+      touches: [
+        { identifier: 1, clientX: 40, clientY: 100 },
+        { identifier: 2, clientX: 260, clientY: 200 },
+      ],
+      changedTouches: [],
+      preventDefault,
+    });
+    handlers.get('end')!({
+      touches: [{ identifier: 1, clientX: 40, clientY: 100 }],
+      changedTouches: [{ identifier: 2, clientX: 260, clientY: 200 }],
+      preventDefault,
+    });
+    handlers.get('end')!({
+      touches: [],
+      changedTouches: [{ identifier: 1, clientX: 40, clientY: 100 }],
+      preventDefault,
+    });
+    expect(moves).toEqual([]);
+    expect(taps).toEqual([]);
+    expect(preventDefault).toHaveBeenCalledTimes(4);
+
+    handlers.get('start')!({
+      touches: [{ identifier: 3, clientX: 0, clientY: 0 }],
+      changedTouches: [{ identifier: 3, clientX: 0, clientY: 0 }],
+      preventDefault,
+    });
+    handlers.get('end')!({
+      touches: [],
+      changedTouches: [{ identifier: 3, clientX: 100, clientY: 0 }],
+      preventDefault,
+    });
+    expect(moves).toEqual(['right']);
+    expect(preventDefault).toHaveBeenCalledTimes(6);
+  });
+
   it('ignores touch after deactivation until the next active gesture', () => {
     const { api, handlers } = fakeApi();
     const moves: string[] = [];

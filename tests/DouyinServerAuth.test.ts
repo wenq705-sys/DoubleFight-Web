@@ -259,3 +259,25 @@ describe('account HTTP endpoints', () => {
     } finally { await closed.close(); }
   });
 });
+
+describe('public player profile endpoint', () => {
+  it('persists a signed-in nickname/avatar and rejects unsafe profile input', async () => {
+    const site = await fixture();
+    try {
+      const auth = await (await post(site.base, '/auth/douyin', { code: 'temporary-code' })).json() as { token: string };
+      const changed = await post(site.base, '/profile', { displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' }, auth.token);
+      expect(changed.status).toBe(200);
+      const body = await changed.json() as { player: { displayName: string; avatarUrl?: string } };
+      expect(body.player).toMatchObject({ displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' });
+      const me = await fetch(site.base + '/me', { headers: { authorization: `Bearer ${auth.token}` } });
+      expect((await me.json()).player).toMatchObject({ displayName: '强哥', avatarUrl: 'https://example.com/avatar.png' });
+      const nameOnly = await post(site.base, '/profile', { displayName: '强哥2' }, auth.token);
+      expect((await nameOnly.json()).player).toMatchObject({ displayName: '强哥2', avatarUrl: 'https://example.com/avatar.png' });
+      expect((await post(site.base, '/profile', { displayName: '' }, auth.token)).status).toBe(400);
+      expect((await post(site.base, '/profile', { displayName: 'A'.repeat(25) }, auth.token)).status).toBe(400);
+      expect((await post(site.base, '/profile', { displayName: '正常', avatarUrl: 'http://unsafe.example/avatar.png' }, auth.token)).status).toBe(400);
+      expect((await post(site.base, '/profile', { displayName: '正常', avatarUrl: 'not-a-url' }, auth.token)).status).toBe(400);
+      expect(site.logs).toContainEqual({ event: 'profile_updated', avatar: true });
+    } finally { await site.close(); }
+  });
+});

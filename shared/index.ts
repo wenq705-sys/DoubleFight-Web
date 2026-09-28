@@ -77,3 +77,12 @@ export type {
   TimeLimitResolution,
   TimeLimitTieBreaker,
 } from './battle/match';
+
+export {
+  RELEASE_THEME_IDS,
+  THEME_UNLOCK_ECONOMY,
+  THEME_UNLOCK_AD_DAILY_CAP,
+  S_COIN_ECONOMY,
+  themeUnlockEconomy,
+} from './game/themeEconomy';
+export type { ReleaseThemeId, ThemeUnlockEconomy } from './game/themeEconomy';

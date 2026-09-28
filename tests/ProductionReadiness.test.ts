@@ -41,9 +41,12 @@ describe('safe production readiness', () => {
     expect(await dataDirectoryWritable(file)).toBe(false);
   });
 
-  it('proxies all M2.12 HTTP surfaces through the production Nginx config', async () => {
+  it('proxies every release account/reward surface through the production Nginx config', async () => {
     const nginx = await readFile('ops/doublefight-tls.conf', 'utf8');
-    for (const route of ['themes(/unlock)?', 'season/current', 'leaderboards/pvp']) {
+    for (const route of [
+      'auth/douyin', 'me', 'profile', 'progress/solo', 'rewards/(sidebar|ad)',
+      'themes(/unlock(/ad)?)?', 'season/current', 'leaderboards/pvp',
+    ]) {
       expect(nginx).toContain(route);
     }
   });

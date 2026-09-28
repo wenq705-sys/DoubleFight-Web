@@ -1,5 +1,5 @@
-import type { AccountBootstrap, AccountBootstrapResult, HapticsAdapter, LifecycleAdapter, Platform, StorageAdapter, SystemInfo } from '../types';
-import type { DouyinApi, DouyinCanvas } from '../../../platform/douyin/src/api';
+import type { AccountBootstrap, AccountBootstrapResult, AccountProfileResult, HapticsAdapter, LifecycleAdapter, Platform, StorageAdapter, SystemInfo } from '../types';
+import type { DouyinApi, DouyinCanvas, DouyinImage } from '../../../platform/douyin/src/api';
 import type { Direction } from '../../../shared/game/types';
 import { DouyinSwipeInput } from '../../../platform/douyin/src/touch';
 import { DouyinSocketTransport } from './DouyinSocketTransport';
@@ -49,8 +49,33 @@ export class DouyinLifecycleAdapter implements LifecycleAdapter {
 
 export class DouyinAccountBootstrap implements AccountBootstrap {
   private result: Promise<AccountBootstrapResult> | null = null;
-  constructor(private readonly api: Pick<DouyinApi, 'login'>) {}
+  constructor(private readonly api: Pick<DouyinApi, 'login' | 'getUserInfo' | 'getUserProfile'>) {}
   reset(): void { this.result = null; }
+  requestProfile(): Promise<AccountProfileResult> {
+    return new Promise(resolve => {
+      const success = (result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => {
+        const nickName = result.userInfo?.nickName?.trim();
+        const avatarUrl = result.userInfo?.avatarUrl?.trim();
+        if (!nickName) { resolve({ status: 'failed', error: 'profile missing nickname' }); return; }
+        resolve({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
+      };
+      const failure = (error: { errMsg?: string }) => {
+        const message = error.errMsg ?? 'Douyin user profile failed';
+        resolve({ status: /deny|cancel|auth deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+      };
+      try {
+        if (this.api.getUserInfo) {
+          this.api.getUserInfo({ withCredentials: false, success, fail: failure });
+          return;
+        }
+        if (this.api.getUserProfile) {
+          this.api.getUserProfile({ force: false, success, fail: failure });
+          return;
+        }
+        resolve({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
+      } catch (error) { resolve({ status: 'failed', error: String(error) }); }
+    });
+  }
   bootstrap(): Promise<AccountBootstrapResult> {
     if (this.result) return this.result;
     this.result = new Promise(resolve => {
@@ -92,6 +117,7 @@ export class DouyinPlatform implements Platform {
   readonly lifecycle: DouyinLifecycleAdapter;
   readonly account: DouyinAccountBootstrap;
   private systemInfo: SystemInfo | null = null;
+  private stableViewport: { width: number; height: number } | null = null;
 
   constructor(private readonly api: DouyinApi) {
     this.socket = new DouyinSocketTransport(api);
@@ -109,11 +135,38 @@ export class DouyinPlatform implements Platform {
   refreshSystemInfo(): SystemInfo {
     let menuButton: ReturnType<NonNullable<DouyinApi['getMenuButtonLayout']>> | undefined;
     try { menuButton = this.api.getMenuButtonLayout?.(); } catch { /* optional host chrome */ }
-    this.systemInfo = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+    let next = normalizeDouyinSystemInfo(this.api.getSystemInfoSync(), menuButton);
+
+    // Mini-game viewport dimensions should be stable for a session. Some preview/
+    // host gesture paths can report browser-like zoomed window dimensions after
+    // accidental multi-touch. Keep the original logical viewport unless the
+    // orientation actually changes, so HUD/layout can never get "stuck zoomed".
+    if (!this.stableViewport) {
+      this.stableViewport = { width: next.width, height: next.height };
+    } else {
+      const stablePortrait = this.stableViewport.height >= this.stableViewport.width;
+      const nextPortrait = next.height >= next.width;
+      const widthScale = next.width / Math.max(1, this.stableViewport.width);
+      const heightScale = next.height / Math.max(1, this.stableViewport.height);
+      // Pinch zoom changes both logical axes by essentially the same scale while
+      // preserving orientation. Real viewport/layout changes generally alter
+      // aspect ratio, so accept those and establish a new stable viewport.
+      const proportionalScale = Math.abs(widthScale - heightScale) < 0.035;
+      const meaningfulScale = Math.abs(widthScale - 1) > 0.06 || Math.abs(heightScale - 1) > 0.06;
+      const looksLikeZoom = stablePortrait === nextPortrait && proportionalScale && meaningfulScale;
+      if (looksLikeZoom) {
+        next = { ...next, width: this.stableViewport.width, height: this.stableViewport.height };
+      } else if (next.width !== this.stableViewport.width || next.height !== this.stableViewport.height) {
+        this.stableViewport = { width: next.width, height: next.height };
+      }
+    }
+
+    this.systemInfo = next;
     return this.systemInfo;
   }
 
   createCanvas(): DouyinCanvas { return this.api.createCanvas(); }
+  createImage(): DouyinImage | null { try { return this.api.createImage?.() ?? null; } catch { return null; } }
   createSwipeInput(
     onDirection: (direction: Direction) => void,
     onTap?: (x: number, y: number) => void,

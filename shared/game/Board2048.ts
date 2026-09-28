@@ -29,6 +29,17 @@ export class Board2048 {
     return this._score;
   }
 
+  get highest(): number {
+    let highest = 2;
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const value = this.grid[row][col]?.value;
+        if (value !== undefined && value > highest) highest = value;
+      }
+    }
+    return highest;
+  }
+
   reset(): BoardTile[] {
     this.grid = this.emptyGrid();
     this.blocked.clear();
@@ -50,7 +61,7 @@ export class Board2048 {
       tiles: tiles.map((tile) => ({ ...tile })),
       blockedCells: this.blockedCells(),
       score: this._score,
-      highest: Math.max(2, ...tiles.map((tile) => tile.value)),
+      highest: this.highest,
       canMove: this.canMove(),
     };
   }
@@ -248,6 +259,34 @@ export class Board2048 {
     };
   }
 
+  /** Solo helper: remove the lowest-value movable tiles while protecting every current highest tile. */
+  clearLowest(count = 2, protectHighest = true): ClearResult {
+    const occupied = this.tiles().filter((tile) => !this.isBlocked(tile));
+    if (occupied.length === 0 || count <= 0) {
+      return { removed: [], gameOver: !this.canMove() };
+    }
+
+    const highest = Math.max(...occupied.map((tile) => tile.value));
+    const pool = occupied
+      .filter((tile) => !protectHighest || tile.value !== highest)
+      .sort((a, b) => a.value - b.value || a.id - b.id);
+    const removed: BoardTile[] = [];
+    const targetCount = Math.min(Math.floor(count), pool.length);
+
+    for (let index = 0; index < targetCount; index += 1) {
+      const lowestValue = pool[0]?.value;
+      if (lowestValue === undefined) break;
+      const sameTier = pool.filter((tile) => tile.value === lowestValue);
+      const pick = sameTier[Math.min(sameTier.length - 1, Math.floor(this.random() * sameTier.length))];
+      const poolIndex = pool.findIndex((tile) => tile.id === pick.id);
+      if (poolIndex >= 0) pool.splice(poolIndex, 1);
+      this.grid[pick.row][pick.col] = null;
+      removed.push({ ...pick });
+    }
+
+    return { removed, gameOver: !this.canMove() };
+  }
+
   clearRandom(count = 2): ClearResult {
     const occupied = this.tiles().filter((tile) => !this.isBlocked(tile));
     if (occupied.length === 0 || count <= 0) {
@@ -270,7 +309,7 @@ export class Board2048 {
   }
 
   canMove(): boolean {
-    if (this.emptyCells().length > 0) return true;
+    if (this.hasEmptyCell()) return true;
 
     for (let row = 0; row < SIZE; row += 1) {
       for (let col = 0; col < SIZE; col += 1) {
@@ -312,6 +351,16 @@ export class Board2048 {
           : null,
       ),
     );
+  }
+
+  private hasEmptyCell(): boolean {
+    for (let row = 0; row < SIZE; row += 1) {
+      for (let col = 0; col < SIZE; col += 1) {
+        const position = { row, col };
+        if (!this.grid[row][col] && !this.isBlocked(position)) return true;
+      }
+    }
+    return false;
   }
 
   private spawnRandom(): BoardTile | null {

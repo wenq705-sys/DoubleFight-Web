@@ -1,14 +1,15 @@
+import { S_COIN_ECONOMY, THEME_UNLOCK_ECONOMY } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
 
 export const S_COIN = {
-  dailyLogin: 15,
-  dailyRewardedBonus: 30,
-  sidebarReturn: 10,
-  dailyTask: 5,
+  dailyLogin: S_COIN_ECONOMY.dailyLogin,
+  dailyRewardedBonus: S_COIN_ECONOMY.dailyRewardedAd,
+  sidebarReturn: S_COIN_ECONOMY.sidebarReturn,
+  dailyTask: S_COIN_ECONOMY.dailyTask,
   dailyTaskCount: 3,
-  firstDiscovery: 5,
-  sevenDayChest: 30,
-  themeUnlock: 500,
+  firstDiscovery: S_COIN_ECONOMY.discoveryPerTier,
+  sevenDayChest: S_COIN_ECONOMY.sevenDayChest,
+  themeUnlock: THEME_UNLOCK_ECONOMY.palace.coinCost,
 } as const;
 
 export const PVP_SEASON_DAYS = 14;
@@ -16,7 +17,7 @@ export const PVP_SEASON_DAYS = 14;
 export interface CompetitiveRank {
   id: 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond' | 'king';
   label: string;
-  division: 'III' | 'II' | 'I' | null;
+  division: '三段' | '二段' | '一段' | null;
   floor: number;
   nextFloor: number | null;
 }
@@ -41,7 +42,7 @@ export function competitiveRank(rating: number): CompetitiveRank {
   const span = Math.max(1, (next?.floor ?? base.floor + 300) - base.floor);
   const within = Math.max(0, Math.min(span - 1, safe - base.floor));
   const third = span / 3;
-  const division: 'III' | 'II' | 'I' = within < third ? 'III' : within < third * 2 ? 'II' : 'I';
+  const division: '三段' | '二段' | '一段' = within < third ? '三段' : within < third * 2 ? '二段' : '一段';
   return { ...base, division, nextFloor: next?.floor ?? null };
 }
 
@@ -75,7 +76,7 @@ export const LEADERBOARDS: readonly LeaderboardDefinition[] = [
   },
   {
     id: 'solo_weekly',
-    label: 'Solo 周榜',
+    label: '本周最高分',
     subtitle: '每周最高分 · 棋子名称作为荣耀展示',
     cadence: 'weekly',
     authority: 'platform',
@@ -83,7 +84,7 @@ export const LEADERBOARDS: readonly LeaderboardDefinition[] = [
   {
     id: 'pvp_season',
     label: '竞技赛季',
-    subtitle: '14天赛季 · 服务器 Rating 排名',
+    subtitle: '14天赛季 · 服务器积分排名',
     cadence: '14d',
     authority: 'server',
   },
@@ -93,12 +94,15 @@ export interface ThemeAccess {
   theme: ThemeId;
   free: boolean;
   permanentPrice: number;
-  trial: 'none' | 'rewarded_once_per_day';
+  rewardedUnlockViews: number;
 }
 
-// Both currently shipped themes remain free. Future themes use the same
-// contract instead of introducing a second currency or direct purchase.
+// One free onboarding world; the remaining worlds support either permanent
+// star-coin purchase or one completed rewarded video for an immediate permanent unlock.
 export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
-  kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, trial: 'none' },
-  palace: { theme: 'palace', free: true, permanentPrice: 0, trial: 'none' },
+  kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, rewardedUnlockViews: 0 },
+  palace: { theme: 'palace', free: false, permanentPrice: 100, rewardedUnlockViews: 1 },
+  zodiac: { theme: 'zodiac', free: false, permanentPrice: 180, rewardedUnlockViews: 1 },
+  candy: { theme: 'candy', free: false, permanentPrice: 280, rewardedUnlockViews: 1 },
+  dreamhouse: { theme: 'dreamhouse', free: false, permanentPrice: 400, rewardedUnlockViews: 1 },
 };

@@ -5,17 +5,20 @@ describe('S Coin product economy', () => {
   it('keeps the V1 economy ad-funded and theme-focused', () => {
     expect(S_COIN.dailyLogin).toBe(15);
     expect(S_COIN.dailyRewardedBonus).toBe(30);
-    expect(S_COIN.themeUnlock).toBe(500);
+    expect(S_COIN.themeUnlock).toBe(100);
     expect(S_COIN.dailyRewardedBonus).toBe(S_COIN.dailyLogin * 2);
-    expect(THEME_ACCESS.kingdom.free).toBe(true);
-    expect(THEME_ACCESS.palace.free).toBe(true);
+    expect(THEME_ACCESS.kingdom).toMatchObject({ free: true, permanentPrice: 0, rewardedUnlockViews: 0 });
+    expect(THEME_ACCESS.palace).toMatchObject({ free: false, permanentPrice: 100, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.zodiac).toMatchObject({ free: false, permanentPrice: 180, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.candy).toMatchObject({ free: false, permanentPrice: 280, rewardedUnlockViews: 1 });
+    expect(THEME_ACCESS.dreamhouse).toMatchObject({ free: false, permanentPrice: 400, rewardedUnlockViews: 1 });
   });
 });
 
 describe('competitive presentation', () => {
   it('maps rating into a compact six-rank ladder', () => {
-    expect(competitiveRankLabel(1000)).toBe('青铜 I');
-    expect(competitiveRankLabel(1250)).toBe('黄金 III');
+    expect(competitiveRankLabel(1000)).toBe('青铜 一段');
+    expect(competitiveRankLabel(1250)).toBe('黄金 三段');
     expect(competitiveRankLabel(1900)).toBe('王者');
     expect(competitiveRankProgress(1900)).toBe(1);
   });

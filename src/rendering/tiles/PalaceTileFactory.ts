@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import type { TileVisual } from './TileFactory';
 import { tierScale } from '../../config/tierProgression';
@@ -77,7 +78,7 @@ const PROFILES: Record<number, TierProfile> = {
   2048: { scale: 1.40, skirtWidth: 0.90, torsoWidth: 0.78, sleeve: 0.47, crown: 11, cape: true, halo: true, throne: true, prop: 'none' },
 };
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+const toon = (color: number) => createToonMaterial({ color, gradientMap: gradient });
 const metal = (color: number) => new THREE.MeshStandardMaterial({ color, roughness: 0.28, metalness: 0.58 });
 
 function mesh(

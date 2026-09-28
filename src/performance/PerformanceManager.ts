@@ -30,7 +30,7 @@ export class PerformanceManager {
     const device = Math.max(1, window.devicePixelRatio || 1);
     const mobile = this.isMobileLike();
     this.quality = mobile ? 'medium' : 'high';
-    this.currentDpr = Math.min(device, mobile ? 1.2 : 1.7);
+    this.currentDpr = Math.min(device, mobile ? 1.75 : 1.9);
     this.snapshot = {
       fps: 60,
       frameMs: 16.7,
@@ -79,9 +79,9 @@ export class PerformanceManager {
   private adapt(fps: number): void {
     const device = Math.max(1, window.devicePixelRatio || 1);
     const mobile = this.isMobileLike();
-    const maxDpr = Math.min(device, mobile ? 1.45 : 1.7);
-    const mediumDpr = Math.min(device, mobile ? 1.2 : 1.45);
-    const lowDpr = Math.min(device, mobile ? 1 : 1.2);
+    const maxDpr = Math.min(device, mobile ? 2 : 1.9);
+    const mediumDpr = Math.min(device, mobile ? 1.75 : 1.65);
+    const lowDpr = Math.min(device, mobile ? 1.4 : 1.35);
 
     if (fps < 44) {
       this.goodWindows = 0;

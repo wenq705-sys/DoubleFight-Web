@@ -1,5 +1,32 @@
 # Handoff
 
+## v1.0 final RC — performance, economy and review hardening — CURRENT
+
+Branch: `feat/m2-17-solo-launch-rc`. PR #44 is the consolidated v1.0 release candidate targeting `main`; the latest hardening head adds performance prewarming, permanent theme economy and Douyin review-copy gates.
+
+The launch decision is now explicit: the first Douyin release ships as a polished **Solo / Theme Islands** product. Online Duel/PvP remains implemented for a later release, but M2.17 hides and disables its launch surfaces rather than deleting the architecture.
+
+Release closure implemented:
+- `DOUYIN_PRODUCT_CONFIG.launch` is the single launch-policy gate; Online Home CTA/tap, room deep links and PvP rank/season surfaces are disabled.
+- first-release world registry is **five themes**: 微缩王国 / 后宫晋升 / 生肖战神 / 甜蜜星球 / 梦想家园.
+- every world has an 11-tier numberless progression, independent collection/mastery data, preview, palette, presentation adapter and server-persisted Solo progress.
+- 生肖战神 uses combat-power progression: 灵鼠 → 斗鸡 → 岩羊 → 灵猴 → 战犬 → 山猪 → 玄蛇 → 烈马 → 神牛 → 白虎 → 东方神龙. Rabbit is the world mascot so the global 11/11 rule remains intact.
+- the three new worlds use cached procedural low-poly factories and lightweight reusable environments; these are release-safe now and can later be replaced by Codex/Blender-authored GLB without changing gameplay contracts.
+- account migration retains legacy Kingdom/Palace fields and generic `soloByTheme` persistence; players with prior progress in formerly-free worlds keep permanent ownership.
+- startup preloads all five environments/tile templates/GPU programs and theme music behind the isolated health screen so first world swipes avoid one-time construction hitches.
+- Browser and Douyin world navigation are registry-driven; the first-release Browser/Douyin shells hide Online Duel while retaining the deferred network implementation.
+- theme economy: 微缩王国 is free; 后宫晋升 / 生肖战神 / 甜蜜星球 / 梦想家园 permanently unlock for 100 / 180 / 280 / 400 星币, or cumulative rewarded-ad progress 2 / 3 / 4 / 5 with a global 2-per-day cap.
+- review-copy gate removes complex-English player-facing labels, uses numeric-only generated guest names and the Chinese currency name 星币; final local validation is 27/27 test files, 172/172 tests plus Browser/Douyin builds and preflight PASS; release `game.js` is about 735 kB / 199 kB gzip.
+
+Remaining release gate:
+1. final GitHub CI on the pushed M2.17 head;
+2. Douyin IDE and physical-device visual/touch/lifecycle verification;
+3. live platform/provider configuration checks required by submission (AppID/legal request domains/account/ad availability);
+4. submit the accepted release bundle in the Douyin developer console.
+
+No production deploy is implied by code-side green status.
+
+
 ## M2.12 server authority
 
 `feat/m2-12-server-authority` adds the server-only S Coin ledger, UTC daily/streak grants, derived Solo/PvP/ad tasks, monotonic discovery grants, permanent theme ownership and current 14-day authoritative PvP seasons. Account JSON v1 data migrates in place without resetting Solo or lifetime PvP fields; Protocol remains v6. New additive HTTP reads are `GET /themes`, `GET /season/current` and `GET /leaderboards/pvp`; `POST /themes/unlock` and existing reward/progress routes return updated additive player state. Follow-up audit hardening caps discovery rewards to the shipped 11 tiers, resets public daily-task flags at the UTC boundary, rejects duplicate-account/guest-only season accounting, excludes inactive players from the season leaderboard, validates theme unlocks as 400-level client errors, and keeps unreleased paid themes out of the production registry while retaining an injectable paid-theme contract for tests. The branch has no deployment.

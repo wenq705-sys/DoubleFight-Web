@@ -22,6 +22,7 @@ export class GameScene {
   private readonly debugElement: HTMLElement | undefined;
   private disposed = false;
   private homeMode = false;
+  private running = false;
   private raf = 0;
 
   constructor(container: HTMLElement) {
@@ -64,13 +65,22 @@ export class GameScene {
     this.prewarmTheme('kingdom');
     window.addEventListener('resize', this.resize);
     window.addEventListener('orientationchange', this.resize);
-    this.animate();
+    this.startLoop();
   }
 
 
   get theme(): ThemeId { return this.boardView.theme; }
   setHomeMode(enabled: boolean): void {
-    this.homeMode = enabled; this.boardView.root.visible = !enabled; this.boardView.clearGesture();
+    this.homeMode = enabled;
+    this.boardView.root.visible = !enabled;
+    this.boardView.clearGesture();
+    if (enabled) {
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.running = false;
+      return;
+    }
+    this.startLoop();
   }
   prewarmTheme(theme: ThemeId): void { this.boardView.prewarmTheme(theme); }
   setTheme(theme: ThemeId, tiles: BoardTile[]): void {
@@ -143,8 +153,19 @@ export class GameScene {
   };
 
 
+  private startLoop(): void {
+    if (this.disposed || this.homeMode || this.running) return;
+    this.running = true;
+    this.clock.start();
+    this.raf = requestAnimationFrame(this.animate);
+  }
+
   private animate = (): void => {
-    if (this.disposed) return;
+    if (this.disposed || this.homeMode) {
+      this.running = false;
+      this.raf = 0;
+      return;
+    }
     this.raf = requestAnimationFrame(this.animate);
     const delta = Math.min(0.033, this.clock.getDelta());
     if (!this.homeMode) this.boardView.update(delta);

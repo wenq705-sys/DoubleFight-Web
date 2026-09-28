@@ -39,6 +39,7 @@ export class Effects {
   private readonly lights: LightItem[] = [];
   private readonly maxByQuality: Record<QualityLevel, number>;
   private quality: QualityLevel = 'high';
+  private activeCount = 0;
 
   constructor(
     private readonly parent: THREE.Object3D,
@@ -250,12 +251,12 @@ export class Effects {
   }
 
   private acquire(kind: PoolKind): FxItem | null {
-    const activeCount = this.items.reduce((sum, item) => sum + (item.active ? 1 : 0), 0);
-    if (activeCount >= this.maxByQuality[this.quality]) return null;
+    if (this.activeCount >= this.maxByQuality[this.quality]) return null;
     return this.items.find((item) => !item.active && item.kind === kind) ?? null;
   }
 
   private activate(item: FxItem, position: THREE.Vector3, color: number, life: number): void {
+    if (!item.active) this.activeCount += 1;
     item.active = true;
     item.life = life;
     item.maxLife = life;
@@ -274,6 +275,7 @@ export class Effects {
   }
 
   private release(item: FxItem): void {
+    if (item.active) this.activeCount = Math.max(0, this.activeCount - 1);
     item.active = false;
     item.life = 0;
     item.mesh.visible = false;

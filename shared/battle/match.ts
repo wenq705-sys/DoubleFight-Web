@@ -1,5 +1,5 @@
 export const MATCH_DURATION_MS = 180_000;
-export const MATCH_FORMAT_LABEL = '标准对决 · 3分钟 · 实时1v1';
+export const MATCH_FORMAT_LABEL = '标准对决 · 3分钟 · 实时一对一';
 
 export type TimeLimitTieBreaker = 'score' | 'highest' | 'usable_space' | 'draw';
 export type MatchTimerPhase = 'normal' | 'last_minute' | 'decisive' | 'final_countdown' | 'finished';

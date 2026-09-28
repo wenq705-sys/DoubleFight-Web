@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createToonMaterial } from '../RuntimeMaterialPolicy';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { ART } from '../../config/artDirection';
 import { tierScale } from '../../config/tierProgression';
@@ -13,7 +14,7 @@ const gradient = (() => {
   return texture;
 })();
 
-const toon = (color: number) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
+const toon = (color: number) => createToonMaterial({ color, gradientMap: gradient });
 const standard = (color: number, roughness = 0.72, metalness = 0) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
 
@@ -154,7 +155,7 @@ function applyTierIdentity(root: THREE.Group, value: number): void {
     const materials = Array.isArray(node.material) ? node.material : [node.material];
 
     materials.forEach((material) => {
-      if (!(material instanceof THREE.MeshToonMaterial || material instanceof THREE.MeshStandardMaterial)) return;
+      if (!(material instanceof THREE.MeshToonMaterial || material instanceof THREE.MeshLambertMaterial || material instanceof THREE.MeshStandardMaterial)) return;
 
       // Keep strongly metallic gold trim as prestige trim. Everything else receives
       // the tier hue so color alone remains a dependable gameplay identifier.
