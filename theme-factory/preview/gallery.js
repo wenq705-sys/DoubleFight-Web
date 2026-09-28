@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 const $=s=>document.querySelector(s),canvas=$('#view'),renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia('(pointer:coarse)').matches?1.15:1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.35;
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.35;
 const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-6,6,6,-6,.1,100);camera.position.set(10,13,16);camera.lookAt(0,0,0);
 scene.add(new THREE.HemisphereLight(0xffe4bb,0x413751,3.3));const key=new THREE.DirectionalLight(0xffcb87,3.4);key.position.set(-4,9,5);scene.add(key);const fill=new THREE.DirectionalLight(0x8daeff,1.4);fill.position.set(5,5,-4);scene.add(fill);
 const root=new THREE.Group();scene.add(root);const loader=new GLTFLoader();const load=n=>new Promise((ok,fail)=>loader.load(import.meta.env.BASE_URL+'night-market/'+n+'.glb',g=>ok(g.scene),undefined,fail));
-const assets=['01-night-newcomer','02-dumpling-apprentice','03-street-skewer','04-festival-vendor','05-stall-master','06-panda-chef','07-famous-restaurant','08-market-magnate','09-golden-guild','10-market-overlord','11-night-market-king'];
-const names=['夜市萌新','团子学徒','串串达人','节庆摊主','小摊掌柜','熊猫大厨','招牌名店','夜市富商','黄金商会','夜市霸主','夜市牛王'];
+const assets=['01-night-newcomer','02-candied-hawthorn','03-raccoon-grill','04-lantern-rabbit','05-fox-teahouse','06-panda-chef','07-opera-diva','08-golden-toad','09-dragon-boat','10-phoenix-pavilion','11-night-market-king'];
+const names=['糯米团子','糖葫芦小贩','烤串狸猫','灯笼兔','茶馆狐狸','熊猫大厨','戏台花旦','金蟾掌柜','龙舟将军','凤凰阁主','夜市牛王'];
 let figures=[],selected=-1,angle=0,drag=false,lastX=0,zoom=1,environment=null,board=null,mode='all';
 function select(i){selected=i;$('#status').textContent=i<0?'全系列 · 11 个等级独立 GLB':(2**(i+1))+' · '+names[i];figures.forEach((f,j)=>{f.userData.targetScale=selected<0?.76:j===i?1.65:.50;f.visible=selected<0||j===i;});$('#selected').textContent=selected<0?'全系列':names[i];}
 $('#all').onclick=()=>select(-1);$('#previous').onclick=()=>select((selected<0?10:selected+10)%11);$('#next').onclick=()=>select((selected+1)%11);
