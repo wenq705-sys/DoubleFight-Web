@@ -44,7 +44,9 @@ def pavilion(size=1):
 def batch():
  meshes=[o for o in bpy.context.scene.objects if o.type=='MESH']
  for o in meshes:
+  bpy.ops.object.select_all(action='DESELECT');o.select_set(True)
   bpy.context.view_layer.objects.active=o
+  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
   for mod in list(o.modifiers):
    try:bpy.ops.object.modifier_apply(modifier=mod.name)
    except RuntimeError:pass
