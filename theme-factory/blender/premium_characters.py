@@ -45,6 +45,13 @@ for x in (-.23,.23):
 rod((.34,-.15,.47),(.48,-.18,1.03),.018,dark,'held skewer')
 for z in (.70,.82,.93):ball('glazed grilled bite',(.41+(z-.7)*.30,-.17,z),(.075,.065,.048),brown,12)
 for x in (-.15,.15):cube('determined eyebrow',(x,-.328,.87),(.11,.025,.022),brown)
+# Embroidered festival sash and contrasting toasted pleat tips.
+cube('scarlet festival waist sash',(0,-.245,.43),(.43,.065,.065),red)
+ball('sash gold clasp',(0,-.289,.43),(.045,.015,.038),gold,12)
+for x in (-.24,-.16,-.08,0,.08,.16,.24):
+ ball('toasted pleat tip',(x,-.018,.88-abs(x)*.17),(.027,.045,.027),brown,10)
+for i in range(3):
+ ball('sauce glaze highlight',(.41+i*.035,-.233,.72+i*.105),(.025,.012,.018),gold,10)
 export('premium-dumpling')
 clear();base()
 # Panda street chef: straw hat, apron, ladle and noodle bowl.
@@ -66,6 +73,15 @@ for i in range(4):
  ball('noodle garnish',(-.37+i*.08,-.43,.50),(.048,.04,.022),gold,10)
 rod((.43,-.10,.47),(.52,-.24,.94),.02,gold,'chef ladle handle')
 ball('ladle cup',(.53,-.25,.94),(.10,.08,.035),dark)
+# Chef apron, stitched gold hem and woven hat ring.
+cube('cream chef apron',(0,-.262,.47),(.35,.045,.35),ivory)
+cube('apron lower hem',(0,-.292,.31),(.37,.047,.027),gold)
+for x in (-.12,.12):rod((x,-.28,.59),(x,-.285,.34),.012,red,'apron stitching')
+for i in range(12):
+ t=i*math.tau/12
+ ball('hat woven trim',(.43*math.cos(t),-.015+.43*math.sin(t),1.14),(.045,.045,.019),gold,8)
+ball('cheek warmth',(-.23,-.296,.82),(.055,.016,.027),pink)
+ball('cheek warmth',(.23,-.296,.82),(.055,.016,.027),pink)
 export('premium-panda')
 clear();base()
 # Final tier: crowned ox guardian, armored silhouette, horns and swirling ember ornaments.
@@ -90,4 +106,16 @@ for i in range(7):
  ball('floating ember '+str(i),(.53*math.cos(t),.27*math.sin(t),.45+i*.12),(.065,.055,.085),fire,10)
 rod((.44,-.16,.67),(.57,-.23,1.31),.025,gold,'ceremonial skewer')
 for z in (.92,1.06,1.19):ball('roasted festival delicacy',(.51,-.21,z),(.082,.07,.056),brown,12)
+# Ornate armor: pauldrons, belt, golden studs, layered mantle and horn rings.
+for x in (-.39,.39):
+ ball('golden shoulder pauldron',(x,-.025,.91),(.18,.18,.12),gold)
+ ball('red armor inset',(x,-.13,.94),(.10,.045,.055),red)
+ for z in (.47,.56,.65):
+  ball('gauntlet rivet',(x*1.25,-.195,z),(.026,.013,.026),gold,10)
+cube('heavy champion belt',(0,-.278,.43),(.65,.085,.10),dark)
+cube('bull crest belt buckle',(0,-.332,.43),(.18,.04,.12),gold)
+for x in (-.28,.28):
+ cone('hanging brocade tassel',(x,-.22,.30),.065,.015,.24,red,10)
+for x in (-.32,.32):
+ ball('engraved horn base ring',(x,.01,1.25),(.13,.12,.045),gold,12)
 export('premium-ox')
