@@ -15,9 +15,9 @@ const load=(name)=>new Promise((ok,fail)=>loader.load(url(name),g=>ok(g.scene),u
 let active=null,angle=0,drag=false,last=0;
 try{
 const board=await load('board');root.add(board);const environment=await load('environment');root.add(environment);
-const pieces=await Promise.all(['skewer','cart','festival'].map(load));
+const pieces=await Promise.all(['premium-dumpling','premium-panda','premium-ox'].map(load));
 pieces.forEach(p=>{p.visible=false;p.position.set(0,-.2,.35);root.add(p)});
-function choose(i){if(active)active.visible=false;active=pieces[i];active.visible=true;status.textContent='拖动旋转 · 当前：'+['街头烤串','夜市小推车','夜市盛典'][i]}
+function choose(i){if(active)active.visible=false;active=pieces[i];active.visible=true;status.textContent='拖动旋转 · 当前：'+['街头团子','熊猫大厨','夜市牛王'][i]}
 document.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>choose(i));choose(1);
 }catch(e){status.textContent='资源加载失败：'+e.message;console.error(e)}
 canvas.addEventListener('pointerdown',e=>{drag=true;last=e.clientX;canvas.setPointerCapture(e.pointerId)});
