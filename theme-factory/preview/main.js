@@ -14,7 +14,7 @@ const url=(name)=>import.meta.env.BASE_URL+'theme-factory/dist/night-market/'+na
 const load=(name)=>new Promise((ok,fail)=>loader.load(url(name),g=>ok(g.scene),undefined,fail));
 let active=null,angle=0,drag=false,last=0;
 try{
-const board=await load('board');root.add(board);
+const board=await load('board');root.add(board);const environment=await load('environment');root.add(environment);
 const pieces=await Promise.all(['skewer','cart','festival'].map(load));
 pieces.forEach(p=>{p.visible=false;p.position.set(0,-.2,.35);root.add(p)});
 function choose(i){if(active)active.visible=false;active=pieces[i];active.visible=true;status.textContent='拖动旋转 · 当前：'+['街头烤串','夜市小推车','夜市盛典'][i]}
@@ -23,4 +23,4 @@ document.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>choose(i));choo
 canvas.addEventListener('pointerdown',e=>{drag=true;last=e.clientX;canvas.setPointerCapture(e.pointerId)});
 canvas.addEventListener('pointermove',e=>{if(drag){angle+=(e.clientX-last)*.007;last=e.clientX}});
 canvas.addEventListener('pointerup',()=>drag=false);canvas.addEventListener('pointercancel',()=>drag=false);
-function frame(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);const aspect=w/h,span=5.7;camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;camera.updateProjectionMatrix();root.rotation.z=angle;renderer.render(scene,camera);requestAnimationFrame(frame)}frame();
+function frame(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);const aspect=w/h,span=Math.max(9.8,9.5/aspect);camera.left=-span*aspect/2;camera.right=span*aspect/2;camera.top=span/2;camera.bottom=-span/2;camera.updateProjectionMatrix();root.rotation.z=angle;renderer.render(scene,camera);requestAnimationFrame(frame)}frame();
