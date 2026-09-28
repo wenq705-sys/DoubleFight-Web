@@ -51,7 +51,9 @@ describe('Solo 1.0 release closure', () => {
     expect(scene).not.toContain('void this.social.setSoloRank(this.score)');
     expect(retention).toContain('if (forceSync && weekly.progress.best > 0)');
     expect(retention).toContain('await social.setSoloRank(weekly.best)');
-    expect(retention).toContain('await social.setAscensionRank(game.theme, mastery.bestAscensionMs)');
+    expect(retention).toContain('void social.setAscensionRank(game.theme, mastery.bestAscensionMs)');
+    expect(retention).toContain('void auth.syncSoloProgress(');
+    expect(retention).toContain('mastery.bestAscensionMs,');
   });
 
   it('rolls the weekly Solo cache at Monday 00:00 China Standard Time', () => {
