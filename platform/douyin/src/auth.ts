@@ -27,7 +27,7 @@ export interface PublicPlayer {
   displayName: string;
   avatarUrl?: string;
   solo: { bestKingdom: number; highestKingdom: number; bestPalace: number; highestPalace: number };
-  soloByTheme?: Record<string, { best: number; highest: number }>;
+  soloByTheme?: Record<string, { best: number; highest: number; bestAscensionMs?: number }>;
   pvp: { wins: number; losses: number; draws: number; rating: number };
   rewards: { currency: number; lastSidebarRewardDay?: string; daily?: PublicPlayerDailyState };
   season?: PublicPlayerSeason;
@@ -48,6 +48,21 @@ export interface PvpLeaderboardEntry {
 export interface PvpLeaderboard {
   season: { id: string; startsAt: number; endsAt: number };
   entries: PvpLeaderboardEntry[];
+}
+
+export type SoloLeaderboardKind = 'score' | 'ascension';
+
+export interface SoloLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  avatarUrl?: string;
+  theme: ThemeId;
+  kind: SoloLeaderboardKind;
+  value: number;
+}
+
+export interface SoloLeaderboard {
+  entries: SoloLeaderboardEntry[];
 }
 
 export interface ThemeCatalogueEntry {
@@ -328,6 +343,32 @@ export class DouyinAuthClient {
     }
   }
 
+  async fetchSoloLeaderboard(
+    theme: ThemeId,
+    kind: SoloLeaderboardKind,
+    limit = 20,
+  ): Promise<SoloLeaderboard | null> {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    try {
+      const data = await this.call(
+        'GET',
+        `/leaderboards/solo?theme=${encodeURIComponent(theme)}&kind=${kind}&limit=${safeLimit}`,
+      );
+      if (!this.isSoloLeaderboard(data, theme, kind)) return null;
+      return {
+        entries: data.entries.map(entry => ({
+          ...entry,
+          displayName: entry.avatarUrl
+            ? boundDouyinDisplayName(entry.displayName, `solo-rank-${entry.rank}`)
+            : reviewSafeDisplayName(entry.displayName, `solo-rank-${entry.rank}-${entry.displayName}`),
+        })),
+      };
+    } catch (error) {
+      this.handleSessionFailure(error);
+      return null;
+    }
+  }
+
   async fetchThemes(): Promise<ThemeCatalogueEntry[] | null> {
     if (!this.token) return null;
     try {
@@ -404,11 +445,17 @@ export class DouyinAuthClient {
     theme: ThemeId,
     best: number,
     highest: number,
+    bestAscensionMs?: number,
   ): Promise<SoloProgressSyncResult> {
     await this.start();
     if (!this.token) return { synced: false, discoveryAmount: 0, taskAmount: 0 };
     try {
-      const data = await this.call('POST', '/progress/solo', { theme, best, highest });
+      const data = await this.call('POST', '/progress/solo', {
+        theme,
+        best,
+        highest,
+        ...(bestAscensionMs && Number.isSafeInteger(bestAscensionMs) ? { bestAscensionMs } : {}),
+      });
       this.updatePlayer(data.player);
       return {
         synced: this.isPlayer(data.player),
@@ -421,8 +468,8 @@ export class DouyinAuthClient {
     }
   }
 
-  async syncSoloProgress(theme: ThemeId, best: number, highest: number): Promise<boolean> {
-    return (await this.syncSoloProgressDetailed(theme, best, highest)).synced;
+  async syncSoloProgress(theme: ThemeId, best: number, highest: number, bestAscensionMs?: number): Promise<boolean> {
+    return (await this.syncSoloProgressDetailed(theme, best, highest, bestAscensionMs)).synced;
   }
 
   private captureDailyLoginGrant(value: unknown): void {
@@ -512,6 +559,25 @@ export class DouyinAuthClient {
         && typeof entry.losses === 'number'
         && typeof entry.draws === 'number'
         && typeof entry.matches === 'number'));
+  }
+
+  private isSoloLeaderboard(
+    value: unknown,
+    theme: ThemeId,
+    kind: SoloLeaderboardKind,
+  ): value is SoloLeaderboard {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as SoloLeaderboard;
+    return Array.isArray(candidate.entries)
+      && candidate.entries.every(entry => entry
+        && Number.isInteger(entry.rank)
+        && entry.rank > 0
+        && typeof entry.displayName === 'string'
+        && (entry.avatarUrl === undefined || typeof entry.avatarUrl === 'string')
+        && entry.theme === theme
+        && entry.kind === kind
+        && Number.isSafeInteger(entry.value)
+        && entry.value > 0);
   }
 
   private isTheme(value: unknown): value is ThemeCatalogueEntry {

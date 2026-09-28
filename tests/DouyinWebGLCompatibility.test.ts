@@ -1,27 +1,25 @@
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { configureRuntimeMaterials, createToonMaterial } from '../src/rendering/RuntimeMaterialPolicy';
 
-afterEach(() => configureRuntimeMaterials(true));
-
 describe('Douyin WebGL compatibility policy', () => {
-  it('uses Lambert only on the WebGL1 compatibility path', () => {
+  it('uses the same stable Lambert material on WebGL1 and WebGL2', () => {
     configureRuntimeMaterials(false);
-    const material = createToonMaterial({ color: 0xffcc88 });
-    expect(material).toBeInstanceOf(THREE.MeshLambertMaterial);
-    expect(material).not.toBeInstanceOf(THREE.MeshToonMaterial);
-    material.dispose();
-  });
-
-  it('keeps the production toon material on WebGL2', () => {
+    const webgl1 = createToonMaterial({ color: 0xffcc88 });
     configureRuntimeMaterials(true);
-    const material = createToonMaterial({ color: 0xffcc88 });
-    expect(material).toBeInstanceOf(THREE.MeshToonMaterial);
-    material.dispose();
+    const webgl2 = createToonMaterial({ color: 0xffcc88 });
+
+    expect(webgl1).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(webgl2).toBeInstanceOf(THREE.MeshLambertMaterial);
+    expect(webgl1).not.toBeInstanceOf(THREE.MeshToonMaterial);
+    expect(webgl2).not.toBeInstanceOf(THREE.MeshToonMaterial);
+
+    webgl1.dispose();
+    webgl2.dispose();
   });
 
-  it('routes devtools to WebGL1 while real devices stay WebGL2-first', () => {
+  it('keeps WebGL2-first context selection on real devices while material shaders stay unified', () => {
     const source = readFileSync(new URL('../platform/douyin/src/main.ts', import.meta.url), 'utf8');
     expect(source).toContain("runtimeInfo.platform === 'devtools'");
     expect(source).toContain("canvas.getContext('webgl'");

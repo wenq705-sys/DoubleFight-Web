@@ -49,22 +49,34 @@ export class DouyinLifecycleAdapter implements LifecycleAdapter {
 
 export class DouyinAccountBootstrap implements AccountBootstrap {
   private result: Promise<AccountBootstrapResult> | null = null;
-  constructor(private readonly api: Pick<DouyinApi, 'login' | 'getUserInfo' | 'getUserProfile'>) {}
+  constructor(private readonly api: Pick<DouyinApi, 'login' | 'getSetting' | 'authorize' | 'openSetting' | 'getUserInfo' | 'getUserProfile'>) {}
   reset(): void { this.result = null; }
   requestProfile(): Promise<AccountProfileResult> {
     return new Promise(resolve => {
+      let settled = false;
+      const finish = (result: AccountProfileResult) => {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
       const success = (result: { userInfo?: { nickName?: string; avatarUrl?: string } }) => {
         const nickName = result.userInfo?.nickName?.trim();
         const avatarUrl = result.userInfo?.avatarUrl?.trim();
-        if (!nickName) { resolve({ status: 'failed', error: 'profile missing nickname' }); return; }
-        resolve({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
+        if (!nickName) { finish({ status: 'failed', error: 'profile missing nickname' }); return; }
+        finish({ status: 'granted', nickName, ...(avatarUrl ? { avatarUrl } : {}) });
       };
       const failure = (error: { errMsg?: string; errNo?: number; errorCode?: number }) => {
         const code = error.errNo ?? error.errorCode;
         const message = `${code ?? ''} ${error.errMsg ?? 'Douyin user profile failed'}`.trim();
-        resolve({ status: /deny|cancel|not authorized|privacy permission/i.test(message) ? 'cancelled' : 'failed', error: message });
+        finish({
+          status: /deny|cancel|not authorized|privacy permission|permission disabled|21102|21103/i.test(message)
+            ? 'cancelled'
+            : 'failed',
+          error: message,
+        });
       };
       const requestUserInfo = () => {
+        if (settled) return;
         try {
           if (this.api.getUserInfo) {
             this.api.getUserInfo({ withCredentials: false, success, fail: failure });
@@ -74,14 +86,76 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
             this.api.getUserProfile({ force: true, success, fail: failure });
             return;
           }
-          resolve({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
+          finish({ status: 'unavailable', error: 'Douyin user profile API unavailable' });
         } catch (error) {
-          resolve({ status: 'failed', error: String(error) });
+          finish({ status: 'failed', error: String(error) });
+        }
+      };
+      const openUserInfoSetting = () => {
+        if (!this.api.openSetting) {
+          finish({ status: 'cancelled', error: '10201 scope.userInfo permission disabled' });
+          return;
+        }
+        try {
+          this.api.openSetting({
+            success: result => {
+              if (result.authSetting?.['scope.userInfo'] === true) requestUserInfo();
+              else finish({ status: 'cancelled', error: '10201 scope.userInfo permission disabled' });
+            },
+            fail: failure,
+          });
+        } catch (error) {
+          finish({ status: 'failed', error: String(error) });
+        }
+      };
+      const requestUserInfoPermission = () => {
+        if (!this.api.authorize) {
+          requestUserInfo();
+          return;
+        }
+        try {
+          this.api.authorize({
+            scope: 'scope.userInfo',
+            success: result => {
+              const granted = result.data?.['scope.userInfo'];
+              if (granted === false || granted === 'fail') {
+                openUserInfoSetting();
+                return;
+              }
+              requestUserInfo();
+            },
+            fail: error => {
+              const message = `${error.errNo ?? ''} ${error.errMsg ?? ''}`.trim();
+              if (/deny|21102|21103/i.test(message)) openUserInfoSetting();
+              else failure(error);
+            },
+          });
+        } catch (error) {
+          finish({ status: 'failed', error: String(error) });
+        }
+      };
+      const ensureUserInfoPermission = () => {
+        if (!this.api.getSetting) {
+          requestUserInfoPermission();
+          return;
+        }
+        try {
+          this.api.getSetting({
+            success: result => {
+              const granted = result.authSetting?.['scope.userInfo'];
+              if (granted === true) requestUserInfo();
+              else if (granted === false) openUserInfoSetting();
+              else requestUserInfoPermission();
+            },
+            fail: () => requestUserInfoPermission(),
+          });
+        } catch {
+          requestUserInfoPermission();
         }
       };
 
       if (!this.api.login) {
-        resolve({ status: 'unavailable', error: 'tt.login unavailable' });
+        finish({ status: 'unavailable', error: 'tt.login unavailable' });
         return;
       }
 
@@ -90,18 +164,18 @@ export class DouyinAccountBootstrap implements AccountBootstrap {
           force: true,
           success: result => {
             if (!result.isLogin) {
-              resolve({ status: 'cancelled', error: '10601 user not login' });
+              finish({ status: 'cancelled', error: '10601 user not login' });
               return;
             }
-            requestUserInfo();
+            ensureUserInfoPermission();
           },
           fail: error => {
             const message = error.errMsg ?? 'tt.login failed';
-            resolve({ status: /cancel|deny/i.test(message) ? 'cancelled' : 'failed', error: message });
+            finish({ status: /cancel|deny/i.test(message) ? 'cancelled' : 'failed', error: message });
           },
         });
       } catch (error) {
-        resolve({ status: 'failed', error: String(error) });
+        finish({ status: 'failed', error: String(error) });
       }
     });
   }

@@ -8,7 +8,7 @@ const themePreview = readFileSync(new URL('../src/rendering/themes/ThemePreview.
 
 describe('mobile release performance rescue', () => {
   it('keeps a crisp 3D world DPR while rendering UI and the static health notice independently', () => {
-    expect(scene).toContain('private currentDpr = 2');
+    expect(scene).toContain('private currentDpr = 2.6');
     expect(scene).toContain('private screenDpr = 1');
     expect(scene).toContain('? Math.min(3, this.devicePixelRatio)');
     expect(scene).toContain(': Math.min(2.25, this.devicePixelRatio)');
@@ -17,9 +17,10 @@ describe('mobile release performance rescue', () => {
     expect(scene).toContain('this.renderer.setRenderTarget(this.worldTarget)');
     expect(scene).toContain('this.renderer.render(this.compositeScene, this.compositeCamera)');
     expect(scene).toContain('toneMapped: false');
-    expect(scene).toContain('this.applyDpr(1.65)');
-    expect(scene).toContain('this.applyDpr(2)');
-    expect(scene).toContain('this.applyDpr(2.25)');
+    expect(scene).toContain('this.applyRenderBudget(1_850_000, 2.4)');
+    expect(scene).toContain('this.applyRenderBudget(2_500_000, 2.8)');
+    expect(scene).toContain('this.applyRenderBudget(3_200_000, 3)');
+    expect(scene).toContain('const budgetDpr = Math.sqrt');
     expect(scene).toContain("this.applyQuality('high')");
     expect(productPass).not.toContain('scene.samplePerformance =');
     expect(productPass).not.toContain('scene.applyQuality =');

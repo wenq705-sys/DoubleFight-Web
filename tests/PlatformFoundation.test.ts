@@ -266,6 +266,45 @@ describe('Douyin profile permission adapter', () => {
     expect(getUserProfile).toHaveBeenCalledOnce();
   });
 
+  it('requests scope.userInfo before reading profile on first authorization', async () => {
+    const order: string[] = [];
+    const account = new DouyinAccountBootstrap({
+      login: options => { order.push('login'); options.success({ isLogin: true, code: 'profile-login' }); },
+      getSetting: options => { order.push('getSetting'); options.success?.({ authSetting: {} }); },
+      authorize: options => {
+        order.push(`authorize:${options.scope}`);
+        options.success?.({ data: { 'scope.userInfo': true } });
+      },
+      getUserInfo: options => {
+        order.push('getUserInfo');
+        options.success?.({ userInfo: { nickName: '强哥', avatarUrl: 'https://example.com/avatar.png' } });
+      },
+    });
+    await expect(account.requestProfile()).resolves.toMatchObject({ status: 'granted', nickName: '强哥' });
+    expect(order).toEqual(['login', 'getSetting', 'authorize:scope.userInfo', 'getUserInfo']);
+  });
+
+  it('opens native settings after a previous userInfo denial and resumes when enabled', async () => {
+    const order: string[] = [];
+    const account = new DouyinAccountBootstrap({
+      login: options => { order.push('login'); options.success({ isLogin: true, code: 'profile-login' }); },
+      getSetting: options => {
+        order.push('getSetting');
+        options.success?.({ authSetting: { 'scope.userInfo': false } });
+      },
+      openSetting: options => {
+        order.push('openSetting');
+        options.success?.({ authSetting: { 'scope.userInfo': true } });
+      },
+      getUserInfo: options => {
+        order.push('getUserInfo');
+        options.success?.({ userInfo: { nickName: 'Rona', avatarUrl: 'https://example.com/rona.png' } });
+      },
+    });
+    await expect(account.requestProfile()).resolves.toMatchObject({ status: 'granted', nickName: 'Rona' });
+    expect(order).toEqual(['login', 'getSetting', 'openSetting', 'getUserInfo']);
+  });
+
   it('maps user cancellation and unavailable hosts without throwing', async () => {
     const cancelled = new DouyinAccountBootstrap({
       login: options => options.success({ isLogin: true, code: 'profile-login' }),

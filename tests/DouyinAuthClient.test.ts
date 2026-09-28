@@ -200,3 +200,93 @@ describe('Douyin public profile binding', () => {
     if (auth.current.status === 'authenticated') expect(auth.current.player.displayName).toBe('强哥');
   });
 });
+
+describe('Douyin Solo leaderboard fallback client', () => {
+  it('parses server score/ascension boards using the shared public contract', async () => {
+    const requests: string[] = [];
+    const setup = fixture(undefined, options => {
+      requests.push(options.url);
+      if (options.url.endsWith('/auth/douyin')) {
+        options.success({ statusCode: 200, data: { token: 'signed.session', player } });
+        return;
+      }
+      if (options.url.includes('/leaderboards/solo?')) {
+        const url = new URL(options.url);
+        const theme = url.searchParams.get('theme');
+        const kind = url.searchParams.get('kind');
+        options.success({
+          statusCode: 200,
+          data: {
+            entries: [{
+              rank: 1,
+              displayName: '强哥',
+              avatarUrl: 'https://example.com/avatar.png',
+              theme,
+              kind,
+              value: kind === 'score' ? 12345 : 45678,
+            }],
+          },
+        });
+        return;
+      }
+      options.fail({ errMsg: 'unexpected request' });
+    });
+    await setup.client.start();
+
+    await expect(setup.client.fetchSoloLeaderboard('dreamhouse', 'score', 20)).resolves.toEqual({
+      entries: [{
+        rank: 1,
+        displayName: '强哥',
+        avatarUrl: 'https://example.com/avatar.png',
+        theme: 'dreamhouse',
+        kind: 'score',
+        value: 12345,
+      }],
+    });
+    await expect(setup.client.fetchSoloLeaderboard('zodiac', 'ascension', 20)).resolves.toEqual({
+      entries: [{
+        rank: 1,
+        displayName: '强哥',
+        avatarUrl: 'https://example.com/avatar.png',
+        theme: 'zodiac',
+        kind: 'ascension',
+        value: 45678,
+      }],
+    });
+    expect(requests.some(url => url.includes('theme=dreamhouse&kind=score&limit=20'))).toBe(true);
+    expect(requests.some(url => url.includes('theme=zodiac&kind=ascension&limit=20'))).toBe(true);
+  });
+
+  it('rejects malformed leaderboard payloads instead of rendering untrusted rows', async () => {
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) {
+        options.success({ statusCode: 200, data: { token: 'signed.session', player } });
+      } else if (options.url.includes('/leaderboards/solo?')) {
+        options.success({
+          statusCode: 200,
+          data: { entries: [{ rank: 0, displayName: 123, theme: 'kingdom', kind: 'score', value: -1 }] },
+        });
+      }
+    });
+    await setup.client.start();
+    await expect(setup.client.fetchSoloLeaderboard('kingdom', 'score')).resolves.toBeNull();
+  });
+
+  it('includes bestAscensionMs only when a valid timing is supplied', async () => {
+    const setup = fixture(undefined, options => {
+      if (options.url.endsWith('/auth/douyin')) {
+        options.success({ statusCode: 200, data: { token: 'signed.session', player } });
+      } else if (options.url.endsWith('/progress/solo')) {
+        options.success({ statusCode: 200, data: { player } });
+      }
+    });
+    await setup.client.start();
+    await expect(setup.client.syncSoloProgress('kingdom', 100, 2048, 54321)).resolves.toBe(true);
+    expect(setup.request.mock.calls[1]?.[0].data).toEqual({
+      theme: 'kingdom',
+      best: 100,
+      highest: 2048,
+      bestAscensionMs: 54321,
+    });
+  });
+});

@@ -103,7 +103,7 @@ export class DouyinSoloScene {
   private goodPerfWindows = 0;
   // Start conservatively on mobile. Promote to high only after sustained real-frame evidence.
   private quality: 'high' | 'medium' | 'low' = 'medium';
-  private currentDpr = 2;
+  private currentDpr = 2.6;
   private screenDpr = 1;
   private frameWidth = 1;
   private frameHeight = 1;
@@ -1362,20 +1362,20 @@ export class DouyinSoloScene {
 
     if (fps < 43) {
       this.goodPerfWindows = 0;
-      this.applyDpr(1.65);
+      this.applyRenderBudget(1_850_000, 2.4);
       this.applyQuality('low');
       return;
     }
     if (fps < 53) {
       this.goodPerfWindows = 0;
-      this.applyDpr(2);
+      this.applyRenderBudget(2_500_000, 2.8);
       this.applyQuality('medium');
       return;
     }
     if (fps >= 57) {
       this.goodPerfWindows += 1;
       if (this.goodPerfWindows >= 3) {
-        this.applyDpr(2.25);
+        this.applyRenderBudget(3_200_000, 3);
         this.applyQuality('high');
         this.goodPerfWindows = 0;
       }
@@ -1384,9 +1384,11 @@ export class DouyinSoloScene {
     }
   }
 
-  private applyDpr(maxDpr: number): void {
+  private applyRenderBudget(targetPixels: number, maxDpr: number): void {
     const info = this.platform.getSystemInfo();
-    const targetDpr = Math.min(Math.max(1, info.pixelRatio), maxDpr);
+    const logicalPixels = Math.max(1, this.frameWidth * this.frameHeight);
+    const budgetDpr = Math.sqrt(Math.max(logicalPixels, targetPixels) / logicalPixels);
+    const targetDpr = Math.min(Math.max(1, info.pixelRatio), maxDpr, budgetDpr);
     if (Math.abs(this.currentDpr - targetDpr) < 0.04) return;
     this.currentDpr = targetDpr;
     this.resizeWorldTarget();

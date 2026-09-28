@@ -127,6 +127,22 @@ export interface DouyinApi {
     fail: (error: { errMsg?: string }) => void;
   }): void;
   checkSession?(options: { success?: () => void; fail?: (error: { errMsg?: string }) => void }): void;
+  getSetting?(options: {
+    success?: (result: { errMsg?: string; authSetting?: Record<string, boolean> }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
+  authorize?(options: {
+    scope: 'scope.userInfo' | string;
+    success?: (result: { errMsg?: string; data?: Record<string, boolean | string> }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
+  openSetting?(options: {
+    success?: (result: { errMsg?: string; authSetting?: Record<string, boolean> }) => void;
+    fail?: (error: { errMsg?: string; errNo?: number }) => void;
+    complete?: (result?: unknown) => void;
+  }): void;
   getUserInfo?(options: {
     withCredentials?: boolean;
     success?: (result: {
