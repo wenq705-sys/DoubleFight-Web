@@ -70,12 +70,46 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
 .mood-comparison img{display:block;width:100%;height:auto}
 .mood-comparison figcaption{text-align:center;font-size:12px;color:#fbd8a5;padding:9px 3px;background:#392a25}
 @media(max-width:480px){.mood-comparison{gap:5px}.mood-comparison figcaption{font-size:10px;padding:6px 2px}}
+
+.play-launch{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:13px 0}
+.play-launch button{cursor:pointer;padding:13px 9px;color:#fff0cb;background:linear-gradient(#986132,#6b3c2e);
+ border:1px solid #eab873;border-radius:12px;font-weight:750;font-size:clamp(13px,3.2vw,16px);
+ box-shadow:0 4px 13px #0005;touch-action:manipulation}
+.play-launch button:nth-child(2){background:linear-gradient(#376d68,#284c53);border-color:#80c2ac}
+.play-launch button#play-stop{background:#302f37;border-color:#b69b78;grid-column:span 2}
+.play-hud{border:1px solid #bd915a;border-radius:13px;padding:13px;margin:8px 0 19px;
+ background:radial-gradient(ellipse at 20% 5%,#3c3834,#21232a)}
+.play-hud[hidden],.play-launch button[hidden]{display:none!important}
+.play-score{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:8px 0 10px}
+.play-score span{border:1px solid #6c604e;text-align:center;border-radius:8px;
+ background:#252b2b;color:#c8b7a0;padding:6px 4px;font-size:12px}
+.play-score strong{display:block;color:#ffe2a3;font-size:20px;font-variant-numeric:tabular-nums}
+.play-pad{display:flex;align-items:center;justify-content:center;gap:10px}
+.play-pad button,.play-restart{touch-action:manipulation;border:1px solid #c79e64;border-radius:10px;
+ background:#48352e;color:#ffe4ae;font-size:23px;font-weight:bold;min-width:50px;min-height:45px}
+.play-restart{font-size:13px;padding:8px 11px}
+.play-note{color:#c8ad94;font-size:12px;line-height:1.55;margin:8px 0 2px}
+.view.play-mode .quick-stage-control{display:none}
+.view.play-mode .hint{bottom:12px!important}
+.stage-panel button:disabled,.quick-stage-control button:disabled{opacity:.39;cursor:default}
+@media(max-width:460px){.play-launch{gap:6px}.play-pad{gap:5px}.play-pad button{min-width:44px}}
+.play-floating{position:absolute;z-index:5;right:12px;top:12px;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+.play-floating button{border:1px solid #f3c77e;border-radius:11px;touch-action:manipulation;cursor:pointer;
+ padding:8px 11px;min-height:38px;font-weight:bold;color:#382017;background:linear-gradient(#ffdc93,#de9860);
+ box-shadow:0 4px 13px #16151d88;backdrop-filter:blur(8px)}
+.play-floating button:nth-child(2){color:#ecffed;border-color:#88c9bd;background:#316f65d9}
+.view.play-mode #play-float-showcase{display:none}
+.view.play-mode #play-float{color:#fff3ce;background:#583b34df}
+.real-model-proof{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 22px}
+.real-model-proof img{width:100%;display:block;border:1px solid #987344;border-radius:11px}
+.real-model-proof figcaption{font-size:12px;color:#edcb9b;text-align:center;padding:7px 2px}
+.real-model-proof figure{margin:0}
 </style><script type="importmap">{"imports":{"three":"../collection/three.module.js"}}</script></head>
 <body><div class="eyebrow">DOUBLE FIGHT · NIGHT MARKET THEME FACTORY</div>
 <h1>东方夜市 · 莲灯棋台</h1>
 <p>按第二张参考图制作的真实可导出微缩场景。木雕夜市、樱花、锦鲤池、莲花瀑布、青瓦商铺和月门；游戏中使用<strong>真正的 4×4 棋盘</strong>，而非概念图的格数。</p>
-<span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span><span class="badge" style="background:#8d4f24;color:#fff0ca;border-color:#e2a85c">新版 V3：画面底部可直接切换阶段</span>
-<div class="view" id="view"><div class="stage-corner" id="stageCorner">初入夜市 · 2</div><div class="stage-toast" id="stageToast" aria-live="polite"></div><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div>
+<span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span><span class="badge" style="background:#8d4f24;color:#fff0ca;border-color:#e2a85c">新版 V4：真对局 · 11阶棋子 · 夜市递进</span>
+<div class="view" id="view"><div class="play-floating"><button id="play-float" type="button">🎮 开始真对局</button><button id="play-float-showcase" type="button">✦ 同屏看 11 阶</button></div><div class="stage-corner" id="stageCorner">初入夜市 · 2</div><div class="stage-toast" id="stageToast" aria-live="polite"></div><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div>
   <div class="quick-stage-control" aria-label="直接切换夜市五阶段" id="quickStages">
     <button data-quick="2" class="active">初入</button>
     <button data-quick="16">苏醒</button>
@@ -86,7 +120,33 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
   </div></div>
 <div class="switch">
 <button id="all" class="chosen">完整微缩场景</button><button id="board">仅看棋盘</button><button id="top">垂直俯视 4×4</button><button id="reset">重置视角</button><button id="quality">画质：自动</button>
-</div><p class="small">手机单指旋转视角、双指缩放。展厅暂时不摆放 11 个棋子，先集中验证棋盘和环境的整体观感。</p>
+</div>
+
+<div class="play-launch" id="playLaunch">
+ <button id="play-start" type="button">🎮 进入真对局 · 3D 2048</button>
+ <button id="play-showcase" type="button">✦ 11 阶模型同屏联调</button>
+ <button id="play-stop" type="button" hidden>← 退出对局 / 返回场景演示</button>
+</div>
+<div class="play-hud" id="playHud" hidden>
+ <div class="eyebrow">SHARED BOARD2048 · REAL INPUT / MERGE / STAGE EVENTS</div>
+ <div class="play-score">
+  <span>得分<strong id="playScore">0</strong></span>
+  <span>合成最高<strong id="playHighest">2</strong></span>
+  <span>步数<strong id="playMoves">0</strong></span>
+  <span>模型预热<strong id="playLoaded">0/11</strong></span>
+ </div>
+ <div class="play-pad">
+  <button type="button" data-move="left" aria-label="左滑">←</button>
+  <button type="button" data-move="up" aria-label="上滑">↑</button>
+  <button type="button" data-move="down" aria-label="下滑">↓</button>
+  <button type="button" data-move="right" aria-label="右滑">→</button>
+  <button class="play-restart" id="play-restart" type="button">↻ 重开</button>
+ </div>
+ <p class="play-note" id="playNote">在上方 3D 棋盘滑动操作；键盘也可使用方向键 / WASD。
+ 用的是项目原有 Board2048 规则，而不是展示页伪造合成。模型会按需加载移动端 LOD。</p>
+</div>
+<p class="small">场景模式：单指旋转、双指缩放。真对局模式：在画面内滑动，真实合成后夜市自动升级。
+ 原始 11 个收藏模型及本次新增 11 个移动端 LOD 分开保存。</p>
 
 <section class="stage-panel loading" id="controls" aria-label="东方夜市五段场景演出">
  <div class="eyebrow">THEME STAGE SYSTEM · 五段情绪递进</div>
@@ -116,6 +176,12 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
  所有特效均不占用 4×4 棋子触控区域。音乐首次点击后才会启动。</p>
  <p class="stage-note" id="load-error" aria-live="polite"></p>
 </section>
+<h2>已验证：11 个独立角色真正上棋盘</h2>
+<p class="small">以下截图来自加载本页实机 3D GLB 的浏览器，不是另一套展示图。真对局使用共享 Board2048，触控滑动会推动真实合成、得分和夜市阶段。</p>
+<div class="real-model-proof">
+ <figure><img src="./playable-live-board-proof.png?v=play-11-v1" alt="真实2048对局中模型在棋格内移动和合成"/><figcaption>真实移动 + 合成 + 生成</figcaption></figure>
+ <figure><img src="./playable-all-11-proof.png?v=play-11-v1" alt="同一4x4棋盘展示从2至2048共11只模型"/><figcaption>2—2048，共11阶同屏验收</figcaption></figure>
+</div>
 <h2>实际运行的五段演出对比</h2>
 <p class="small">以下是浏览器加载同一套真实 3D 场景、相同镜头拍下的开局与盛会。点击上方 3D 画面底部的「初入 / 苏醒 / 繁盛 / 华彩 / 盛会 / 2048」，亲自切换。</p>
 <div class="mood-comparison">
@@ -126,4 +192,4 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
 <img src="./scene-top.png?v=nightmarket-art-v2" alt="棋盘与环境俯视校验"/><img src="./board-only.png?v=nightmarket-art-v2" alt="无环境的完整4×4棋盘"/></div>
 <div class="note"><b>接入预留：</b>两份 GLB 共享同一个世界原点。棋子的位置、逻辑行列与槽位宽度单独保存在 <code>placement.json</code>，不把模型、文字或数字烘焙进棋格；场景装饰可整体关闭，方便低端手机使用。</div>
 <div class="file"><a href="./placement.json">4×4 槽位数据</a><a href="./nightmarket-diorama.blend">可编辑 Blender 工程</a><a href="./board-4x4.glb">棋盘 GLB</a><a href="./environment-mobile.glb">移动端环境 GLB</a><a href="./stats.json">面数 / 资源体积</a><a href="../collection/?v=74bd9fe">11 阶模型展厅 ↗</a></div>
-<script type="module" src="./scene-app.mjs?v=mood-visible-v3"></script></body></html>
+<script type="module" src="./scene-app.mjs?v=play-11-v1"></script></body></html>

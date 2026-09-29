@@ -3,6 +3,7 @@ import {GLTFLoader} from '../collection/GLTFLoader.js';
 import {MOOD_STAGES,ThemeMoodDirector} from './theme-stage-core.mjs';
 import {ThemeStageVisual} from './theme-stage-visual.mjs?v=mood-visible-v3';
 import {ThemeStageAudio} from './theme-stage-audio.mjs';
+import {NightMarketPlayable} from './nightmarket-playable.mjs?v=play-11-v1';
 const $=id=>document.getElementById(id);
 const root=$('view'),hint=$('hint'),group=new T.Group();
 const mobile=matchMedia('(pointer:coarse)').matches||innerWidth<740;
@@ -36,6 +37,7 @@ const load=u=>new Promise((resolve,reject)=>loader.load(u,g=>resolve(g.scene),un
 const audio=new ThemeStageAudio();
 const stageTrail=$('stageTrail'),stageTitle=$('stageTitle'),stageSub=$('stageSubtitle');
 const maxLabel=$('maxTileLabel'),bar=$('stageProgress'),audioButton=$('audio-toggle');
+const stageCorner=$('stageCorner');
 stageTrail.innerHTML=MOOD_STAGES.map(s=>'<span data-step="'+s.id+'">'+s.name+'</span>').join('');
 function toast(message,accent=false){
   const el=$('stageToast');el.textContent=message;el.classList.toggle('special',accent);
@@ -61,6 +63,38 @@ const director=new ThemeMoodDirector({
   },
 });
 director.reset();
+const playable=new NightMarketPlayable({
+  scene,loader,canvas:ren.domElement,director,assetQuery:'play-11-v1',
+  onMode(mode){
+    const active=mode!=='off';
+    $('view').classList.toggle('play-mode',active);
+    $('playHud').hidden=!active;
+    $('play-start').hidden=active;$('play-showcase').hidden=active;$('play-stop').hidden=!active;
+    $('play-float').textContent=active?'← 返回演示':'🎮 开始真对局';
+    for(const ctrl of document.querySelectorAll('[data-quick],[data-max],#auto-demo,#stage-reset,#merge-demo,#combo-demo'))
+      ctrl.disabled=active;
+    if(active){
+      stopAutoplay();if(env)env.visible=true;if(visual)visual.root.visible=true;
+      theta=.12;phi=mode==='showcase'?.84:1.04;zoom=1.26;cameraUpdate();
+      hint.textContent=mode==='showcase'?'完整 11 阶收藏模型 · 真正放入 16 个棋格':
+        '在画面内滑动 3D 棋子 · 真实合成会自动点亮夜市';
+    }else{
+      theta=.53;phi=.57;zoom=1;cameraUpdate();
+      hint.textContent='单指旋转 · 双指缩放 · 下方可触发情绪递进';
+    }
+    selection('all');
+  },
+  onState(status){
+    $('playScore').textContent=status.score.toLocaleString();
+    $('playHighest').textContent=String(status.highest);
+    $('playMoves').textContent=String(status.moves);
+    $('playLoaded').textContent=status.loaded+'/11';
+    $('playNote').textContent=status.gameOver?'棋盘已无可用移动：按「重开」开始下一局。':
+      status.mode==='showcase'?'11 阶全部按真实棋格占位，点击「退出」返回。此处是美术同屏联调，不是对局结算。':
+      '在上方 3D 棋盘滑动操作；键盘可使用方向键 / WASD。真合成驱动五段氛围。';
+    refreshUI();
+  },
+});
 function refreshUI(){
   const s=director.snapshot();
   maxLabel.textContent='局内最高：'+s.highest;
@@ -76,11 +110,21 @@ function refreshUI(){
     b.classList.toggle('selected',Number(b.dataset.max)===s.highest);
 }
 refreshUI();
+$('play-start').onclick=()=>playable.start();
+$('play-showcase').onclick=()=>playable.showcase();
+$('play-stop').onclick=()=>playable.stop();
+$('play-float').onclick=()=>playable.active?playable.stop():playable.start();
+$('play-float-showcase').onclick=()=>playable.showcase();
+$('play-restart').onclick=()=>playable.restart();
+document.querySelectorAll('[data-move]').forEach(button=>{
+  button.onclick=()=>playable.move(button.dataset.move);
+});
 function stopAutoplay(){
   if(autoTask){clearTimeout(autoTask);autoTask=null}
   $('auto-demo').textContent='▶ 自动体验五段演出';
 }
 function advance(maxTile){
+  if(playable.active)return;
   const previous=director.highest;
   director.progress(maxTile);
   if(maxTile>previous&&maxTile<2048){
@@ -183,15 +227,16 @@ Promise.all([
   $('load-error').textContent=String(err?.message||err);
 });
 let isDrag=false,px=0,py=0,pinch=0;const cv=ren.domElement;
-cv.onpointerdown=e=>{if(e.pointerType!=='touch'||e.isPrimary){
+cv.onpointerdown=e=>{if(playable.active)return;if(e.pointerType!=='touch'||e.isPrimary){
   isDrag=true;px=e.clientX;py=e.clientY;cv.setPointerCapture?.(e.pointerId)}};
 cv.onpointerup=()=>isDrag=false;cv.onpointercancel=()=>isDrag=false;
-cv.onpointermove=e=>{if(!isDrag)return;
+cv.onpointermove=e=>{if(playable.active||!isDrag)return;
   theta-=(e.clientX-px)*.007;phi=Math.max(.21,Math.min(1.55,phi+(e.clientY-py)*.006));
   px=e.clientX;py=e.clientY;cameraUpdate()};
 cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.67,Math.min(2.6,
   zoom*(1-e.deltaY*.00075)));cameraUpdate()},{passive:false});
 cv.addEventListener('touchmove',e=>{
+  if(playable.active)return;
   if(e.touches.length===2){e.preventDefault();isDrag=false;
     const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
       e.touches[0].clientY-e.touches[1].clientY);
@@ -203,9 +248,10 @@ function frame(t){
   if(!last){last=t;return}const diff=t-last;if(diff<30)return;last=t;
   const state=director.update(Math.min(diff/1000,.085));
   audio.update(state);visual?.update(Math.min(diff/1000,.085),state);
+  playable.update(Math.min(diff/1000,.085));
   ren.render(scene,cam);
 }
 requestAnimationFrame(frame);
 addEventListener('resize',resize);
-addEventListener('pagehide',()=>{stopAutoplay();audio.dispose();visual?.dispose()},{once:true});
+addEventListener('pagehide',()=>{stopAutoplay();audio.dispose();playable.dispose();visual?.dispose()},{once:true});
 
