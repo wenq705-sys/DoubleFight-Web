@@ -1,0 +1,64 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>东方夜市莲灯棋台 | 双数对决 · 场景3D预览</title><style>
+:root{font:15px/1.48 system-ui,-apple-system,"PingFang SC",sans-serif;color:#f8e9d6;background:#12151d}
+*{box-sizing:border-box}body{max-width:980px;padding:16px;margin:0 auto;background:radial-gradient(ellipse at 53% 8%,#46332e 0%,#1d202d 43%,#12151d 80%)}
+h1{font-size:clamp(22px,5vw,32px);line-height:1.2;margin:9px 0}h2{font-size:19px;margin:23px 0 9px}
+p{color:#c3b8b0;line-height:1.65}.eyebrow{color:#f6c781;letter-spacing:1.4px;font-size:12px}
+.badge{display:inline-block;font-size:12px;color:#ffdea6;border:1px solid #9d784e;border-radius:20px;padding:4px 11px;margin:8px 6px 0 0}
+.view{position:relative;width:100%;height:min(66vh,680px);min-height:400px;margin:16px 0 10px;overflow:hidden;background:radial-gradient(ellipse at 50% 55%,#33444d 0%,#2d292e 46%,#161922 85%);border:1px solid #645344;border-radius:19px}
+.view canvas{display:block;touch-action:none}.hint{position:absolute;bottom:12px;left:12px;right:12px;text-align:center;color:#ffead1;pointer-events:none;font-size:12px;text-shadow:0 1px 4px #000}
+.switch{display:flex;gap:8px;flex-wrap:wrap}.switch button{border-radius:11px;border:1px solid #826345;background:#382e2b;padding:10px 13px;color:#ffe9cb;font-weight:600;font-size:13px}
+.switch button.chosen{background:#9a5b33;color:white;border-color:#efad6c}.switch button:active{transform:scale(.98)}
+.gallery{display:grid;grid-template-columns:2fr 1fr;gap:11px}.gallery img{display:block;width:100%;background:radial-gradient(#67604a,#22282c);border-radius:12px}
+.gallery img:first-child{grid-row:span 2}.tile{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:12px 0 7px;max-width:340px}
+.tile span{aspect-ratio:1;display:grid;place-items:center;border:2px solid #b58c5f;background:#e1b3a3;color:#835c43;border-radius:8px;font-size:10px}
+.note{background:#222c2c;border:1px solid #43544d;padding:15px;border-radius:14px;margin:16px 0}
+a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;flex-wrap:wrap}
+@media(max-width:560px){.gallery{grid-template-columns:1fr 1fr}.gallery img:first-child{grid-column:span 2;grid-row:auto}.view{min-height:365px;height:54vh}}
+</style><script type="importmap">{"imports":{"three":"../collection/three.module.js"}}</script></head>
+<body><div class="eyebrow">DOUBLE FIGHT · NIGHT MARKET THEME FACTORY</div>
+<h1>东方夜市 · 莲灯棋台</h1>
+<p>按第二张参考图制作的真实可导出微缩场景。木雕夜市、樱花、锦鲤池、莲花瀑布、青瓦商铺和月门；游戏中使用<strong>真正的 4×4 棋盘</strong>，而非概念图的格数。</p>
+<span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span>
+<div class="view" id="view"><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div></div>
+<div class="switch">
+<button id="all" class="chosen">完整微缩场景</button><button id="board">仅看棋盘</button><button id="top">垂直俯视 4×4</button><button id="reset">重置视角</button>
+</div><p class="small">手机单指旋转视角、双指缩放。展厅暂时不摆放 11 个棋子，先集中验证棋盘和环境的整体观感。</p>
+<h2>Blender 渲染实拍</h2><div class="gallery"><img src="./scene-hero.png" alt="完整东方夜市莲灯棋台斜俯视渲染"/>
+<img src="./scene-top.png" alt="棋盘与环境俯视校验"/><img src="./board-only.png" alt="无环境的完整4×4棋盘"/></div>
+<div class="note"><b>接入预留：</b>两份 GLB 共享同一个世界原点。棋子的位置、逻辑行列与槽位宽度单独保存在 <code>placement.json</code>，不把模型、文字或数字烘焙进棋格；场景装饰可整体关闭，方便低端手机使用。</div>
+<div class="file"><a href="./placement.json">4×4 槽位数据</a><a href="./nightmarket-diorama.blend">可编辑 Blender 工程</a><a href="./board-4x4.glb">棋盘 GLB</a><a href="./environment-mobile.glb">移动端环境 GLB</a><a href="./stats.json">面数 / 资源体积</a><a href="../collection/?v=74bd9fe">11 阶模型展厅 ↗</a></div>
+<script type="module">
+import * as T from 'three';import{GLTFLoader}from'../collection/GLTFLoader.js';
+const root=document.getElementById('view'),hint=document.getElementById('hint'),group=new T.Group();
+const ren=new T.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
+ren.setPixelRatio(Math.min(devicePixelRatio||1,1.5));ren.outputColorSpace=T.SRGBColorSpace;
+ren.toneMapping=T.ACESFilmicToneMapping;ren.toneMappingExposure=1.26;ren.shadowMap.enabled=false;
+root.insertBefore(ren.domElement,hint);
+const scene=new T.Scene();scene.add(group);scene.add(new T.HemisphereLight(0xffe7cf,0x527284,3.0));
+let sun=new T.DirectionalLight(0xffddab,3.1);sun.position.set(-4,8,7);scene.add(sun);
+let fill=new T.DirectionalLight(0xb5e9fc,1.5);fill.position.set(5,5,-5);scene.add(fill);
+const cam=new T.OrthographicCamera(-6,6,6,-6,.1,120);let theta=.53,phi=.57,zoom=1,board=null,env=null;
+function cameraUpdate(){let radius=15;cam.position.set(radius*Math.sin(theta)*Math.cos(phi),
+ radius*Math.sin(phi),radius*Math.cos(theta)*Math.cos(phi));cam.lookAt(0,.53,0);cam.zoom=zoom;cam.updateProjectionMatrix()}
+function resize(){let a=root.clientWidth/root.clientHeight,v=a<.90?14.8:12.6;cam.left=-v*a/2;cam.right=v*a/2;cam.top=v/2;cam.bottom=-v/2;
+ cam.updateProjectionMatrix();ren.setSize(root.clientWidth,root.clientHeight)}resize();cameraUpdate();
+const loader=new GLTFLoader();const load=u=>new Promise((resolve,reject)=>loader.load(u,g=>resolve(g.scene),undefined,reject));
+Promise.all([load('./board-4x4.glb?v=nightmarket-v4'),load('./environment-nightmarket.glb?v=nightmarket-v4')]).then(([b,e])=>{
+ board=b;env=e;group.add(env,board);hint.textContent='单指旋转 · 双指缩放 · 可关闭环境';}).catch(e=>hint.textContent='加载失败，请刷新：'+e.message);
+let pointer=false,px=0,py=0,pinch=0;const cv=ren.domElement;
+cv.onpointerdown=e=>{pointer=true;px=e.clientX;py=e.clientY;cv.setPointerCapture(e.pointerId)};
+cv.onpointerup=()=>pointer=false;cv.onpointercancel=()=>pointer=false;
+cv.onpointermove=e=>{if(!pointer)return;theta-=(e.clientX-px)*.007;phi=Math.max(.22,Math.min(1.54,phi+(e.clientY-py)*.006));px=e.clientX;py=e.clientY;cameraUpdate()};
+cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.70,Math.min(2.5,zoom*(1-e.deltaY*.0007)));cameraUpdate()},{passive:false});
+cv.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();
+ let d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+ if(pinch)zoom=Math.max(.70,Math.min(2.5,zoom*d/pinch));pinch=d;cameraUpdate()}else pinch=0},{passive:false});
+function selected(id){for(let x of ['all','board','top','reset'])document.getElementById(x).classList.toggle('chosen',x===id)}
+document.getElementById('all').onclick=()=>{if(env)env.visible=true;phi=.57;theta=.53;zoom=1;cameraUpdate();selected('all')};
+document.getElementById('board').onclick=()=>{if(env)env.visible=false;phi=.72;theta=.49;zoom=1.45;cameraUpdate();selected('board')};
+document.getElementById('top').onclick=()=>{if(env)env.visible=true;theta=0;phi=1.56;zoom=1.06;cameraUpdate();selected('top')};
+document.getElementById('reset').onclick=()=>{if(env)env.visible=true;theta=.53;phi=.57;zoom=1;cameraUpdate();selected('all')};
+let last=0;function animate(t){requestAnimationFrame(animate);if(t-last>32){last=t;ren.render(scene,cam)}}requestAnimationFrame(animate);
+addEventListener('resize',resize);
+</script></body></html>

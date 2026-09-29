@@ -1,0 +1,34 @@
+{
+  "model": "Oriental Night Market Lotus Diorama | approved second concept",
+  "grid": 4,
+  "cells": 16,
+  "technology": "Blender 5.2.2 authored directly, ZERO Codex",
+  "board": {
+    "meshes_authored": 231,
+    "drawcall_meshes_exported": 10,
+    "triangles": 17210,
+    "bytes": 670868,
+    "roundtrip_meshes": 10,
+    "imported_triangles": 17210,
+    "valid": true
+  },
+  "environment": {
+    "meshes_authored": 785,
+    "drawcall_meshes_exported": 21,
+    "triangles": 125098,
+    "bytes": 3302352,
+    "roundtrip_meshes": 21,
+    "imported_triangles": 125098,
+    "valid": true
+  },
+  "files": {
+    "nightmarket-diorama.blend": 1052590,
+    "board-4x4.glb": 670868,
+    "environment-nightmarket.glb": 3302352,
+    "scene-hero.png": 1571382,
+    "scene-top.png": 1771377,
+    "board-only.png": 1489922,
+    "placement.json": 3941
+  },
+  "seconds": 83.9
+}
