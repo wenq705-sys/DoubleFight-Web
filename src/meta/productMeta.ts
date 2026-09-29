@@ -1,5 +1,6 @@
 import { S_COIN_ECONOMY, THEME_UNLOCK_ECONOMY } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
+import { ART_THEMES } from '../config/artThemes.generated';
 
 export const S_COIN = {
   dailyLogin: S_COIN_ECONOMY.dailyLogin,
@@ -105,4 +106,5 @@ export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
   zodiac: { theme: 'zodiac', free: false, permanentPrice: 180, rewardedUnlockViews: 1 },
   candy: { theme: 'candy', free: false, permanentPrice: 280, rewardedUnlockViews: 1 },
   dreamhouse: { theme: 'dreamhouse', free: false, permanentPrice: 400, rewardedUnlockViews: 1 },
-};
+  ...Object.fromEntries(ART_THEMES.map(art => [art.id, { theme: art.id, free: true, permanentPrice: 0, rewardedUnlockViews: 0 }])),
+} as Record<ThemeId, ThemeAccess>;

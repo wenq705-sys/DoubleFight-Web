@@ -8,6 +8,7 @@ import {
 } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
 import { THEMES } from '../config/themes';
+import { isArtTheme } from '../config/artThemes.generated';
 import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 
 const SKILL_ORDER: SkillId[] = ['random_clear', 'shield', 'petrify', 'shuffle', 'purify'];

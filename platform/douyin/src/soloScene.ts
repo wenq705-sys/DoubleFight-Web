@@ -25,6 +25,11 @@ import {
   type MatchPlayerState,
   type SkillId,
 } from '../../../shared/index';
+import { isArtTheme } from '../../../src/config/artThemes.generated';
+const CLIENT_THEME_ECONOMY: Record<string, { free: boolean; coinCost: number; adViewsRequired: number }> = {
+  ...THEME_UNLOCK_ECONOMY,
+  nightmarket: { free: true, coinCost: 0, adViewsRequired: 0 },
+};
 import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
 import { DouyinSocial } from './social';
@@ -45,6 +50,8 @@ type SoloResultState = {
 type MergeBurst = { count: number; maxValue: number; startedAt: number; until: number };
 type HomeMote = { mesh: THREE.Mesh; baseX: number; baseY: number; baseZ: number; phase: number; speed: number };
 
+// Preserve all five reviewed Solo worlds, then include every imported art theme.
+const NATIVE_SOLO_THEMES: readonly ThemeId[] = THEME_IDS;
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
   { id: 9102, value: 64, row: 1, col: 1 },
@@ -552,6 +559,7 @@ export class DouyinSoloScene {
     if (this.mode === 'online' && this.online && this.online!.snapshot().mode !== 'playing') {
       this.boardView.reset(HOME_TILES);
     }
+    this.configureCamera();
     this.applyThemeLook();
     this.audio.setScene(this.mode === 'solo' ? 'solo' : 'home', theme);
     this.refreshHud();
@@ -756,7 +764,7 @@ export class DouyinSoloScene {
 
   private async purchaseCurrentTheme(): Promise<void> {
     const theme = this.currentTheme;
-    const economy = THEME_UNLOCK_ECONOMY[theme];
+    const economy = CLIENT_THEME_ECONOMY[theme];
     this.themeUnlockBusy = true;
     this.themeUnlockMessage = '正在确认星币余额…';
     this.refreshHud();
@@ -1430,9 +1438,11 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const ratio = Math.max(0.1, info.width / Math.max(1, info.height));
     const heroMode = this.mode === 'home' || this.mode === 'online';
-    this.cameraTarget.set(0, heroMode ? 0.82 : 0.6, ART.board.centerZ + (heroMode ? 0.25 : 0));
+    const nightMarket = isArtTheme(this.currentTheme);
+    this.cameraTarget.set(0, nightMarket ? 0.82 : heroMode ? 0.82 : 0.6,
+      nightMarket ? ART.board.centerZ - .32 : ART.board.centerZ + (heroMode ? 0.25 : 0));
     const baseDistance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
-    const distance = baseDistance * (heroMode ? 1.12 : 1);
+    const distance = baseDistance * (nightMarket ? (heroMode ? 1.32 : 1.20) : heroMode ? 1.12 : 1);
     this.cameraHome.copy(this.cameraTarget).add(
       new THREE.Vector3(0, heroMode ? 0.94 : 0.88, heroMode ? 0.52 : 0.475).multiplyScalar(distance),
     );
@@ -1871,7 +1881,7 @@ export class DouyinSoloScene {
     ctx.restore();
 
     this.drawWorldPager(ctx, width, metaY + 67);
-    this.drawPillButton(ctx, layout.solo, themeOwned ? '开始挑战' : `解锁主题 · ${THEME_UNLOCK_ECONOMY[this.currentTheme].coinCost} 星币`, 'primary', themeOwned ? 'solo' : 'world');
+    this.drawPillButton(ctx, layout.solo, themeOwned ? '开始挑战' : `解锁主题 · ${CLIENT_THEME_ECONOMY[this.currentTheme].coinCost} 星币`, 'primary', themeOwned ? 'solo' : 'world');
     if (DOUYIN_PRODUCT_CONFIG.launch.onlineEnabled) {
       this.drawPillButton(ctx, layout.online, '在线对决', 'secondary', 'pvp');
     }
@@ -2380,7 +2390,7 @@ export class DouyinSoloScene {
 
   private drawThemeUnlock(ctx: CanvasRenderingContext2D, width: number, height: number): void {
     const layout = this.themeUnlockLayout(width, height);
-    const economy = THEME_UNLOCK_ECONOMY[this.currentTheme];
+    const economy = CLIENT_THEME_ECONOMY[this.currentTheme];
     const progress = this.auth.themeUnlockProgress(this.currentTheme);
     const balance = this.auth.current.status === 'authenticated' ? this.auth.current.player.rewards.currency : 0;
 

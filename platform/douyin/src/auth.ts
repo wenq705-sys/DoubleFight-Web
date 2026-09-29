@@ -1,6 +1,12 @@
 import { THEME_UNLOCK_ECONOMY } from '../../../shared/index';
+// New art worlds are locally available in the review test build; their server economy is not altered.
+const CLIENT_THEME_ECONOMY: Record<string, {free: boolean; coinCost: number; adViewsRequired: number}> = {
+  ...THEME_UNLOCK_ECONOMY,
+  nightmarket: { free: true, coinCost: 0, adViewsRequired: 0 },
+};
 import type { Platform } from '../../../src/platform/types';
 import { THEME_IDS, type ThemeId } from '../../../src/config/themes';
+import { isArtTheme } from '../../../src/config/artThemes.generated';
 import type { DouyinApi } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 
@@ -384,7 +390,9 @@ export class DouyinAuthClient {
   }
 
   isThemeOwned(theme: ThemeId): boolean {
-    if (THEME_UNLOCK_ECONOMY[theme].free) return true;
+    // Imported art themes are included free in this trial, without touching server currency.
+    if (isArtTheme(theme)) return true;
+    if (CLIENT_THEME_ECONOMY[theme].free) return true;
     if (this.state.status === 'authenticated' && this.state.player.themes?.owned.includes(theme)) return true;
     try {
       const cached = JSON.parse(this.platform.storage.getItem('doublefight-owned-themes') ?? '[]') as unknown;
@@ -395,7 +403,7 @@ export class DouyinAuthClient {
   }
 
   themeUnlockProgress(theme: ThemeId): { progress: number; required: number; dailyRemaining: number } {
-    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    const required = CLIENT_THEME_ECONOMY[theme].adViewsRequired;
     const themes = this.state.status === 'authenticated' ? this.state.player.themes : undefined;
     return {
       progress: Math.min(required, Math.max(0, Math.floor(themes?.adUnlockProgress?.[theme] ?? 0))),
@@ -405,10 +413,11 @@ export class DouyinAuthClient {
   }
 
   async purchaseTheme(theme: ThemeId): Promise<'unlocked' | 'owned' | 'insufficient' | 'unavailable'> {
+    if (isArtTheme(theme)) return 'owned';
     await this.start();
     if (!this.token || this.state.status !== 'authenticated') return 'unavailable';
     if (this.isThemeOwned(theme)) return 'owned';
-    if (this.state.player.rewards.currency < THEME_UNLOCK_ECONOMY[theme].coinCost) return 'insufficient';
+    if (this.state.player.rewards.currency < CLIENT_THEME_ECONOMY[theme].coinCost) return 'insufficient';
     const requestId = `theme_${theme}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     try {
       const data = await this.call('POST', '/themes/unlock', { themeId: theme, requestId });
@@ -422,8 +431,9 @@ export class DouyinAuthClient {
   }
 
   async claimThemeUnlockAd(theme: ThemeId, claimId: string): Promise<ThemeAdUnlockResult> {
+    if (isArtTheme(theme)) return { status: 'unavailable', unlocked: true, progress: 0, required: 0, dailyRemaining: 0 };
     await this.start();
-    const required = THEME_UNLOCK_ECONOMY[theme].adViewsRequired;
+    const required = CLIENT_THEME_ECONOMY[theme].adViewsRequired;
     if (!this.token) return { status: 'unavailable', unlocked: false, progress: 0, required, dailyRemaining: 0 };
     try {
       const data = await this.call('POST', '/themes/unlock/ad', { themeId: theme, claimId });

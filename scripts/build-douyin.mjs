@@ -1,5 +1,7 @@
 import { build } from 'vite';
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile, stat, readdir } from 'node:fs/promises';
+import { collectThemeArtPacks, syncThemeRegistry, installNativeThemePacks }
+  from './theme-art-pipeline.mjs';
 
 const release = process.argv.includes('--release') || process.env.DOUYIN_RELEASE === '1';
 const outDir = release ? 'platform/douyin/dist-release' : 'platform/douyin/dist';
@@ -16,6 +18,10 @@ if (installedThreeVersion !== EXPECTED_THREE_VERSION) {
     `Douyin build requires three@${EXPECTED_THREE_VERSION} for Helium/WebGL1 compatibility; installed three@${installedThreeVersion}.`,
   );
 }
+
+// Validate art packs and regenerate the shared registry before compiling.
+const artPacks = await collectThemeArtPacks();
+await syncThemeRegistry(artPacks);
 
 await build({
   configFile: false,
@@ -40,6 +46,24 @@ await mkdir(outDir, { recursive: true });
 await copyFile('platform/douyin/game.json', `${outDir}/game.json`);
 await copyFile(projectConfigSource, `${outDir}/project.config.json`);
 await writeGeneratedAudio(outDir);
+const artInstall = await installNativeThemePacks(artPacks, outDir, {
+  existingGameBytes: (await stat(outDir+'/game.js')).size,
+});
+async function directoryBytes(dir) {
+  let sum = 0;
+  for (const entry of await readdir(dir, {withFileTypes:true})) {
+    const full=dir+'/'+entry.name;
+    sum += entry.isDirectory() ? await directoryBytes(full) : (await stat(full)).size;
+  }
+  return sum;
+}
+const totalPackageBytes=await directoryBytes(outDir);
+if (totalPackageBytes>20*1024*1024) {
+  throw new Error('All native files exceed 20MiB after art import ('+
+    (totalPackageBytes/1048576).toFixed(2)+' MiB); move large art into Douyin subpackages.');
+}
+console.log('[ThemeArtImport] native:',artInstall.installed.map(x=>x.id).join(', '),
+  'total package:',(totalPackageBytes/1048576).toFixed(2)+'MiB');
 
 const projectConfig = JSON.parse(await readFile(`${outDir}/project.config.json`, 'utf8'));
 const urlCheck = projectConfig.setting?.urlCheck;

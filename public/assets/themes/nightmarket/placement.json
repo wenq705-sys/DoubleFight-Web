@@ -1,0 +1,242 @@
+{
+  "grid": 4,
+  "coordinate_system": "Blender Z-up, exported GLTF Y-up",
+  "cell_spacing": 1.065,
+  "cell_usable_width": 0.895,
+  "tile_surface_z_blender": 0.852,
+  "character_bottom_anchor_z_blender": 0.88,
+  "cells": [
+    {
+      "row": 0,
+      "column": 0,
+      "blender_xyz": [
+        -1.5975,
+        1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        -1.5975,
+        0.88,
+        -1.5975
+      ]
+    },
+    {
+      "row": 0,
+      "column": 1,
+      "blender_xyz": [
+        -0.5325,
+        1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        -0.5325,
+        0.88,
+        -1.5975
+      ]
+    },
+    {
+      "row": 0,
+      "column": 2,
+      "blender_xyz": [
+        0.5325,
+        1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        0.5325,
+        0.88,
+        -1.5975
+      ]
+    },
+    {
+      "row": 0,
+      "column": 3,
+      "blender_xyz": [
+        1.5975,
+        1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        1.5975,
+        0.88,
+        -1.5975
+      ]
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "blender_xyz": [
+        -1.5975,
+        0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        -1.5975,
+        0.88,
+        -0.5325
+      ]
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "blender_xyz": [
+        -0.5325,
+        0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        -0.5325,
+        0.88,
+        -0.5325
+      ]
+    },
+    {
+      "row": 1,
+      "column": 2,
+      "blender_xyz": [
+        0.5325,
+        0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        0.5325,
+        0.88,
+        -0.5325
+      ]
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "blender_xyz": [
+        1.5975,
+        0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        1.5975,
+        0.88,
+        -0.5325
+      ]
+    },
+    {
+      "row": 2,
+      "column": 0,
+      "blender_xyz": [
+        -1.5975,
+        -0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        -1.5975,
+        0.88,
+        0.5325
+      ]
+    },
+    {
+      "row": 2,
+      "column": 1,
+      "blender_xyz": [
+        -0.5325,
+        -0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        -0.5325,
+        0.88,
+        0.5325
+      ]
+    },
+    {
+      "row": 2,
+      "column": 2,
+      "blender_xyz": [
+        0.5325,
+        -0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        0.5325,
+        0.88,
+        0.5325
+      ]
+    },
+    {
+      "row": 2,
+      "column": 3,
+      "blender_xyz": [
+        1.5975,
+        -0.5325,
+        0.88
+      ],
+      "three_xyz": [
+        1.5975,
+        0.88,
+        0.5325
+      ]
+    },
+    {
+      "row": 3,
+      "column": 0,
+      "blender_xyz": [
+        -1.5975,
+        -1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        -1.5975,
+        0.88,
+        1.5975
+      ]
+    },
+    {
+      "row": 3,
+      "column": 1,
+      "blender_xyz": [
+        -0.5325,
+        -1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        -0.5325,
+        0.88,
+        1.5975
+      ]
+    },
+    {
+      "row": 3,
+      "column": 2,
+      "blender_xyz": [
+        0.5325,
+        -1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        0.5325,
+        0.88,
+        1.5975
+      ]
+    },
+    {
+      "row": 3,
+      "column": 3,
+      "blender_xyz": [
+        1.5975,
+        -1.5975,
+        0.88
+      ],
+      "three_xyz": [
+        1.5975,
+        0.88,
+        1.5975
+      ]
+    }
+  ],
+  "board_bounds_xy": [
+    -2.72,
+    -2.72,
+    2.72,
+    2.72
+  ],
+  "interaction": "Use cell array as logical tile slots, no board digits or baked tile labels",
+  "animations": "board static; lanterns, falling blossoms and ripples belong to environment"
+}

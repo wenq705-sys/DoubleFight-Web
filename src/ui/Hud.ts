@@ -7,6 +7,8 @@ export class Hud {
   private readonly bestValue: HTMLElement;
   private readonly highestValue: HTMLElement;
   private readonly toast: HTMLElement;
+  private readonly nightmarketStage: HTMLElement;
+  private lastMoodStage = -1;
   private readonly gameOver: HTMLElement;
   private readonly restartButton: HTMLButtonElement;
   private readonly retryButton: HTMLButtonElement;
@@ -36,6 +38,7 @@ export class Hud {
           <strong class="hud__skill-count" id="skill-count">3</strong>
         </button>
 
+        <div class="hud__nightmarket-stage" id="nightmarket-stage" aria-live="polite">初入夜市 · 2</div>
         <div class="hud__toast" id="merge-toast">MERGE!</div>
       </div>
 
@@ -64,6 +67,7 @@ export class Hud {
     this.bestValue = container.querySelector('#best-value') as HTMLElement;
     this.highestValue = container.querySelector('#highest-value') as HTMLElement;
     this.toast = container.querySelector('#merge-toast') as HTMLElement;
+    this.nightmarketStage = container.querySelector('#nightmarket-stage') as HTMLElement;
     this.gameOver = container.querySelector('#game-over') as HTMLElement;
     this.restartButton = container.querySelector('#new-game') as HTMLButtonElement;
     this.retryButton = container.querySelector('#retry-game') as HTMLButtonElement;
@@ -90,6 +94,17 @@ export class Hud {
     document.body.dataset.theme = theme.id;
   }
 
+  setNightMarketStage(stage: number | null, name: string, highest: number): void {
+    if (stage === null) { this.lastMoodStage = -1; return; }
+    this.nightmarketStage.textContent = name + ' · 灵物 ' + highest;
+    if (this.lastMoodStage !== -1 && stage > this.lastMoodStage) {
+      this.nightmarketStage.classList.remove('hud__nightmarket-stage--pulse');
+      void this.nightmarketStage.offsetWidth;
+      this.nightmarketStage.classList.add('hud__nightmarket-stage--pulse');
+    }
+    this.lastMoodStage = stage;
+  }
+
   setVisible(visible: boolean): void {
     this.root.classList.toggle('hud--hidden', !visible);
     if (!visible) this.hideGameOver();
@@ -102,7 +117,7 @@ export class Hud {
   }
 
   showMerge(value: number, chain: number, theme: ThemeId): void {
-    const finalCopy: Record<ThemeId, string> = {
+    const finalCopy: Partial<Record<ThemeId, string>> = {
       kingdom: '王国奇观!',
       palace: '母仪天下!',
       zodiac: '神龙降临!',
@@ -110,7 +125,7 @@ export class Hud {
       dreamhouse: '梦想成真!',
     };
     this.toast.textContent =
-      value >= 2048 ? finalCopy[theme] :
+      value >= 2048 ? (finalCopy[theme] ?? `${THEMES[theme].highestLabel}登顶!`) :
       value >= 1024 ? `${THEMES[theme].highestLabel}在望!` :
       chain >= 2 ? `连升 ×${chain}` :
       '合成!';
@@ -121,7 +136,7 @@ export class Hud {
 
   playSkillFx(theme: ThemeId): void {
     this.skillFx.classList.remove('skill-fx--show', 'skill-fx--palace', 'skill-fx--kingdom');
-    this.skillFx.classList.add(theme === 'palace' ? 'skill-fx--palace' : 'skill-fx--kingdom');
+    this.skillFx.classList.add(theme === 'palace' || theme === 'nightmarket' ? 'skill-fx--palace' : 'skill-fx--kingdom');
     void this.skillFx.offsetWidth;
     this.skillFx.classList.add('skill-fx--show');
     window.setTimeout(() => this.skillFx.classList.remove('skill-fx--show'), 1450);

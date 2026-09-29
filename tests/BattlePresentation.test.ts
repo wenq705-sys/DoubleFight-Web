@@ -128,7 +128,7 @@ describe('shared battle presentation', () => {
     expect(localEvents.filter(event => event.type === 'skill_cast')).toHaveLength(1);
   });
 
-  it('preserves readable tier growth and clamps horizontal footprint in both themes', () => {
+  it('preserves readable tier growth and clamps horizontal footprint in all themes', () => {
     // Faces are decorative canvas textures; sizing exercises the real model geometry.
     vi.stubGlobal('document', { createElement: () => ({ getContext: () => null }) });
     for (const theme of Object.values(THEME_PRESENTATIONS)) {

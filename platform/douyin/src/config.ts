@@ -30,6 +30,7 @@ export const DOUYIN_PRODUCT_CONFIG = {
       zodiac: 'ascension-zodiac',
       candy: 'ascension-candy',
       dreamhouse: 'ascension-dreamhouse',
+      nightmarket: 'ascension-nightmarket',
     },
   },
   retention: {

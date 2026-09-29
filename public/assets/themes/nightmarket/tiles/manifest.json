@@ -1,0 +1,112 @@
+{
+  "character_count": 11,
+  "target": "on-board 4x4 LOD; original 11 remain unchanged",
+  "all_valid": true,
+  "source_triangles": 817610,
+  "mobile_triangles": 214498,
+  "source_bytes": 18457148,
+  "mobile_bytes": 5161924,
+  "asset_budget": "Typical 16 concurrently visible characters, single merged mesh/level",
+  "seconds": 7.9,
+  "models": [
+    {
+      "level": 2,
+      "original_triangles": 86398,
+      "mobile_triangles": 16000,
+      "roundtrip_triangles": 16000,
+      "original_bytes": 2089636,
+      "mobile_bytes": 400060,
+      "valid": true
+    },
+    {
+      "level": 4,
+      "original_triangles": 59042,
+      "mobile_triangles": 16000,
+      "roundtrip_triangles": 16000,
+      "original_bytes": 1430272,
+      "mobile_bytes": 397204,
+      "valid": true
+    },
+    {
+      "level": 8,
+      "original_triangles": 64212,
+      "mobile_triangles": 17500,
+      "roundtrip_triangles": 17500,
+      "original_bytes": 1553948,
+      "mobile_bytes": 432824,
+      "valid": true
+    },
+    {
+      "level": 16,
+      "original_triangles": 65000,
+      "mobile_triangles": 17999,
+      "roundtrip_triangles": 17999,
+      "original_bytes": 1197716,
+      "mobile_bytes": 344992,
+      "valid": true
+    },
+    {
+      "level": 32,
+      "original_triangles": 40784,
+      "mobile_triangles": 16000,
+      "roundtrip_triangles": 16000,
+      "original_bytes": 988608,
+      "mobile_bytes": 393772,
+      "valid": true
+    },
+    {
+      "level": 64,
+      "original_triangles": 68602,
+      "mobile_triangles": 17999,
+      "roundtrip_triangles": 17999,
+      "original_bytes": 1661064,
+      "mobile_bytes": 444920,
+      "valid": true
+    },
+    {
+      "level": 128,
+      "original_triangles": 115654,
+      "mobile_triangles": 19000,
+      "roundtrip_triangles": 19000,
+      "original_bytes": 1850244,
+      "mobile_bytes": 436564,
+      "valid": true
+    },
+    {
+      "level": 256,
+      "original_triangles": 51160,
+      "mobile_triangles": 19000,
+      "roundtrip_triangles": 19000,
+      "original_bytes": 1239468,
+      "mobile_bytes": 467596,
+      "valid": true
+    },
+    {
+      "level": 512,
+      "original_triangles": 94104,
+      "mobile_triangles": 25000,
+      "roundtrip_triangles": 25000,
+      "original_bytes": 2273076,
+      "mobile_bytes": 614560,
+      "valid": true
+    },
+    {
+      "level": 1024,
+      "original_triangles": 80816,
+      "mobile_triangles": 24000,
+      "roundtrip_triangles": 24000,
+      "original_bytes": 1952184,
+      "mobile_bytes": 588656,
+      "valid": true
+    },
+    {
+      "level": 2048,
+      "original_triangles": 91838,
+      "mobile_triangles": 26000,
+      "roundtrip_triangles": 26000,
+      "original_bytes": 2220932,
+      "mobile_bytes": 640776,
+      "valid": true
+    }
+  ]
+}

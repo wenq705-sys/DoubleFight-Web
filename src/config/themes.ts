@@ -1,4 +1,5 @@
-export const THEME_IDS = ['kingdom', 'palace', 'zodiac', 'candy', 'dreamhouse'] as const;
+import { ART_THEMES, ART_THEME_BY_ID } from './artThemes.generated';
+export const THEME_IDS = ['kingdom', 'palace', 'zodiac', 'candy', 'dreamhouse', ...ART_THEMES.map(art => art.id)] as const;
 export type ThemeId = typeof THEME_IDS[number];
 
 export interface ThemeUiPalette {
@@ -19,7 +20,7 @@ export interface ThemeMeta {
   ui: ThemeUiPalette;
 }
 
-export const THEMES: Record<ThemeId, ThemeMeta> = {
+export const THEMES = {
   kingdom: {
     id: 'kingdom',
     label: '微缩王国',
@@ -75,7 +76,17 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
       ambient: [0x8bd1a0, 0xf2c26b, 0x7dbbd8, 0xf3a57f],
     },
   },
-};
+  ...Object.fromEntries(ART_THEMES.map(art => [art.id, {
+    id: art.id, label: art.label, subtitle: art.subtitle, highestLabel: art.highestLabel,
+    ui: {
+      background: art.render.sky, accent: art.render.accent, secondary: art.render.secondary,
+      stageTint: Number.parseInt(art.render.accent.slice(1), 16),
+      finalTint: Number.parseInt(art.render.secondary.slice(1), 16),
+      glow: Number.parseInt(art.render.spawn.slice(1), 16),
+      ambient: art.render.confetti.map(color => Number.parseInt(color.slice(1), 16)),
+    },
+  }])),
+} as unknown as Record<ThemeId, ThemeMeta>;
 
 export const PIECE_VALUES = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048] as const;
 export type PieceValue = typeof PIECE_VALUES[number];
@@ -116,7 +127,11 @@ const THEME_RANKS: Record<ThemeId, Record<number, string>> = {
   zodiac: ZODIAC_RANKS,
   candy: CANDY_RANKS,
   dreamhouse: DREAMHOUSE_RANKS,
-};
+  ...Object.fromEntries(ART_THEMES.map(art => [art.id, art.ranks])),
+} as Record<ThemeId, Record<number, string>>;
+
+export const NIGHTMARKET_RANKS: Record<number,string> =
+  ART_THEME_BY_ID.nightmarket?.ranks ?? {};
 
 export interface PieceMeta {
   theme: ThemeId;

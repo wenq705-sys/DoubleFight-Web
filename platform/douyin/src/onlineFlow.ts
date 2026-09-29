@@ -10,6 +10,7 @@ import {
   type SkillLoadout,
 } from '../../../shared/index';
 import type { ThemeId } from '../../../src/config/themes';
+import { isArtTheme } from '../../../src/config/artThemes.generated';
 import { OnlineController } from '../../../src/battle/OnlineController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { OnlineClient, type OnlineClientState } from '../../../src/network/OnlineClient';

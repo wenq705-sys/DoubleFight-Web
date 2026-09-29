@@ -1,5 +1,6 @@
 import { THEME_IDS, THEMES, pieceName, pieceTier, type ThemeId } from '../config/themes';
 import { loadThemePreviews } from '../rendering/themes/ThemePreview';
+import { ART_THEME_BY_ID } from '../config/artThemes.generated';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 type ThemeCard = {
@@ -7,7 +8,7 @@ type ThemeCard = {
   icon: string;
 };
 
-const ICONS: Record<ThemeId, string> = {
+const ICONS: Partial<Record<ThemeId, string>> = {
   kingdom: '♜',
   palace: '♛',
   zodiac: '◉',
@@ -15,7 +16,7 @@ const ICONS: Record<ThemeId, string> = {
   dreamhouse: '⌂',
 };
 
-const CARDS: ThemeCard[] = THEME_IDS.map(id => ({ id, icon: ICONS[id] }));
+const CARDS: ThemeCard[] = THEME_IDS.map(id => ({ id, icon: ICONS[id] ?? ART_THEME_BY_ID[id]?.icon ?? '✦' }));
 
 export class HomeScreen {
   private readonly root: HTMLElement;

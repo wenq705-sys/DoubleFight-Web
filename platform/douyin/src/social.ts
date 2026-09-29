@@ -1,6 +1,7 @@
 import type { DouyinApi, DouyinLaunchOptions, DouyinShowOptions } from './api';
 import { DOUYIN_PRODUCT_CONFIG } from './config';
 import { THEMES, type ThemeId } from '../../../src/config/themes';
+import { isArtTheme } from '../../../src/config/artThemes.generated';
 import { formatDuration } from './metaProgress';
 
 export class DouyinSocial {
@@ -246,6 +247,7 @@ export class DouyinSocial {
   }
 
   async setAscensionRank(theme: ThemeId, elapsedMs: number): Promise<boolean> {
+    if (isArtTheme(theme)) return false; // No undeclared native Douyin ranking zone for art trial.
     this.lastRankError = null;
     if (!this.api.setImRankData || !Number.isFinite(elapsedMs) || elapsedMs <= 0) {
       this.lastRankError = { errMsg: !this.api.setImRankData ? 'setImRankData unavailable' : 'invalid ascension time', errNo: 20000 };
@@ -279,6 +281,10 @@ export class DouyinSocial {
   }
 
   async openAscensionRank(theme: ThemeId): Promise<boolean> {
+    if (isArtTheme(theme)) {
+      this.lastRankError = { errMsg: 'New theme rank is not yet configured', errNo: 20000 };
+      return false;
+    }
     this.lastRankError = null;
     if (!this.api.getImRankList) {
       this.lastRankError = { errMsg: 'getImRankList unavailable', errNo: 20000 };

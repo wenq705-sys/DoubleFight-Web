@@ -96,7 +96,8 @@ const commercialConstructor = commercialSource.match(/constructor\([^)]*\)\s*\{(
 if (commercialConstructor.includes('prepareRewarded')) {
   issues.push('platform/douyin/src/commercial.ts: rewarded ad is pre-created before an explicit user action');
 }
-if (!commercialSource.includes('if (this.rewardedBusy) return')) {
+// Allow the approved explicit busy branch (which records an error before returning).
+if (!/if\s*\(\s*this\.rewardedBusy\s*\)\s*(?:\{|return)/.test(commercialSource)) {
   issues.push('platform/douyin/src/commercial.ts: rewarded ad flow has no re-entry guard');
 }
 if (/rewardedSkillClaims\s*<\s*[2-9]/.test(soloSceneSource)

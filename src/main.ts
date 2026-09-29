@@ -1,4 +1,6 @@
 import './styles.css';
+import './nightmarket.css';
+import { isArtTheme } from './config/artThemes.generated';
 import { SoloController } from './battle/SoloController';
 import type { Direction } from './game/board/types';
 import { ART } from './config/artDirection';
@@ -57,6 +59,8 @@ const persistThemeRecord = (): void => {
 const refresh = () => {
   hud.setScore(board.score);
   hud.setHighest(highest(), theme);
+  const mood = scene.boardView.nightmarketMood;
+  hud.setNightMarketStage(mood?.stage ?? null, mood?.name ?? '', mood?.highest ?? 2);
   hud.setSkillCharges(skillCharges);
   persistThemeRecord();
 };
@@ -66,6 +70,10 @@ function applyTheme(nextTheme: ThemeId): void {
   storage.setItem('doublefight-theme', theme);
   scene.setTheme(theme, board.tiles());
   hud.setTheme(THEMES[theme]);
+  document.body.classList.toggle('art-theme-active',isArtTheme(theme));
+  const currentMood = scene.boardView.nightmarketMood;
+  hud.setNightMarketStage(currentMood?.stage ?? null,
+    currentMood?.name ?? '', currentMood?.highest ?? 2);
 }
 
 function reset(): void {
