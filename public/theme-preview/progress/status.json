@@ -13,8 +13,8 @@
                       "name":  "炭火狸猫"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
-                      "status":  "todo",
+                      "detail":  "Direct Blender modeling in progress",
+                      "status":  "work",
                       "level":  8,
                       "name":  "月灯玉兔"
                   },
@@ -25,13 +25,13 @@
                       "name":  "翡翠醒狮"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  32,
                       "name":  "琉璃锦鲤"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  64,
                       "name":  "紫晶魔女"
@@ -43,30 +43,30 @@
                       "name":  "玫瑰花妖"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  256,
                       "name":  "黄金招财蟾"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  512,
                       "name":  "冰晶凤凰"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  1024,
                       "name":  "月华九尾狐"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
+                      "detail":  "Awaiting original Blender sculpt",
                       "status":  "todo",
                       "level":  2048,
                       "name":  "赤焰东方龙"
                   }
               ],
     "note":  "仅统计同时存在 Blender 工程和有效 GLB 的独立重制模型（Codex 或直接 Blender）。",
-    "updated":  "2026-09-29 10:33:01"
+    "updated":  "2026-09-29 10:33:17"
 }
