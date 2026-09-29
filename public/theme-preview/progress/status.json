@@ -13,7 +13,7 @@
                       "name":  "炭火狸猫"
                   },
                   {
-                      "detail":  "GLB 1.63 MB",
+                      "detail":  "GLB 1.48 MB",
                       "status":  "trial",
                       "level":  8,
                       "name":  "月灯玉兔"
@@ -68,5 +68,5 @@
                   }
               ],
     "note":  "仅统计同时存在 Blender 工程和有效 GLB 的独立重制模型（Codex 或直接 Blender）。",
-    "updated":  "2026-09-29 10:43:01"
+    "updated":  "2026-09-29 10:48:01"
 }
