@@ -1,61 +1,72 @@
 {
-  "updated": "2026-09-29",
-  "note": "旧版非 Codex 模型不计入完成。",
-  "items": [
-    {
-      "level": 2,
-      "name": "莲花团子",
-      "status": "todo"
-    },
-    {
-      "level": 4,
-      "name": "炭火狸猫",
-      "status": "todo"
-    },
-    {
-      "level": 8,
-      "name": "月灯玉兔",
-      "status": "todo"
-    },
-    {
-      "level": 16,
-      "name": "翡翠醒狮",
-      "status": "done"
-    },
-    {
-      "level": 32,
-      "name": "琉璃锦鲤",
-      "status": "todo"
-    },
-    {
-      "level": 64,
-      "name": "紫晶魔女",
-      "status": "todo"
-    },
-    {
-      "level": 128,
-      "name": "玫瑰花妖",
-      "status": "work"
-    },
-    {
-      "level": 256,
-      "name": "黄金招财蟾",
-      "status": "todo"
-    },
-    {
-      "level": 512,
-      "name": "冰晶凤凰",
-      "status": "todo"
-    },
-    {
-      "level": 1024,
-      "name": "月华九尾狐",
-      "status": "todo"
-    },
-    {
-      "level": 2048,
-      "name": "赤焰东方龙",
-      "status": "todo"
-    }
-  ]
+    "items":  [
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  2,
+                      "name":  "莲花团子"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  4,
+                      "name":  "炭火狸猫"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  8,
+                      "name":  "月灯玉兔"
+                  },
+                  {
+                      "detail":  "GLB 1.14 MB",
+                      "status":  "done",
+                      "level":  16,
+                      "name":  "翡翠醒狮"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  32,
+                      "name":  "琉璃锦鲤"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  64,
+                      "name":  "紫晶魔女"
+                  },
+                  {
+                      "detail":  "Codex 建模中；尚未导出",
+                      "status":  "work",
+                      "level":  128,
+                      "name":  "玫瑰花妖"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  256,
+                      "name":  "黄金招财蟾"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  512,
+                      "name":  "冰晶凤凰"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  1024,
+                      "name":  "月华九尾狐"
+                  },
+                  {
+                      "detail":  "等待 Codex 原创建模",
+                      "status":  "todo",
+                      "level":  2048,
+                      "name":  "赤焰东方龙"
+                  }
+              ],
+    "note":  "仅统计同时存在 Blender 工程和有效 GLB 的 Codex 原创模型。",
+    "updated":  "2026-09-29 10:02:07"
 }
