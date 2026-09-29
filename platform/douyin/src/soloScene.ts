@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { ART } from '../../../src/config/artDirection';
 import { THEMES, pieceName, type ThemeId } from '../../../src/config/themes';
-import { ART_THEMES, isArtTheme } from '../../../src/config/artThemes.generated';
+import {isArtTheme} from '../../../src/config/artThemes.generated';
+import {THEME_MAP_CARDS,playableTheme} from '../../../src/config/themeCatalog';
+import {nativeHomePosterPath,drawNativeThemeMap,layoutNativeThemeMap,nextThemeMapIndex}
+  from './nativeThemeMap';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -24,9 +27,23 @@ import { DOUYIN_RELEASE } from './config';
 import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 
 type ProductMode = 'home' | 'solo' | 'online';
+interface NativePackImage {
+  src: ArrayBuffer | string;
+  width: number;
+  height: number;
+  addEventListener(type:'load'|'error',listener:()=>void):void;
+}
+declare const tt:{
+  createImage?:()=>NativePackImage;
+  getFileSystemManager?:()=>{readFile(options:{
+    filePath:string;
+    success(result:{data:ArrayBuffer|string}):void;
+    fail(error:{errMsg?:string}):void;
+  }):void;};
+} | undefined;
 type Rect = { x: number; y: number; width: number; height: number };
 
-const NATIVE_SOLO_THEMES: readonly ThemeId[] = ['kingdom','palace',...ART_THEMES.map(art=>art.id)];
+const NATIVE_THEME_CARDS = THEME_MAP_CARDS;
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
   { id: 9102, value: 64, row: 1, col: 1 },
@@ -64,6 +81,8 @@ export class DouyinSoloScene {
   private inputLocked = false;
   private skillCharges = 3;
   private currentTheme: ThemeId;
+  private homeCardIndex = 0;
+  private readonly homePosterCache=new Map<string,{pending:boolean;image?:CanvasImageSource}>();
   private mode: ProductMode = 'home';
   private disposed = false;
   private visualTime = 0;
@@ -97,6 +116,7 @@ export class DouyinSoloScene {
     private readonly auth: DouyinAuthClient,
   ) {
     this.currentTheme = theme;
+    this.homeCardIndex = Math.max(0,NATIVE_THEME_CARDS.findIndex(card=>card.id===theme));
 
     setTextureCanvasFactory((width, height) => {
       const canvas = this.platform.createCanvas();
@@ -138,8 +158,9 @@ export class DouyinSoloScene {
     this.configureLighting();
     this.resize();
     this.applyThemeLook();
-    this.boardView.prewarmTheme(theme);
-    this.boardView.reset(HOME_TILES);
+
+    // Home uses packaged posters: do not instantiate 3D tile models before the first frame.
+    this.boardView.root.visible = false;
 
     this.uiCanvas = this.platform.createCanvas();
     this.uiContext = this.uiCanvas.getContext('2d') as CanvasRenderingContext2D;
@@ -190,6 +211,15 @@ export class DouyinSoloScene {
     });
   }
 
+  /** Restrict startup/home gallery to two low-LOD art tiles, not six high-ranked GLBs. */
+  private homePreviewTiles(): readonly BoardTile[] {
+    if (!isArtTheme(this.currentTheme)) return HOME_TILES;
+    return [
+      {id:9101,value:2,row:1,col:1},
+      {id:9102,value:4,row:1,col:2},
+    ];
+  }
+
   get theme(): ThemeId { return this.currentTheme; }
   get currentMode(): ProductMode { return this.mode; }
   get score(): number { return this.controller.board.score; }
@@ -219,7 +249,7 @@ export class DouyinSoloScene {
   handleDirection(direction: Direction): void {
     if (this.mode === 'home') {
       if (direction === 'left' || direction === 'right') {
-        this.cycleSoloTheme(direction === 'left' ? 1 : -1);
+        this.cycleHomeCard(direction === 'left' ? 1 : -1);
         this.platform.haptics.trigger('light');
       }
       return;
@@ -299,25 +329,72 @@ export class DouyinSoloScene {
     else this.handleOnlineTap(x, y);
   }
 
-  /** Native home carousel cycles across all three unlockable Solo themes. */
-  private cycleSoloTheme(direction: -1 | 1): void {
-    const index = NATIVE_SOLO_THEMES.indexOf(this.currentTheme);
-    const next = (index + direction + NATIVE_SOLO_THEMES.length) % NATIVE_SOLO_THEMES.length;
-    this.setTheme(NATIVE_SOLO_THEMES[next]);
+  /** Exactly the same five-card ordered map as Web. Locked cards are visible, not playable. */
+  private cycleHomeCard(direction: -1 | 1): void {
+    const next = nextThemeMapIndex(this.homeCardIndex,direction);
+    this.selectHomeCard(next);
+  }
+  private selectHomeCard(index:number):void {
+    if(index<0||index>=NATIVE_THEME_CARDS.length||index===this.homeCardIndex)return;
+    this.homeCardIndex=index;
+    const card=NATIVE_THEME_CARDS[index];
+    if(playableTheme(card.id))this.setTheme(card.id);
+    else this.refreshHud();
+    this.platform.haptics.trigger('light');
   }
 
+  /** Changing the selected home island is poster-only; 3D is created on Enter World. */
   setTheme(theme: ThemeId): void {
-    if (theme === this.currentTheme) return;
-    this.currentTheme = theme;
-    this.platform.storage.setItem('doublefight-theme', theme);
+    const wasCurrent=theme===this.currentTheme;
+    this.currentTheme=theme;
+    this.homeCardIndex=Math.max(0,NATIVE_THEME_CARDS.findIndex(card=>card.id===theme));
+    this.platform.storage.setItem('doublefight-theme',theme);
+    if(this.mode==='home'){
+      this.boardView.root.visible=false;
+      this.refreshHud();
+      return;
+    }
+    if(wasCurrent&&this.boardView.theme===theme)return;
     this.boardView.setTheme(theme);
     this.boardView.prewarmTheme(theme);
-    if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
-      this.boardView.reset(HOME_TILES);
-    }
-    this.configureCamera();
-    this.applyThemeLook();
-    this.refreshHud();
+    if(this.mode==='online'&&this.online.snapshot().mode!=='playing')
+      this.boardView.reset(this.homePreviewTiles());
+    this.configureCamera();this.applyThemeLook();this.refreshHud();
+  }
+
+  private ensureHomePoster(theme:ThemeId):void{
+    if(this.homePosterCache.has(theme))return;
+    const relative=nativeHomePosterPath(theme);
+    if(!relative||typeof tt==='undefined'||!tt.getFileSystemManager||!tt.createImage)return;
+    this.homePosterCache.set(theme,{pending:true});
+    tt.getFileSystemManager().readFile({
+      filePath:relative,
+      success:result=>{
+        if(this.disposed)return;
+        try{
+          const image=tt.createImage!();
+          image.addEventListener('load',()=>{
+            if(this.disposed)return;
+            this.homePosterCache.set(theme,{pending:false,
+              image:image as unknown as CanvasImageSource});
+            if(this.mode==='home'&&NATIVE_THEME_CARDS[this.homeCardIndex].id===theme)
+              this.refreshHud();
+          });
+          image.addEventListener('error',()=>{
+            console.warn('[NativeHome] poster decode failed:',relative);
+            this.homePosterCache.set(theme,{pending:false});
+          });
+          image.src=result.data;
+        }catch(error){
+          console.warn('[NativeHome] image allocation failed:',relative,error);
+          this.homePosterCache.set(theme,{pending:false});
+        }
+      },
+      fail:error=>{
+        console.warn('[NativeHome] packaged poster missing:',relative,error.errMsg);
+        this.homePosterCache.set(theme,{pending:false});
+      },
+    });
   }
 
   render(): void {
@@ -328,6 +405,9 @@ export class DouyinSoloScene {
 
     const onlineState = this.mode === 'online' ? this.online.snapshot() : null;
     const duel = onlineState?.mode === 'playing' || onlineState?.mode === 'result';
+    // Theme-map presentation is a lightweight poster gallery, never the 3D battle scene.
+    this.boardView.root.visible=this.mode!=='home';
+    this.boardView.root.position.y=0;
     if (this.mode === 'home' && this.visualTime >= this.nextHomeHudAt) {
       this.nextHomeHudAt = this.visualTime + 0.75;
       this.refreshHud();
@@ -342,7 +422,7 @@ export class DouyinSoloScene {
         this.refreshHud();
       }
     } else {
-      this.boardView.update(delta);
+      if(this.mode!=='home')this.boardView.update(delta);
       const home = this.cameraScratch.copy(this.cameraHome);
       if (this.mode === 'home' || this.mode === 'online') {
         home.x += Math.sin(this.visualTime * 0.34) * 0.28;
@@ -418,6 +498,10 @@ export class DouyinSoloScene {
     this.boardView.root.visible = true;
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
+    if(this.boardView.theme!==this.currentTheme){
+      this.boardView.setTheme(this.currentTheme);
+      this.boardView.prewarmTheme(this.currentTheme);
+    }
     this.controller.reset();
     this.configureCamera();
     this.applyThemeLook();
@@ -443,6 +527,7 @@ export class DouyinSoloScene {
     this.boardView.root.visible = true;
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
+    if(this.boardView.theme!==this.currentTheme)this.boardView.setTheme(this.currentTheme);
     this.boardView.reset(HOME_TILES);
     this.online.open(this.currentTheme);
     this.configureCamera();
@@ -457,6 +542,7 @@ export class DouyinSoloScene {
     this.persistRecord(true);
     if (this.mode === 'online') this.online.close();
     this.mode = 'home';
+    this.homeCardIndex=Math.max(0,NATIVE_THEME_CARDS.findIndex(card=>card.id===this.currentTheme));
     const showInterstitial = previousMode === 'solo' || previousOnlineMode === 'result';
     if (showInterstitial) void this.commercial.maybeShowInterstitial();
     this.inputLocked = false;
@@ -465,10 +551,8 @@ export class DouyinSoloScene {
     this.exitConfirm = false;
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
-    this.boardView.root.visible = true;
-    this.boardView.reset(HOME_TILES);
-    this.configureCamera();
-    this.applyThemeLook();
+    this.boardView.root.visible = false;
+    // Do not reset and asynchronously load 3D collectible tiles on a static theme-map page.
     this.platform.haptics.trigger('light');
     this.refreshHud();
   }
@@ -501,14 +585,22 @@ export class DouyinSoloScene {
       return;
     }
 
-    if (this.hit(x, y, layout.theme)) {
-      this.cycleSoloTheme(1);
-      this.platform.haptics.trigger('light');
-      return;
+    if(this.hit(x,y,layout.previous)){this.cycleHomeCard(-1);return;}
+    if(this.hit(x,y,layout.next)){this.cycleHomeCard(1);return;}
+    for(let i=0;i<layout.dots.length;i++){
+      if(this.hit(x,y,layout.dots[i])){this.selectHomeCard(i);return;}
     }
-    if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
+    if (this.hit(x,y,layout.theme)){this.cycleHomeCard(1);return;}
+    const card=NATIVE_THEME_CARDS[this.homeCardIndex];
+    if (this.hit(x, y, layout.solo)) {
+      if(card.locked){
+        this.notice={text:'该主题仍在制作中，敬请期待',until:this.visualTime+1.8};
+        this.refreshHud();return;
+      }
+      this.startSolo();return;
+    }
     if (this.hit(x, y, layout.online)) {
-      if (isArtTheme(this.currentTheme)) {
+      if (card.locked || isArtTheme(this.currentTheme)) {
         this.notice = { text: '东方夜市现已开放单人模式 · 在线对决暂未开放', until: this.visualTime + 1.7 };
         this.refreshHud();return;
       }
@@ -851,7 +943,10 @@ export class DouyinSoloScene {
     this.cameraTarget.set(0, nightMarket ? 0.82 : heroMode ? 0.82 : 0.6,
       nightMarket ? ART.board.centerZ - .32 : ART.board.centerZ + (heroMode ? 0.25 : 0));
     const baseDistance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
-    const distance = baseDistance * (nightMarket ? (heroMode ? 1.32 : 1.20) : heroMode ? 1.12 : 1);
+    const shortHome=heroMode&&this.mode==='home'&&info.height<730;
+    const distance = baseDistance *
+      (nightMarket?(heroMode?1.39:1.20):(heroMode?1.23:1)) *
+      (shortHome?1.10:1);
     this.cameraHome.copy(this.cameraTarget).add(
       new THREE.Vector3(0, heroMode ? 0.94 : 0.88, heroMode ? 0.52 : 0.475).multiplyScalar(distance),
     );
@@ -959,71 +1054,21 @@ export class DouyinSoloScene {
   }
 
   private drawHomeHud(ctx: CanvasRenderingContext2D, width: number, height: number, safeBottomInset: number): void {
-    const info = this.platform.getSystemInfo();
-    const titleTop = this.hudTop();
-    const layout = this.homeLayout(width, height, safeBottomInset);
-    const themeMeta = THEMES[this.currentTheme];
-    const best = Number(this.platform.storage.getItem(`doublefight-best-${this.currentTheme}`) ?? 0);
-    const highest = Number(this.platform.storage.getItem(`doublefight-highest-${this.currentTheme}`) ?? 2);
-
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-
-    if (this.auth.current.status === 'authenticated') {
-      ctx.fillStyle = 'rgba(233,244,216,.78)';
-      ctx.font = '700 10px sans-serif';
-      ctx.fillText(`● ${this.auth.current.player.displayName}`, width / 2, titleTop + 68);
-    }
-
-    const brandGradient = ctx.createLinearGradient(0, titleTop, 0, titleTop + 58);
-    brandGradient.addColorStop(0, '#fff6d7');
-    brandGradient.addColorStop(1, '#efc969');
-    ctx.fillStyle = brandGradient;
-    ctx.shadowColor = 'rgba(13, 24, 31, .55)';
-    ctx.shadowBlur = 16;
-    ctx.font = '900 32px sans-serif';
-    ctx.fillText('双数对决', width / 2, titleTop + 25);
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(236,244,242,.78)';
-    ctx.font = '750 10px sans-serif';
-    ctx.fillText('DOUBLE FIGHT · 3D 2048', width / 2, titleTop + 50);
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(238,244,241,.78)';
-    ctx.font = '800 16px sans-serif';
-    ctx.fillText('⚙', 24, titleTop + 24);
-    ctx.textAlign = 'center';
-
-    const metaY = Math.max(titleTop + 72, height * 0.56);
-    ctx.fillStyle = 'rgba(12, 28, 36, .72)';
-    this.roundedRect(ctx, width / 2 - 112, metaY, 224, 74, 22);
-    ctx.fill();
-
-    ctx.fillStyle = '#ffe6a1';
-    ctx.font = '900 18px sans-serif';
-    ctx.fillText(themeMeta.label, width / 2, metaY + 22);
-    ctx.fillStyle = '#c9d9d8';
-    ctx.font = '700 9px sans-serif';
-    ctx.fillText(themeMeta.subtitle, width / 2, metaY + 42);
-    ctx.fillStyle = '#f6e9c5';
-    ctx.font = '750 11px sans-serif';
-    ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
-
-    this.drawPillButton(ctx, layout.theme, '‹   切换主题  ·  3座岛   ›', 'secondary');
-    this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
-    this.drawPillButton(ctx, layout.online,
-      isArtTheme(this.currentTheme) ? '🔒 在线对决 · 暂未开放' : '⚔  在线对决', 'secondary');
-    this.drawPillButton(ctx, layout.rank, '🏆 排行榜', 'secondary');
-    this.drawPillButton(
-      ctx,
-      layout.daily,
-      this.sidebarRewardReady() ? '🎁 领取福利' : '🎁 侧边栏福利',
-      this.sidebarRewardReady() ? 'primary' : 'secondary',
-    );
-
-    ctx.fillStyle = 'rgba(255,255,255,.62)';
-    ctx.font = '650 10px sans-serif';
-    ctx.fillText('左右滑动切换世界', width / 2, layout.solo.y - 16);
+    const card=NATIVE_THEME_CARDS[this.homeCardIndex];
+    const playable=playableTheme(card.id);
+    const best=playable
+      ? Number(this.platform.storage.getItem('doublefight-best-'+card.id)??0):0;
+    const highest=playable
+      ? Number(this.platform.storage.getItem('doublefight-highest-'+card.id)??2):2;
+    if(playableTheme(card.id))this.ensureHomePoster(card.id);
+    const poster=playable?this.homePosterCache.get(card.id)?.image:undefined;
+    drawNativeThemeMap(ctx,{
+      width,height,hudTop:this.hudTop(),safeBottomInset,
+      selected:this.homeCardIndex,best,highest,heroImage:poster,
+      accountName:this.auth.current.status==='authenticated'
+        ? this.auth.current.player.displayName:undefined,
+      sidebarReward:this.sidebarRewardReady(),
+    });
   }
 
   private drawSoloHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {
@@ -1603,20 +1648,8 @@ export class DouyinSoloScene {
     return Math.max(Math.max(12, info.safeArea.top + 8), (info.menuButton?.bottom ?? 0) + 8);
   }
 
-  private homeLayout(width: number, height: number, safeBottomInset: number) {
-    const safeBottom = Math.max(16, safeBottomInset + 12);
-    const primaryWidth = Math.min(252, width - 48);
-    const secondaryWidth = Math.min(226, width - 64);
-    const soloY = height - safeBottom - 218;
-    const utilityWidth = Math.min(112, (width - 64) / 2);
-    return {
-      settings: { x: 12, y: this.hudTop() + 5, width: 44, height: 40 },
-      theme: { x: width / 2 - 72, y: soloY - 54, width: 144, height: 34 },
-      solo: { x: width / 2 - primaryWidth / 2, y: soloY, width: primaryWidth, height: 50 },
-      online: { x: width / 2 - secondaryWidth / 2, y: soloY + 60, width: secondaryWidth, height: 44 },
-      rank: { x: width / 2 - utilityWidth - 5, y: soloY + 114, width: utilityWidth, height: 36 },
-      daily: { x: width / 2 + 5, y: soloY + 114, width: utilityWidth, height: 36 },
-    };
+  private homeLayout(width:number,height:number,safeBottomInset:number){
+    return layoutNativeThemeMap(width,height,safeBottomInset,this.hudTop());
   }
 
   private onlineLobbyLayout(width: number, height: number) {

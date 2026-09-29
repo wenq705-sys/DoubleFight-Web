@@ -36,6 +36,11 @@ await mkdir(outDir, { recursive: true });
 await copyFile('platform/douyin/game.json', `${outDir}/game.json`);
 await copyFile(projectConfigSource, `${outDir}/project.config.json`);
 await writeGeneratedAudio(outDir);
+await mkdir(outDir+'/assets/home-islands',{recursive:true});
+for (const name of ['kingdom','palace'])
+  await copyFile('public/assets/home-islands/'+name+'.png',
+    outDir+'/assets/home-islands/'+name+'.png');
+
 const artInstall = await installNativeThemePacks(artPacks, outDir, {
   existingGameBytes: (await stat(outDir+'/game.js')).size,
 });

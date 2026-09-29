@@ -38,7 +38,11 @@ const savedTheme = platform.storage.getItem('doublefight-theme');
 const theme: ThemeId =
   savedTheme === 'kingdom' || savedTheme === 'palace' || isArtTheme(savedTheme ?? '')
     ? (savedTheme as ThemeId) : 'kingdom';
-const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, theme, auth);
+// An art theme's full diorama is too expensive to construct before the FIRST frame.
+ // Paint the lightweight baseline first; restore the selected poster only; no 3D art load on Home.
+const startupTheme: ThemeId = isArtTheme(theme) ? 'kingdom' : theme;
+const game = new DouyinSoloScene(platform, client, commercial, social, audio, canvas, context, startupTheme, auth);
+let firstPaintComplete = false;
 installM212ProductPass(game, platform, client, auth, commercial);
 installM212RetentionHub(game, platform, auth, social, commercial, engagement);
 const sharedRoom = social.launchRoomCode();
@@ -60,7 +64,23 @@ const loop = new DouyinRenderLoop(
     request: callback => requestAnimationFrame(callback),
     cancel: handle => cancelAnimationFrame(handle),
   },
-  () => game.render(),
+  () => {
+    game.render();
+    if (!firstPaintComplete) {
+      firstPaintComplete = true;
+      console.info('[DoubleFight/Boot] first interactive frame painted');
+      if (startupTheme !== theme) {
+        // Re-check selection: a fast user gesture or profile switch takes precedence.
+        setTimeout(() => {
+          if (game.currentMode === 'home' && game.theme === startupTheme &&
+              platform.storage.getItem('doublefight-theme') === theme) {
+            game.setTheme(theme); // Native home mode now only changes poster and saved island.
+            console.info('[DoubleFight/Boot] deferred saved art theme activated:', theme);
+          }
+        }, 850);
+      }
+    }
+  },
   () => {
     touch.setActive(true);
     platform.refreshSystemInfo();

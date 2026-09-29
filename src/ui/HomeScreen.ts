@@ -3,23 +3,8 @@ import { ART_THEMES, ART_THEME_BY_ID, isArtTheme } from '../config/artThemes.gen
 import { themePreviews } from '../rendering/themes/ThemePreview';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
-type ThemeCard = {
-  id: ThemeId | 'candy' | 'snow';
-  title: string;
-  kicker: string;
-  icon: string;
-  locked?: boolean;
-};
-
-const CARDS: ThemeCard[] = [
-  { id: 'kingdom', title: '微缩王国', kicker: 'MINIATURE KINGDOM', icon: '♜' },
-  { id: 'palace', title: '后宫晋升', kicker: 'PALACE ASCENSION', icon: '♛' },
-  ...ART_THEMES.map((art):ThemeCard=>({
-  id:art.id,title:art.title,kicker:art.kicker,icon:art.icon,
-})),
-  { id: 'candy', title: '糖果王国', kicker: 'COMING SOON', icon: '🍭', locked: true },
-  { id: 'snow', title: '冰雪神殿', kicker: 'COMING SOON', icon: '❄️', locked: true },
-];
+import {THEME_MAP_CARDS} from '../config/themeCatalog';
+const CARDS = THEME_MAP_CARDS;
 
 export class HomeScreen {
   private readonly root: HTMLElement;

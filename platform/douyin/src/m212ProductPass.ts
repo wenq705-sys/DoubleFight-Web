@@ -262,7 +262,6 @@ function drawHomeMeta(
   const player = auth.current.status === 'authenticated' ? auth.current.player : null;
   const rating = player?.season?.rating ?? player?.pvp.rating ?? 1000;
   const balance = player?.rewards.currency ?? 0;
-  const highest = Number(platform.storage.getItem(`doublefight-highest-${game.theme}`) ?? 2);
   const profile = profileRect(width, top);
 
   round(ctx, profile.x, profile.y, profile.width, profile.height, 15);
@@ -290,12 +289,8 @@ function drawHomeMeta(
   ctx.font = '900 11px sans-serif';
   ctx.fillText(`S ${balance}`, coinX + coinW / 2, profile.y + 20);
 
-  const y = Math.max(top + 72, platform.getSystemInfo().height * 0.56) + 60;
-  ctx.fillStyle = 'rgba(12,28,36,.95)';
-  ctx.fillRect(width / 2 - 108, y - 8, 216, 17);
-  ctx.fillStyle = '#f6e9c5';
-  ctx.font = '750 10px sans-serif';
-  ctx.fillText(`最高 · ${pieceName(game.theme, highest)}`, width / 2, y);
+  // The native five-island map already draws the best/highest row; no old overlay.
+
 }
 
 function drawSoloMeta(

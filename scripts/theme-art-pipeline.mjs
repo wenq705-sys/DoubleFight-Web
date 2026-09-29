@@ -134,7 +134,7 @@ export async function collectThemeArtPacks(inputDir=INPUT_DIR){
       }
     }
     const files=[
-      ['hero',raw.assets.hero,'.png',false],
+      ['hero',raw.assets.hero,'.png',true],
       ['board',raw.assets.board,'.glb',true],
       ['environmentMobile',raw.assets.environmentMobile,'.glb',true],
     ];

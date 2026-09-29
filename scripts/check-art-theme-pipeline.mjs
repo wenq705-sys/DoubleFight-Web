@@ -36,6 +36,13 @@ test('second independent art theme registers and packages without game-code edit
         '初雪','破晓','流光','极光','冰川盛宴',
       ]}};
     await writeFile(path.join(second,'theme.json'),JSON.stringify(future,null,2));
+    // Use a valid compact LOD in the hypothetical SECOND art pack: it must satisfy
+    // the real aggregate 20 MiB platform budget, not duplicate a full 9+MiB world.
+    const compact=await readFile(path.join(first,'tiles','0016.glb'));
+    for(const file of [future.assets.board,future.assets.environmentMobile,
+      ...Object.values(future.assets.tiles)]){
+      await writeFile(path.join(second,file),compact);
+    }
     const packs=await collectThemeArtPacks(input);
     assert.deepEqual(packs.map(p=>p.id),['aurora','nightmarket']);
     const registry=registrySource(packs);
@@ -55,6 +62,11 @@ test('second independent art theme registers and packages without game-code edit
       assert((await stat(tiles)).size>50_000);
     }
     assert(native.totalBytes<20*1024*1024);
+    await assert.rejects(
+      installNativeThemePacks(packs,path.join(tmp,'overflow'),{
+        existingGameBytes:20*1024*1024,
+      }),/exceeds 20 MiB/);
+
     console.log('ART_IMPORT_SECOND_THEME_OK',packs.map(x=>x.id).join(','),
       (native.totalBytes/1048576).toFixed(2)+'MiB');
     const altered={...future,assets:{...future.assets,

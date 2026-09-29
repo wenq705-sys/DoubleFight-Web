@@ -240,14 +240,8 @@ export function installM212RetentionHub(
 
     if (game.currentMode === 'home' && !scene.settingsOpen && !scene.onboardingOpen) {
       const layout = scene.homeLayout(info.width, info.height, info.safeArea.bottom);
-      if (layout?.theme && hit(x, y, layout.theme)) {
-        state.screen = 'themes';
-        state.collectionTheme = game.theme;
-        platform.haptics.trigger('light');
-        engagement.track('theme_center_open', { theme: game.theme });
-        scene.refreshHud();
-        return;
-      }
+      // The complete mainline carousel IS the theme map. Do not open a second,
+      // obsolete three-theme selector over the five-island gallery.
       const utility = homeUtilityLayout(info.width, layout);
       if (hit(x, y, utility.collection)) {
         state.screen = 'collection';
@@ -272,9 +266,8 @@ export function installM212RetentionHub(
         void auth.refresh().then(() => { if (!scene.disposed && state.screen === 'daily') scene.refreshHud(); });
         return;
       }
-      // The M2.12 three-destination row visually covers the legacy two-button
-      // row. Consume its gutters so taps cannot leak through to old handlers.
-      if (hit(x, y, utility.cover)) return;
+      // The native painter owns the three destinations; the retention hub only
+      // handles their actions and does not paint a duplicate row over them.
     }
 
     const onboardingWasOpen = Boolean(scene.onboardingOpen);
@@ -384,7 +377,7 @@ function handleHubTap(
   if (state.screen === 'collection') {
     const layout = collectionLayout(info.width, info.height);
     if (hit(x, y, layout.close)) {
-      state.screen = 'themes';
+      state.screen = null;
       scene.refreshHud();
       return;
     }
@@ -628,29 +621,25 @@ async function claimDailyCoinReward(
   scene.refreshHud();
 }
 
-function drawHomeUtility(ctx: CanvasRenderingContext2D, width: number, height: number, scene: SceneInternals, auth: DouyinAuthClient): void {
-  const info = scene.platform.getSystemInfo();
-  const layout = scene.homeLayout(width, height, info.safeArea.bottom);
-  const utility = homeUtilityLayout(width, layout);
-  scene.drawPillButton(ctx, layout.theme, '🌍 世界中心', 'secondary');
-
-  // Replace the old two equal utility pills with three quieter destinations.
-  // This keeps Start/Online as the dominant Home actions.
-  ctx.fillStyle = 'rgba(7,23,30,.82)';
-  round(ctx, utility.cover.x, utility.cover.y, utility.cover.width, utility.cover.height, 18);
-  ctx.fill();
-
-  miniHomeButton(ctx, utility.collection, '📖', '图鉴', false);
-  miniHomeButton(ctx, utility.rank, '🏆', '排行', false);
-  const daily = auth.current.status === 'authenticated' ? auth.current.player.rewards.daily : undefined;
-  const benefitReady = Boolean(scene.sidebarRewardReady?.()) || daily?.adClaimed === false;
-  miniHomeButton(
-    ctx,
-    utility.daily,
-    benefitReady ? '🎁' : '✦',
-    benefitReady ? '可领取' : '福利',
-    benefitReady,
-  );
+function drawHomeUtility(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scene: SceneInternals,
+  auth: DouyinAuthClient,
+): void {
+  // Keep rewards discoverable without drawing the old duplicated theme-center
+  // and three-destination controls ON TOP of the new native mainline map.
+  const info=scene.platform.getSystemInfo();
+  const layout=scene.homeLayout(width,height,info.safeArea.bottom);
+  const daily=auth.current.status==='authenticated'
+    ? auth.current.player.rewards.daily:undefined;
+  const benefitReady=Boolean(scene.sidebarRewardReady?.())||daily?.adClaimed===false;
+  if(!benefitReady)return;
+  ctx.save();ctx.beginPath();ctx.arc(layout.daily.x+layout.daily.width-6,
+    layout.daily.y+5,3.5,0,Math.PI*2);
+  ctx.fillStyle='#ffe59a';ctx.shadowColor='#ffc466';ctx.shadowBlur=7;
+  ctx.fill();ctx.restore();
 }
 
 function drawRankingCenter(
@@ -1143,6 +1132,10 @@ function drawOnlinePolish(
 }
 
 function homeUtilityLayout(width: number, base: any) {
+  if(base.collection && base.rank && base.daily) return {
+    collection:base.collection,rank:base.rank,daily:base.daily,
+    cover:{x:-1,y:-1,width:0,height:0},
+  };
   const left = Math.max(22, base.rank?.x ?? 22);
   const right = Math.min(width - 22, (base.daily?.x ?? width - 22) + (base.daily?.width ?? 0));
   const y = Math.min(base.rank?.y ?? base.daily?.y ?? 0, base.daily?.y ?? base.rank?.y ?? 0);
