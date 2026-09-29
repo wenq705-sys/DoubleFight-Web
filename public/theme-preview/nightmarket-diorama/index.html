@@ -15,50 +15,85 @@ p{color:#c3b8b0;line-height:1.65}.eyebrow{color:#f6c781;letter-spacing:1.4px;fon
 .note{background:#222c2c;border:1px solid #43544d;padding:15px;border-radius:14px;margin:16px 0}
 a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;flex-wrap:wrap}
 @media(max-width:560px){.gallery{grid-template-columns:1fr 1fr}.gallery img:first-child{grid-column:span 2;grid-row:auto}.view{min-height:365px;height:54vh}}
+
+/* Five-stage emotional progression controls; mobile first, not decorative buttons. */
+.stage-corner{position:absolute;top:12px;left:12px;padding:6px 10px;z-index:2;pointer-events:none;background:#292735cf;border:1px solid #ad8961;border-radius:12px;font-size:12px;color:#ffe3ba;backdrop-filter:blur(6px);transition:background .6s}
+.stage-corner.level3,.stage-corner.level4{background:#87512ce0;box-shadow:0 0 20px #ffb56555}
+.stage-panel{margin:20px 0;border:1px solid #9e7149;background:
+ radial-gradient(ellipse at 90% 8%,#634037 0%,#2c2830 45%,#201f29 95%);border-radius:18px;
+ box-shadow:0 11px 34px #05040540;padding:16px}
+.stage-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin:6px 0}
+.stage-head h2{font-size:clamp(24px,6vw,33px);margin:0;color:#ffe0a4}
+.stage-head #maxTileLabel{border:1px solid #a87955;border-radius:40px;padding:5px 9px;white-space:nowrap;
+ font-variant-numeric:tabular-nums;font-size:12px;color:#ffcf9b}
+#stageSubtitle{margin:5px 0 15px;color:#e8bb9c}
+.stage-track{display:flex;justify-content:space-between;gap:4px}
+.stage-track span{flex:1;min-width:0;text-align:center;border-radius:8px;padding:7px 3px;
+ border:1px solid #5b5150;background:#252831;color:#9ca2a5;font-size:clamp(9px,2.5vw,12px);white-space:nowrap}
+.stage-track span.passed{border-color:#a97a45;color:#d4ba8d;background:#43322d}
+.stage-track span.current{border-color:#ffe0a2;background:#a4663c;color:#fff5db;box-shadow:0 0 10px #f4b15f69}
+.stage-progress{height:5px;border-radius:20px;margin:10px 0 17px;background:#3c3942;overflow:hidden}
+.stage-progress i{display:block;width:0;height:100%;border-radius:20px;background:linear-gradient(90deg,#af8056,#ffdc82);
+ transition:width .8s cubic-bezier(.3,.7,.2,1)}
+.stage-panel h3{font-size:13px;font-weight:650;color:#e8d1b0;margin:12px 0 7px}
+.milestones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.milestones button,.beats button{font:inherit;cursor:pointer;padding:9px 5px;border-radius:9px;
+ background:#362f35;color:#e4d6c2;border:1px solid #63524b;min-width:0}
+.milestones button.selected,.beats button.selected{background:linear-gradient(135deg,#a75c3c,#d39450);
+ color:#fff5dc;border-color:#ffcf85}
+.milestones button:active,.beats button:active{transform:scale(.97)}
+.beats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.beats button{border-color:#846346;color:#ffe0ad}
+.stage-note{font-size:12px!important;margin:12px 0 0!important;color:#bea9a0!important}
+#load-error{color:#ffb4b4}
+.stage-toast{position:absolute;top:13px;left:50%;width:max-content;max-width:calc(100% - 16px);
+ transform:translate(-50%,-16px);opacity:0;transition:opacity .25s,transform .25s;
+ z-index:3;pointer-events:none;color:#fff3d5;background:#483228e8;border:1px solid #e3b979;
+ box-shadow:0 5px 25px #0008;border-radius:22px;padding:8px 16px;font-weight:bold;text-align:center}
+.stage-toast.show{opacity:1;transform:translate(-50%,0)}
+.stage-toast.special{background:#a56b3ceb;box-shadow:0 0 26px #ffbc6e77}
+@media(max-width:520px){.milestones{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .stage-panel{padding:12px}.stage-track span{letter-spacing:-.35px}}
 </style><script type="importmap">{"imports":{"three":"../collection/three.module.js"}}</script></head>
 <body><div class="eyebrow">DOUBLE FIGHT · NIGHT MARKET THEME FACTORY</div>
 <h1>东方夜市 · 莲灯棋台</h1>
 <p>按第二张参考图制作的真实可导出微缩场景。木雕夜市、樱花、锦鲤池、莲花瀑布、青瓦商铺和月门；游戏中使用<strong>真正的 4×4 棋盘</strong>，而非概念图的格数。</p>
 <span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span>
-<div class="view" id="view"><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div></div>
+<div class="view" id="view"><div class="stage-corner" id="stageCorner">初入夜市 · 2</div><div class="stage-toast" id="stageToast" aria-live="polite"></div><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div></div>
 <div class="switch">
-<button id="all" class="chosen">完整微缩场景</button><button id="board">仅看棋盘</button><button id="top">垂直俯视 4×4</button><button id="reset">重置视角</button>
+<button id="all" class="chosen">完整微缩场景</button><button id="board">仅看棋盘</button><button id="top">垂直俯视 4×4</button><button id="reset">重置视角</button><button id="quality">画质：自动</button>
 </div><p class="small">手机单指旋转视角、双指缩放。展厅暂时不摆放 11 个棋子，先集中验证棋盘和环境的整体观感。</p>
+
+<section class="stage-panel loading" id="controls" aria-label="东方夜市五段场景演出">
+ <div class="eyebrow">THEME STAGE SYSTEM · 五段情绪递进</div>
+ <div class="stage-head"><h2 id="stageTitle">初入夜市</h2><span id="maxTileLabel">局内最高：2</span></div>
+ <p id="stageSubtitle">静谧 · 微光初燃</p>
+ <div class="stage-track" id="stageTrail" aria-label="阶段递进"></div>
+ <div class="stage-progress"><i id="stageProgress"></i></div>
+ <h3>体验不同合成里程碑</h3>
+ <div class="milestones">
+  <button type="button" data-max="2" class="selected">2 · 开局</button>
+  <button type="button" data-max="16">16 · 苏醒</button>
+  <button type="button" data-max="64">64 · 繁盛</button>
+  <button type="button" data-max="256">256 · 华彩</button>
+  <button type="button" data-max="1024">1024 · 盛会</button>
+  <button type="button" data-max="2048">2048 · 终局</button>
+ </div>
+ <h3>实时合成反馈 / 音效层叠</h3>
+ <div class="beats">
+  <button id="merge-demo" type="button">✦ 单次合成反馈</button>
+  <button id="combo-demo" type="button">✧ 连击 Combo ×4</button>
+  <button id="auto-demo" type="button">▶ 自动体验五段演出</button>
+  <button id="stage-reset" type="button">↻ 重新开局</button>
+  <button id="audio-toggle" type="button">♫ 开启分层音乐</button>
+ </div>
+ <p class="stage-note">当前是基于真实棋盘 GLB 的交互演出验收页。这里的里程碑按钮模拟游戏事件；
+ 正式接入时由局内最大合成值和连击事件驱动。长期氛围只升不降，重新开局才复位；
+ 所有特效均不占用 4×4 棋子触控区域。音乐首次点击后才会启动。</p>
+ <p class="stage-note" id="load-error" aria-live="polite"></p>
+</section>
 <h2>Blender 渲染实拍</h2><div class="gallery"><img src="./scene-hero.png" alt="完整东方夜市莲灯棋台斜俯视渲染"/>
 <img src="./scene-top.png" alt="棋盘与环境俯视校验"/><img src="./board-only.png" alt="无环境的完整4×4棋盘"/></div>
 <div class="note"><b>接入预留：</b>两份 GLB 共享同一个世界原点。棋子的位置、逻辑行列与槽位宽度单独保存在 <code>placement.json</code>，不把模型、文字或数字烘焙进棋格；场景装饰可整体关闭，方便低端手机使用。</div>
 <div class="file"><a href="./placement.json">4×4 槽位数据</a><a href="./nightmarket-diorama.blend">可编辑 Blender 工程</a><a href="./board-4x4.glb">棋盘 GLB</a><a href="./environment-mobile.glb">移动端环境 GLB</a><a href="./stats.json">面数 / 资源体积</a><a href="../collection/?v=74bd9fe">11 阶模型展厅 ↗</a></div>
-<script type="module">
-import * as T from 'three';import{GLTFLoader}from'../collection/GLTFLoader.js';
-const root=document.getElementById('view'),hint=document.getElementById('hint'),group=new T.Group();
-const ren=new T.WebGLRenderer({alpha:true,antialias:true,powerPreference:'high-performance'});
-ren.setPixelRatio(Math.min(devicePixelRatio||1,1.5));ren.outputColorSpace=T.SRGBColorSpace;
-ren.toneMapping=T.ACESFilmicToneMapping;ren.toneMappingExposure=1.26;ren.shadowMap.enabled=false;
-root.insertBefore(ren.domElement,hint);
-const scene=new T.Scene();scene.add(group);scene.add(new T.HemisphereLight(0xffe7cf,0x527284,3.0));
-let sun=new T.DirectionalLight(0xffddab,3.1);sun.position.set(-4,8,7);scene.add(sun);
-let fill=new T.DirectionalLight(0xb5e9fc,1.5);fill.position.set(5,5,-5);scene.add(fill);
-const cam=new T.OrthographicCamera(-6,6,6,-6,.1,120);let theta=.53,phi=.57,zoom=1,board=null,env=null;
-function cameraUpdate(){let radius=15;cam.position.set(radius*Math.sin(theta)*Math.cos(phi),
- radius*Math.sin(phi),radius*Math.cos(theta)*Math.cos(phi));cam.lookAt(0,.53,0);cam.zoom=zoom;cam.updateProjectionMatrix()}
-function resize(){let a=root.clientWidth/root.clientHeight,v=a<.90?14.8:12.6;cam.left=-v*a/2;cam.right=v*a/2;cam.top=v/2;cam.bottom=-v/2;
- cam.updateProjectionMatrix();ren.setSize(root.clientWidth,root.clientHeight)}resize();cameraUpdate();
-const loader=new GLTFLoader();const load=u=>new Promise((resolve,reject)=>loader.load(u,g=>resolve(g.scene),undefined,reject));
-Promise.all([load('./board-4x4.glb?v=nightmarket-v4'),load('./environment-nightmarket.glb?v=nightmarket-v4')]).then(([b,e])=>{
- board=b;env=e;group.add(env,board);hint.textContent='单指旋转 · 双指缩放 · 可关闭环境';}).catch(e=>hint.textContent='加载失败，请刷新：'+e.message);
-let pointer=false,px=0,py=0,pinch=0;const cv=ren.domElement;
-cv.onpointerdown=e=>{pointer=true;px=e.clientX;py=e.clientY;cv.setPointerCapture(e.pointerId)};
-cv.onpointerup=()=>pointer=false;cv.onpointercancel=()=>pointer=false;
-cv.onpointermove=e=>{if(!pointer)return;theta-=(e.clientX-px)*.007;phi=Math.max(.22,Math.min(1.54,phi+(e.clientY-py)*.006));px=e.clientX;py=e.clientY;cameraUpdate()};
-cv.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.70,Math.min(2.5,zoom*(1-e.deltaY*.0007)));cameraUpdate()},{passive:false});
-cv.addEventListener('touchmove',e=>{if(e.touches.length===2){e.preventDefault();
- let d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
- if(pinch)zoom=Math.max(.70,Math.min(2.5,zoom*d/pinch));pinch=d;cameraUpdate()}else pinch=0},{passive:false});
-function selected(id){for(let x of ['all','board','top','reset'])document.getElementById(x).classList.toggle('chosen',x===id)}
-document.getElementById('all').onclick=()=>{if(env)env.visible=true;phi=.57;theta=.53;zoom=1;cameraUpdate();selected('all')};
-document.getElementById('board').onclick=()=>{if(env)env.visible=false;phi=.72;theta=.49;zoom=1.45;cameraUpdate();selected('board')};
-document.getElementById('top').onclick=()=>{if(env)env.visible=true;theta=0;phi=1.56;zoom=1.06;cameraUpdate();selected('top')};
-document.getElementById('reset').onclick=()=>{if(env)env.visible=true;theta=.53;phi=.57;zoom=1;cameraUpdate();selected('all')};
-let last=0;function animate(t){requestAnimationFrame(animate);if(t-last>32){last=t;ren.render(scene,cam)}}requestAnimationFrame(animate);
-addEventListener('resize',resize);
-</script></body></html>
+<script type="module" src="./scene-app.mjs"></script></body></html>
