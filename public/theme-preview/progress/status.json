@@ -13,8 +13,8 @@
                       "name":  "炭火狸猫"
                   },
                   {
-                      "detail":  "Direct Blender modeling in progress",
-                      "status":  "work",
+                      "detail":  "GLB 1.63 MB",
+                      "status":  "done",
                       "level":  8,
                       "name":  "月灯玉兔"
                   },
@@ -68,5 +68,5 @@
                   }
               ],
     "note":  "仅统计同时存在 Blender 工程和有效 GLB 的独立重制模型（Codex 或直接 Blender）。",
-    "updated":  "2026-09-29 10:33:17"
+    "updated":  "2026-09-29 10:38:01"
 }
