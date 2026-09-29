@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { BoardTile, CellPosition, Direction, MoveResult, TileMotion } from '../../../shared/index';
 import { ART } from '../../config/artDirection';
 import type { ThemeId } from '../../config/themes';
+import { isArtTheme } from '../../config/artThemes.generated';
 import type { QualityLevel } from '../../performance/PerformanceManager';
 import type { PresentationEvent } from '../../battle/PresentationEvents';
 import { sameTiles } from '../../battle/PresentationEvents';
@@ -76,7 +77,7 @@ export class BattleBoardView {
 
   get theme(): ThemeId { return this.currentTheme; }
   get nightmarketMood(): { stage: number; name: string; highest: number } | null {
-    if (this.currentTheme !== 'nightmarket') return null;
+    if (!isArtTheme(this.currentTheme)) return null;
     return { stage: this.environment.moodStage ?? 0,
       name: this.environment.moodName ?? '初入夜市',
       highest: this.environment.reachedValue ?? 2 };

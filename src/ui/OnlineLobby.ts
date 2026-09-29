@@ -4,9 +4,11 @@ import {
   SKILL_DEFINITIONS,
   type SkillId,
   type SkillLoadout,
+  type NetworkThemeId,
 } from '../../shared/index';
 import type { ThemeId } from '../config/themes';
 import { THEMES } from '../config/themes';
+import { isArtTheme } from '../config/artThemes.generated';
 import { OnlineClient, type OnlineClientState } from '../network/OnlineClient';
 
 const SKILL_ORDER: SkillId[] = ['random_clear', 'shield', 'petrify', 'shuffle', 'purify'];
@@ -34,7 +36,7 @@ export class OnlineLobby {
   private readonly library: HTMLDialogElement;
   private readonly changeSkills: HTMLButtonElement;
 
-  private currentTheme: Exclude<ThemeId, 'nightmarket'> = 'kingdom';
+  private currentTheme: NetworkThemeId = 'kingdom';
   private loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT];
   private activeSlot = 0;
   private onCloseHandler: (() => void) | null = null;
@@ -233,7 +235,7 @@ export class OnlineLobby {
 
   show(theme: ThemeId): void {
     if (!browserPlatform.storage.getItem('doublefight-online-theme'))
-      this.currentTheme = theme === 'nightmarket' ? 'palace' : theme;
+      this.currentTheme = isArtTheme(theme) ? 'palace' : theme;
     this.renderSetup();
     this.root.classList.remove('online-lobby--hidden');
     this.root.setAttribute('aria-hidden', 'false');
@@ -259,7 +261,7 @@ export class OnlineLobby {
   }
 
   setTheme(theme: ThemeId): void {
-    this.currentTheme = theme === 'nightmarket' ? 'palace' : theme;
+    this.currentTheme = isArtTheme(theme) ? 'palace' : theme;
     const state = this.client.snapshot();
     if (state.room?.phase === 'lobby') this.client.setTheme(this.currentTheme);
   }

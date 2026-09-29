@@ -4,9 +4,13 @@ import type { ThemeId } from '../../config/themes';
 import { KingdomEnvironment } from '../environment/KingdomEnvironment';
 import { PalaceEnvironment } from '../environment/PalaceEnvironment';
 import { NightMarketEnvironment } from '../environment/NightMarketEnvironment';
+import { ArtPackEnvironment } from '../environment/ArtPackEnvironment';
+import { ART_THEMES } from '../../config/artThemes.generated';
+import type { ArtThemeId } from '../../config/artThemes.generated';
 import { TileFactory, type TileVisual } from '../tiles/TileFactory';
 import { PalaceTileFactory } from '../tiles/PalaceTileFactory';
 import { NightMarketTileFactory } from '../tiles/NightMarketTileFactory';
+import { ArtPackTileFactory } from '../tiles/ArtPackTileFactory';
 import { KINGDOM_SIZING, PALACE_SIZING, type TileVisualSizingProfile } from '../tiles/TileSizingPolicy';
 
 export interface EffectPalette {
@@ -46,6 +50,32 @@ const NIGHTMARKET_SIZING: TileVisualSizingProfile = {
   minimumHeight: () => 2.42,
 };
 
+const rgb=(color:string)=>Number.parseInt(color.slice(1),16);
+function importedArtPresentation(art:(typeof ART_THEMES)[number]):ThemePresentation{
+  return {
+    sizing: {
+      horizontalLimit:()=>1.56,
+      minimumHeight:()=>2.42,
+    },
+    factory:new ArtPackTileFactory(art),
+    environment:detail=>new ArtPackEnvironment(art,detail),
+    skillReaction:(environment,positions)=>positions.forEach(position=>environment.impact(256,position)),
+    surfaceY:art.placement.gameSurfaceY,
+    sky:rgb(art.render.sky),fog:rgb(art.render.fog),exposure:art.render.exposure,
+    effects:{
+      primary:()=>rgb(art.render.accent),
+      secondary:rgb(art.render.secondary),spawn:rgb(art.render.spawn),
+      skill:rgb(art.render.skill),skillSecondary:rgb(art.render.secondary),
+      skillLight:5.2,confetti:art.render.confetti.map(rgb),
+    },
+    feedback:{move:8,merge:[11,6,14],skill:[22,18,38,20,62]},
+  };
+}
+const EXTRA_ART_PRESENTATIONS = Object.fromEntries(
+  ART_THEMES.filter(art => art.id !== 'nightmarket')
+    .map(art => [art.id, importedArtPresentation(art)]),
+) as Record<Exclude<ArtThemeId, 'nightmarket'>, ThemePresentation>;
+
 export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
   kingdom: {
     sizing: KINGDOM_SIZING,
@@ -60,6 +90,7 @@ export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
     },
     feedback: { move: 8, merge: [11, 6, 14], skill: [22, 18, 38, 20, 62] },
   },
+  ...EXTRA_ART_PRESENTATIONS,
   nightmarket: {
     sizing: NIGHTMARKET_SIZING,
     factory: nightmarketFactory,

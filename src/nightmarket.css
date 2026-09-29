@@ -1,34 +1,34 @@
 /* Production home-map island and full-screen gameplay presentation, not the demo page. */
-.home[data-theme="nightmarket"]{
+.home.home--art-theme{
   background:radial-gradient(ellipse at 53% 17%,#825246 0%,#473a46 28%,transparent 65%),
     linear-gradient(180deg,#302b3d 0%,#46525b 49%,#47676a 100%);
 }
-.home[data-theme="nightmarket"] .home__sky-glow{
+.home.home--art-theme .home__sky-glow{
   background:radial-gradient(circle at 15% 29%,#ffcc8999 0 2.6%,transparent 3.0%),
     radial-gradient(circle at 76% 16%,#ffe3a799 0 4.1%,transparent 4.4%),
     radial-gradient(circle at 72% 54%,#ffd8ac55 0 2.1%,transparent 2.5%);
 }
-.home[data-theme="nightmarket"] .home__logo{
+.home.home--art-theme .home__logo{
   color:#ffefd2;-webkit-text-stroke-color:#5b3124;
   text-shadow:0 4px 0 #ad6a44,0 7px 0 #684032,0 12px 28px #0005;
 }
-.home[data-theme="nightmarket"] .home__logo-sub{
+.home.home--art-theme .home__logo-sub{
   color:#68472e;background:#ffddb3ec;border-color:#d2a478;
 }
-.home[data-theme="nightmarket"] .home__kicker{color:#ffcf9a;letter-spacing:.17em}
-.home[data-theme="nightmarket"] .home__title{
+.home.home--art-theme .home__kicker{color:#ffcf9a;letter-spacing:.17em}
+.home.home--art-theme .home__title{
   color:#ffe6ae;text-shadow:0 3px 15px #211822bd,0 3px 0 #71482c;
 }
-.home[data-theme="nightmarket"] .home__record{color:#ffdfb7}
-.home[data-theme="nightmarket"] .home__dots i{background:#ffbd8555}
-.home[data-theme="nightmarket"] .home__dots i.is-active{background:#ffd98b}
-.home[data-theme="nightmarket"] .home__tip{color:#ffdfc5}
-.home[data-theme="nightmarket"] .home__start{
+.home.home--art-theme .home__record{color:#ffdfb7}
+.home.home--art-theme .home__dots i{background:#ffbd8555}
+.home.home--art-theme .home__dots i.is-active{background:#ffd98b}
+.home.home--art-theme .home__tip{color:#ffdfc5}
+.home.home--art-theme .home__start{
   color:#fff5d6;border-color:#ffdc94;
-  background:linear-gradient(165deg,#da9652,#a95b37 66%,#8f4636);
+  background:linear-gradient(165deg,var(--art-accent,#da9652),#a95b37 66%,#8f4636);
   box-shadow:0 6px 0 #65352e,0 15px 31px #1c141b6b,inset 0 2px 0 #fffbda55;
 }
-.home-island--nightmarket .home-island__land{
+.home-island--art-theme .home-island__land{
   width:min(88vw,515px);aspect-ratio:1.05/1;max-height:min(53vh,490px);
   transform:translateY(1%) rotate(-2deg);
   filter:drop-shadow(0 21px 24px #0d112466);
@@ -38,44 +38,44 @@
   from{transform:translateY(2%) rotate(-2deg)}
   to{transform:translateY(-1.8%) rotate(1deg)}
 }
-.home-island--nightmarket .home-island__rim{
+.home-island--art-theme .home-island__rim{
   inset:11% 6% 6%;border-radius:34% 34% 38% 38%;
   background:linear-gradient(160deg,#c59156,#755140 65%,#3c4050);
   box-shadow:0 17px 0 #5f3b32,0 25px 27px #130c1799;
 }
-.home-island--nightmarket .home-island__world{
+.home-island--art-theme .home-island__world{
   inset:1% 2% 9%;border:3px solid #f1c485a8;border-radius:34% 34% 36% 36%;
   background:radial-gradient(ellipse at 50% 35%,#d0ae83,#698c8b 69%,#32414a 100%);
   box-shadow:inset 0 -15px 20px #34404788,0 0 0 6px #533e3273;
   overflow:hidden;
 }
-.home-island--nightmarket .home-island__hero{
+.home-island--art-theme .home-island__hero{
   position:absolute;inset:0;width:100%;height:100%;
   object-fit:contain;object-position:center center;
   filter:saturate(1.13) contrast(1.05) drop-shadow(0 9px 10px #0004);
 }
-.home-island--nightmarket .home-island__cloud{background:#ffdfb788;filter:blur(5px)}
-.home-island--nightmarket .home-island__prop{display:none}
-.home-island--nightmarket .home-island__world::after{
+.home-island--art-theme .home-island__cloud{background:#ffdfb788;filter:blur(5px)}
+.home-island--art-theme .home-island__prop{display:none}
+.home-island--art-theme .home-island__world::after{
   content:"🏮  莲灯盛会";position:absolute;bottom:5%;left:50%;
   transform:translateX(-50%);white-space:nowrap;font-size:11px;
   font-weight:900;color:#fff0c4;background:#4d3029cc;
   padding:5px 13px;border:1px solid #dfb783;border-radius:99px;
   box-shadow:0 5px 10px #1a121c88;letter-spacing:.12em;
 }
-.home[data-theme="nightmarket"] .home__online:disabled{
+.home.home--art-theme .home__online:disabled{
   opacity:.60;filter:grayscale(.17);pointer-events:none;
 }
-body[data-theme="nightmarket"] .hud__new{
+body.art-theme-active .hud__new{
   border-color:#eed4a1;background:linear-gradient(#c58751,#91513b);
   box-shadow:0 5px 0 #5b322c,0 10px 22px #160e1740;
 }
-body[data-theme="nightmarket"] .hud__theme,
-body[data-theme="nightmarket"] .hud__skill{
+body.art-theme-active .hud__theme,
+body.art-theme-active .hud__skill{
   border-color:#dcba78;background:linear-gradient(#745a48,#44313a);
   color:#fff3c7;
 }
-body[data-theme="nightmarket"] .hud__toast{
+body.art-theme-active .hud__toast{
   color:#ffe6b6;text-shadow:0 5px 0 #ab673c,0 10px 0 #87504b,0 14px 30px #2b151a77;
 }
 .hud__nightmarket-stage{
@@ -86,7 +86,7 @@ body[data-theme="nightmarket"] .hud__toast{
   font-size:11px;font-weight:850;white-space:nowrap;box-shadow:0 3px 16px #1b101b7a;
   backdrop-filter:blur(7px);
 }
-body[data-theme="nightmarket"] .hud__nightmarket-stage{display:block}
+body.art-theme-active .hud__nightmarket-stage{display:block}
 .hud__nightmarket-stage--pulse{animation:nightmarket-stage-rise .85s cubic-bezier(.12,.66,.2,1)}
 @keyframes nightmarket-stage-rise{
   0%{transform:translateX(-50%) scale(.84);filter:brightness(1)}
@@ -94,7 +94,7 @@ body[data-theme="nightmarket"] .hud__nightmarket-stage{display:block}
   100%{transform:translateX(-50%) scale(1);filter:brightness(1)}
 }
 @media(max-width:700px){
-  .home-island--nightmarket .home-island__land{width:min(91vw,410px)}
+  .home-island--art-theme .home-island__land{width:min(91vw,410px)}
   .hud__nightmarket-stage{top:max(141px,calc(env(safe-area-inset-top) + 125px));font-size:10px}
 }
 @media(orientation:landscape) and (max-height:560px){
@@ -104,14 +104,14 @@ body[data-theme="nightmarket"] .hud__nightmarket-stage{display:block}
 
 /* V1 visual QA: the inherited elliptical land backplate looked like a huge brown disc.
    The real Blender diorama already includes its own sculpted floating foundation. */
-.home-island--nightmarket .home-island__rim{display:none}
-.home-island--nightmarket .home-island__world{
+.home-island--art-theme .home-island__rim{display:none}
+.home-island--art-theme .home-island__world{
   inset:0 2% 8%;border:0;border-radius:0;background:none;
   box-shadow:none;overflow:visible;
 }
-.home-island--nightmarket .home-island__hero{
+.home-island--art-theme .home-island__hero{
   object-fit:contain;filter:saturate(1.12) contrast(1.07) drop-shadow(0 20px 16px #090b1788);
 }
-.home-island--nightmarket .home-island__world::after{
+.home-island--art-theme .home-island__world::after{
   bottom:-2%;background:#604136dd;border-color:#e9be8e;
 }

@@ -1,4 +1,4 @@
-import { KINGDOM_RANKS, PALACE_RANKS, NIGHTMARKET_RANKS, type ThemeId, type ThemeMeta } from '../config/themes';
+import { pieceName, type ThemeId, type ThemeMeta } from '../config/themes';
 import { browserPlatform } from '../platform/browser/BrowserPlatform';
 
 export class Hud {
@@ -85,11 +85,7 @@ export class Hud {
   }
 
   setHighest(value: number, theme: ThemeId): void {
-    this.highestValue.textContent = theme === 'nightmarket'
-      ? (NIGHTMARKET_RANKS[value] ?? NIGHTMARKET_RANKS[2048])
-      : theme === 'palace'
-      ? (PALACE_RANKS[value] ?? '凤仪')
-      : (KINGDOM_RANKS[value] ?? '王国奇观');
+    this.highestValue.textContent = pieceName(theme,value);
   }
 
   setTheme(theme: ThemeMeta): void {

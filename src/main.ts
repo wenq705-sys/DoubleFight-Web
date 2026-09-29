@@ -1,5 +1,6 @@
 import './styles.css';
 import './nightmarket.css';
+import { isArtTheme } from './config/artThemes.generated';
 import { SoloController } from './battle/SoloController';
 import type { Direction } from './game/board/types';
 import { ART } from './config/artDirection';
@@ -36,8 +37,8 @@ let inGame = false;
 let pointerStart: { x: number; y: number; time: number } | null = null;
 let skillCharges = 3;
 const savedTheme = storage.getItem('doublefight-theme');
-let theme: ThemeId = savedTheme === 'nightmarket' || savedTheme === 'kingdom'
-  ? savedTheme : 'palace';
+let theme: ThemeId = savedTheme === 'kingdom' || isArtTheme(savedTheme??'')
+  ? (savedTheme as ThemeId) : 'palace';
 
 const home = new HomeScreen(app, theme);
 const onlineEndpoint = resolveOnlineEndpoint();
@@ -70,6 +71,7 @@ function applyTheme(nextTheme: ThemeId): void {
   storage.setItem('doublefight-theme', theme);
   scene.setTheme(theme, board.tiles());
   hud.setTheme(THEMES[theme]);
+  document.body.classList.toggle('art-theme-active',isArtTheme(theme));
   const currentMood = scene.boardView.nightmarketMood;
   hud.setNightMarketStage(currentMood?.stage ?? null,
     currentMood?.name ?? '', currentMood?.highest ?? 2);

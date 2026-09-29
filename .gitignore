@@ -11,3 +11,6 @@ test-results/
 .env
 .env.*
 !.env.example
+
+# Local Douyin export ZIPs and native-project backups
+/exports/

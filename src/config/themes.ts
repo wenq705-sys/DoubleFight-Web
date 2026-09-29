@@ -1,4 +1,6 @@
-export type ThemeId = 'kingdom' | 'palace' | 'nightmarket';
+import { ART_THEMES, ART_THEME_BY_ID } from './artThemes.generated';
+import type { ArtThemeId } from './artThemes.generated';
+export type ThemeId = 'kingdom' | 'palace' | ArtThemeId;
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -7,7 +9,7 @@ export interface ThemeMeta {
   highestLabel: string;
 }
 
-export const THEMES: Record<ThemeId, ThemeMeta> = {
+export const THEMES = {
   kingdom: {
     id: 'kingdom',
     label: '微缩王国',
@@ -20,13 +22,10 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
     subtitle: '后宫晋升 · 2048',
     highestLabel: '宫廷位分',
   },
-  nightmarket: {
-    id: 'nightmarket',
-    label: '东方夜市',
-    subtitle: '莲灯盛会 · 十一阶灵物',
-    highestLabel: '莲灯灵物',
-  },
-};
+  ...Object.fromEntries(ART_THEMES.map(art=>[art.id,{
+    id:art.id,label:art.label,subtitle:art.subtitle,highestLabel:art.highestLabel,
+  }])),
+} as Record<ThemeId,ThemeMeta>;
 
 export const PIECE_VALUES = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048] as const;
 export type PieceValue = typeof PIECE_VALUES[number];
@@ -62,11 +61,8 @@ export const KINGDOM_RANKS: Record<number, string> = {
   2048: '王国奇观',
 };
 
-export const NIGHTMARKET_RANKS: Record<number, string> = {
-  2: '莲花团子', 4: '炭火狸猫', 8: '月灯玉兔', 16: '翡翠醒狮',
-  32: '琉璃锦鲤', 64: '紫晶魔女', 128: '玫瑰花妖', 256: '黄金招财蟾',
-  512: '冰晶凤凰', 1024: '月华九尾狐', 2048: '赤焰东方龙',
-};
+export const NIGHTMARKET_RANKS: Record<number,string> =
+  ART_THEME_BY_ID.nightmarket?.ranks ?? {};
 
 export interface PieceMeta {
   theme: ThemeId;
@@ -77,7 +73,8 @@ export interface PieceMeta {
 }
 
 const rankTable = (theme: ThemeId): Record<number, string> =>
-  theme === 'nightmarket' ? NIGHTMARKET_RANKS : theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
+  theme === 'palace' ? PALACE_RANKS : theme === 'kingdom' ? KINGDOM_RANKS :
+  (ART_THEME_BY_ID[theme]?.ranks ?? KINGDOM_RANKS);
 
 export function normalizePieceValue(value: number): PieceValue {
   if (!Number.isFinite(value) || value <= 2) return 2;

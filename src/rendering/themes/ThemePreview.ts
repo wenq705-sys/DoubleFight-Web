@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { THEME_PRESENTATIONS } from './ThemePresentation';
 import { fitTile } from '../tiles/TileSizingPolicy';
 import type { ThemeId } from '../../config/themes';
+import { ART_THEMES } from '../../config/artThemes.generated';
 
 let previews: Record<ThemeId, string> | undefined;
 /** Two cached images from the actual game factories, with no additional animation loop. */
@@ -26,7 +27,8 @@ export function themePreviews(): Record<ThemeId, string> {
     scene.remove(model);
   }
   // Real authored Blender scene shown on the home map; no fake icon.
-  previews.nightmarket = import.meta.env.BASE_URL + 'assets/themes/nightmarket/scene-hero.png';
+  for(const art of ART_THEMES)
+    previews[art.id] = import.meta.env.BASE_URL + 'assets/themes/'+art.id+'/'+art.assets.hero;
   renderer.dispose(); renderer.forceContextLoss();
   return previews;
 }

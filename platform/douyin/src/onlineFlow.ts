@@ -10,6 +10,7 @@ import {
   type SkillLoadout,
 } from '../../../shared/index';
 import type { ThemeId } from '../../../src/config/themes';
+import { isArtTheme } from '../../../src/config/artThemes.generated';
 import { OnlineController } from '../../../src/battle/OnlineController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { OnlineClient, type OnlineClientState } from '../../../src/network/OnlineClient';
@@ -55,7 +56,7 @@ export class DouyinOnlineFlow {
     this.local = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
     this.remote = new BattleBoardView('kingdom', 'board', undefined, onPresentation, true);
     this.controller = new OnlineController(this.local, this.remote);
-    this.selectedTheme = initialTheme === 'nightmarket' ? 'palace' : initialTheme;
+    this.selectedTheme = isArtTheme(initialTheme) ? 'palace' : initialTheme;
     // The mini-game has no unreviewed free-text nickname entry. Authenticated
     // connections receive their profile name from the server instead.
     this.playerName = '玩家';
@@ -74,7 +75,7 @@ export class DouyinOnlineFlow {
   open(theme: ThemeId): void {
     this.opened = true;
     if (!this.platform.storage.getItem('doublefight-online-theme'))
-      this.selectedTheme = theme === 'nightmarket' ? 'palace' : theme;
+      this.selectedTheme = isArtTheme(theme) ? 'palace' : theme;
     this.client.connect();
     this.emit();
   }
@@ -116,7 +117,7 @@ export class DouyinOnlineFlow {
   setTheme(theme: ThemeId): void {
     const state = this.client.snapshot();
     if (state.matchmaking.status === 'searching' || state.match?.phase === 'playing') return;
-    this.selectedTheme = theme === 'nightmarket' ? 'palace' : theme;
+    this.selectedTheme = isArtTheme(theme) ? 'palace' : theme;
     this.platform.storage.setItem('doublefight-online-theme', this.selectedTheme);
     if (state.room?.phase === 'lobby') this.client.setTheme(this.selectedTheme);
     this.emit();

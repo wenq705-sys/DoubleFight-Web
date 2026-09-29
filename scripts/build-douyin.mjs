@@ -1,11 +1,17 @@
 import { build } from 'vite';
-import { copyFile, mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile, stat, readdir } from 'node:fs/promises';
+import { collectThemeArtPacks, syncThemeRegistry, installNativeThemePacks }
+  from './theme-art-pipeline.mjs';
 
 const release = process.argv.includes('--release') || process.env.DOUYIN_RELEASE === '1';
 const outDir = release ? 'platform/douyin/dist-release' : 'platform/douyin/dist';
 const projectConfigSource = release
   ? 'platform/douyin/project.release.config.json'
   : 'platform/douyin/project.config.json';
+
+// Validate and regenerate the platform-neutral art registry BEFORE Vite compiles its imports.
+const artPacks = await collectThemeArtPacks();
+await syncThemeRegistry(artPacks);
 
 await build({
   configFile: false,
@@ -30,7 +36,24 @@ await mkdir(outDir, { recursive: true });
 await copyFile('platform/douyin/game.json', `${outDir}/game.json`);
 await copyFile(projectConfigSource, `${outDir}/project.config.json`);
 await writeGeneratedAudio(outDir);
-await writeNightMarketNativeAssets(outDir);
+const artInstall = await installNativeThemePacks(artPacks, outDir, {
+  existingGameBytes: (await stat(outDir+'/game.js')).size,
+});
+async function directoryBytes(dir) {
+  let sum = 0;
+  for (const entry of await readdir(dir, {withFileTypes:true})) {
+    const full=dir+'/'+entry.name;
+    sum += entry.isDirectory() ? await directoryBytes(full) : (await stat(full)).size;
+  }
+  return sum;
+}
+const totalPackageBytes=await directoryBytes(outDir);
+if (totalPackageBytes>20*1024*1024) {
+  throw new Error('All native files exceed 20MiB after art import ('+
+    (totalPackageBytes/1048576).toFixed(2)+' MiB); move large art into Douyin subpackages.');
+}
+console.log('[ThemeArtImport] native:',artInstall.installed.map(x=>x.id).join(', '),
+  'total package:',(totalPackageBytes/1048576).toFixed(2)+'MiB');
 
 const projectConfig = JSON.parse(await readFile(`${outDir}/project.config.json`, 'utf8'));
 const urlCheck = projectConfig.setting?.urlCheck;
@@ -43,46 +66,6 @@ if (!release && urlCheck !== false) {
 
 console.log(`Douyin ${release ? 'release' : 'development'} build written to ${outDir}`);
 
-
-/**
- * Douyin IDE uploads only outDir (publicDir:false). This copies the entire approved
- * native LOD scene into its LOCAL READ-ONLY package for FileSystemManager.readFile.
- * A non-subpackage Douyin game currently permits <=20MiB; reserve main logic within it.
- */
-async function writeNightMarketNativeAssets(outDir) {
-  const source = 'public/assets/themes/nightmarket';
-  const target = outDir + '/assets/nightmarket';
-  const levels = ['0002','0004','0008','0016','0032','0064','0128','0256','0512','1024','2048'];
-  const paths = ['board-4x4.glb','environment-mobile.glb',...levels.map(level=>'tiles/'+level+'.glb')];
-  let assetBytes = 0;
-  for (const path of paths) {
-    const bytes = await readFile(source+'/'+path);
-    if (bytes.length<64 || bytes.toString('ascii',0,4)!=='glTF' || bytes.readUInt32LE(4)!==2 ||
-        bytes.readUInt32LE(8)!==bytes.length) {
-      throw new Error('Invalid native night-market GLB: '+path);
-    }
-    const dir = path.includes('/') ? target+'/tiles' : target;
-    await mkdir(dir,{recursive:true});
-    await writeFile(target+'/'+path,bytes);
-    const copied = await stat(target+'/'+path);
-    if (copied.size!==bytes.length) throw new Error('Partial model copy: '+path);
-    assetBytes+=bytes.length;
-  }
-  const packageSize=assetBytes+(await stat(outDir+'/game.js')).size;
-  // Non-subpackaged Douyin mini-games are limited to 20MiB. Future add-ons must
-  // use subpackages, not silently bloat launch or increase cold-start time.
-  if (packageSize > 20*1024*1024) throw new Error('Native package exceeds 20MiB size budget');
-  await writeFile(target+'/manifest.json',JSON.stringify({
-    scene:'东方夜市·莲灯盛会',
-    placement:'native packaged /assets/nightmarket/*, no external URLs',
-    characterModels:levels.length,
-    generatedPaths:paths,assetBytes,gameJsBytes:(await stat(outDir+'/game.js')).size,
-    packageBudgetMiB:20,packageSoFarBytes:packageSize,
-  },null,2));
-  console.log('Douyin native night-market installed:',paths.length,'GLBs',
-    (assetBytes/1048576).toFixed(2)+'MiB',
-    'total+game.js:',(packageSize/1048576).toFixed(2)+'MiB');
-}
 
 function wavBuffer(sequence, sampleRate = 22050) {
   const samples = [];

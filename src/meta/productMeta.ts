@@ -1,4 +1,5 @@
 import type { ThemeId } from '../config/themes';
+import { ART_THEMES } from '../config/artThemes.generated';
 
 export const S_COIN = {
   dailyLogin: 15,
@@ -98,8 +99,10 @@ export interface ThemeAccess {
 
 // Both currently shipped themes remain free. Future themes use the same
 // contract instead of introducing a second currency or direct purchase.
-export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
+export const THEME_ACCESS = {
   kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, trial: 'none' },
   palace: { theme: 'palace', free: true, permanentPrice: 0, trial: 'none' },
-  nightmarket: { theme: 'nightmarket', free: true, permanentPrice: 0, trial: 'none' },
-};
+  ...Object.fromEntries(ART_THEMES.map(art=>[art.id,{
+    theme:art.id,free:true,permanentPrice:0,trial:'none',
+  }])),
+} as Record<ThemeId,ThemeAccess>;
