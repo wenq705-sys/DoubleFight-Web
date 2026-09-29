@@ -1,8 +1,8 @@
 {
-  "source_triangles": 125098,
-  "mobile_triangles": 66729,
-  "import_triangles": 66703,
+  "source_triangles": 136548,
+  "mobile_triangles": 72799,
+  "import_triangles": 72773,
   "valid": true,
-  "glb_bytes": 2009548,
-  "mesh_count": 21
+  "glb_bytes": 2186544,
+  "mesh_count": 22
 }

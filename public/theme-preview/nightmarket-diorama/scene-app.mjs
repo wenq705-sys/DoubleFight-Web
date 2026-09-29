@@ -149,7 +149,7 @@ $('quality').onclick=async()=>{
   const next=currentQuality==='mobile'?'full':'mobile';
   btn.textContent='切换中…';
   try{
-    const newer=await load('./'+(next==='mobile'?'environment-mobile':'environment-nightmarket')+'.glb?v=mood-stage-v1');
+    const newer=await load('./'+(next==='mobile'?'environment-mobile':'environment-nightmarket')+'.glb?v=nightmarket-art-v2');
     const old=env;env=newer;group.add(newer);visual.bindEnvironment(newer);
     newer.visible=old?.visible??true;disposeGLB(old);
     currentQuality=next;
@@ -159,8 +159,8 @@ $('quality').onclick=async()=>{
   finally{switching=false;btn.disabled=false}
 };
 Promise.all([
-  load('./board-4x4.glb?v=mood-stage-v1'),
-  load('./'+(mobile?'environment-mobile':'environment-nightmarket')+'.glb?v=mood-stage-v1'),
+  load('./board-4x4.glb?v=nightmarket-art-v2'),
+  load('./'+(mobile?'environment-mobile':'environment-nightmarket')+'.glb?v=nightmarket-art-v2'),
 ]).then(([b,e])=>{
   board=b;env=e;group.add(e,b);
   visual=new ThemeStageVisual({scene,boardRoot:b,envRoot:e,renderer:ren,mobile,sun,hemi,fill});
