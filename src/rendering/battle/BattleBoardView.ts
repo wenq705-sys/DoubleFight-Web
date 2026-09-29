@@ -442,9 +442,16 @@ export class BattleBoardView {
   }
 
   private addTile(tile: BoardTile, spawn: boolean): TileInstance {
-    const root = this.getFittedTemplate(this.currentTheme, tile.value).clone(true) as THREE.Group;
-    const animatedParts: THREE.Object3D[] = [];
-    root.traverse(node => { if (node.userData.tileAnimated) animatedParts.push(node); });
+    // Imported GLBs arrive asynchronously. Cloning a loading template here permanently
+    // strands the live tile with its octahedron placeholder when the template updates.
+    // Create a live visual for art themes; their factories share decoded source GLBs,
+    // so this does not reload model data or duplicate geometry/material resources.
+    const artVisual = isArtTheme(this.currentTheme)
+      ? fitTile(this.presentation.factory.create(tile.value), tile.value, this.presentation.sizing)
+      : null;
+    const root = artVisual?.root ?? this.getFittedTemplate(this.currentTheme, tile.value).clone(true) as THREE.Group;
+    const animatedParts: THREE.Object3D[] = artVisual?.animatedParts ?? [];
+    if (!artVisual) root.traverse(node => { if (node.userData.tileAnimated) animatedParts.push(node); });
     const instance: TileInstance = { root, animatedParts, value: tile.value };
     instance.root.position.copy(this.cellPosition(tile.row, tile.col));
     instance.root.name = `Tile-${tile.id}-${tile.value}`;

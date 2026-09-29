@@ -38,6 +38,34 @@ function assetPath(themeId: string, relativePath: string): string {
   }
   return 'assets/themes/'+themeId+'/'+relativePath;
 }
+/** The Douyin Helium runtime does not consistently expose Web TextDecoder.
+ * GLTFLoader 0.162 instantiates it unconditionally even for texture-free GLBs. */
+function ensureUtf8Decoder(): void {
+  if (typeof globalThis.TextDecoder === 'function') return;
+  class MiniUtf8Decoder {
+    decode(input?: ArrayBuffer | ArrayBufferView): string {
+      if (!input) return '';
+      const bytes = input instanceof ArrayBuffer
+        ? new Uint8Array(input)
+        : new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+      const parts: string[] = [];
+      for (let i = 0; i < bytes.length;) {
+        const x = bytes[i++];
+        let cp = x;
+        if (x >= 0xc2 && x < 0xe0) cp = ((x & 31) << 6) | (bytes[i++] & 63);
+        else if (x >= 0xe0 && x < 0xf0) cp = ((x & 15) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63);
+        else if (x >= 0xf0 && x < 0xf5) cp = ((x & 7) << 18) | ((bytes[i++] & 63) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63);
+        else if (x >= 0x80) cp = 0xfffd;
+        if (cp > 0xffff) { cp -= 0x10000; parts.push(String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 1023))); }
+        else parts.push(String.fromCharCode(cp));
+      }
+      return parts.join('');
+    }
+  }
+  (globalThis as typeof globalThis & { TextDecoder: typeof TextDecoder }).TextDecoder =
+    MiniUtf8Decoder as unknown as typeof TextDecoder;
+}
+
 export function loadArtThemeGLB(
   loader: GLTFLoader,
   themeId: string,
@@ -52,7 +80,7 @@ export function loadArtThemeGLB(
     tt!.getFileSystemManager!().readFile({
       filePath: path,
       success: result => {
-        try{loader.parse(arrayBuffer(result.data),'',onLoad,onError)}
+        try{ensureUtf8Decoder();loader.parse(arrayBuffer(result.data),'',onLoad,onError)}
         catch(error){onError(error)}
       },
       fail: error => onError(new Error(path+': '+(error.errMsg??'package read failed'))),
