@@ -139,7 +139,7 @@ export class DouyinSoloScene {
     this.resize();
     this.applyThemeLook();
     this.boardView.prewarmTheme(theme);
-    this.boardView.reset(HOME_TILES);
+    this.boardView.reset(this.homePreviewTiles());
 
     this.uiCanvas = this.platform.createCanvas();
     this.uiContext = this.uiCanvas.getContext('2d') as CanvasRenderingContext2D;
@@ -188,6 +188,15 @@ export class DouyinSoloScene {
       this.sidebarSupported = supported;
       if (!this.disposed && this.mode === 'home') this.refreshHud();
     });
+  }
+
+  /** Restrict startup/home gallery to two low-LOD art tiles, not six high-ranked GLBs. */
+  private homePreviewTiles(): readonly BoardTile[] {
+    if (!isArtTheme(this.currentTheme)) return HOME_TILES;
+    return [
+      {id:9101,value:2,row:1,col:1},
+      {id:9102,value:4,row:1,col:2},
+    ];
   }
 
   get theme(): ThemeId { return this.currentTheme; }
@@ -311,9 +320,10 @@ export class DouyinSoloScene {
     this.currentTheme = theme;
     this.platform.storage.setItem('doublefight-theme', theme);
     this.boardView.setTheme(theme);
-    this.boardView.prewarmTheme(theme);
+    // The two low-rank preview tiles preload on demand; do not also decode rank 8.
+    if (!isArtTheme(theme) || this.mode !== 'home') this.boardView.prewarmTheme(theme);
     if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
-      this.boardView.reset(HOME_TILES);
+      this.boardView.reset(this.homePreviewTiles());
     }
     this.configureCamera();
     this.applyThemeLook();
@@ -466,7 +476,7 @@ export class DouyinSoloScene {
     this.online.local.root.visible = false;
     this.online.remote.root.visible = false;
     this.boardView.root.visible = true;
-    this.boardView.reset(HOME_TILES);
+    this.boardView.reset(this.homePreviewTiles());
     this.configureCamera();
     this.applyThemeLook();
     this.platform.haptics.trigger('light');
