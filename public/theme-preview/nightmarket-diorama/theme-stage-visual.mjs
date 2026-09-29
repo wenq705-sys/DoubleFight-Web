@@ -4,6 +4,7 @@
  * low-cost and located outside the unobstructed 4x4 gameplay area.
  */
 import * as T from 'three';
+import {NightMarketSpectacle} from './theme-stage-spectacle.mjs?v=mood-visible-v3';
 const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
 const seeded=(i,k=0)=>{const v=Math.sin((i+1)*127.1+(k+1)*311.7)*43758.5453123;return v-Math.floor(v)};
 function tagMaterial(m){
@@ -48,6 +49,8 @@ export class ThemeStageVisual{
     this.mobile=mobile;this.t=0;this.materials=[];this.sun=sun;this.hemi=hemi;this.fill=fill;
     this.root=new T.Group();this.root.name='ThemeStageVFX | no collision with game slots';
     scene.add(this.root);
+    this.spectacle=new NightMarketSpectacle(scene,{mobile});
+    this.root.add(this.spectacle.root);
     this.portal=ring(.845,0x98ffd8);this.portal.position.set(3.05,1.90,-4.04);
     this.root.add(this.portal);
     this.portalInner=ring(.756,0xffdfa2);this.portalInner.position.set(3.05,1.90,-4.018);
@@ -160,10 +163,10 @@ export class ThemeStageVisual{
   }
   update(dt,s){
     this.t+=dt;const pulse=clamp(s.pulse,0,1.5),fest=s.festival;
-    this.renderer.toneMappingExposure=1.06+.18*fest+.045*pulse;
-    if(this.sun)this.sun.intensity=2.28+.58*fest+.18*pulse;
-    if(this.hemi)this.hemi.intensity=2.19+.53*fest;
-    if(this.fill)this.fill.intensity=.96+.22*fest;
+    this.renderer.toneMappingExposure=.79+.49*fest+.055*pulse;
+    if(this.sun)this.sun.intensity=1.48+1.77*fest+.20*pulse;
+    if(this.hemi)this.hemi.intensity=1.32+1.32*fest;
+    if(this.fill)this.fill.intensity=.59+.65*fest;
     this.scene.background.copy(this.baseBG).lerp(this.festivalBG,clamp(fest*.50+.08*pulse));
     for(const {m,tag,original} of this.materials){
       if(!m?.emissive)continue;
@@ -214,6 +217,7 @@ export class ThemeStageVisual{
     }
     this.updateParticles(this.petals,dt,s.petals,.65);
     this.updateParticles(this.sparkles,dt,s.sparkles,.68);
+    this.spectacle.update(dt,s);
     this.burstAge+=dt;
     const burstT=this.burstAge/(.76+.22*this.burstPower);
     this.burst.visible=burstT<1;
@@ -239,6 +243,7 @@ export class ThemeStageVisual{
     p.geo.attributes.position.needsUpdate=true;
   }
   dispose(){
+    this.spectacle.dispose();
     this.root.parent?.remove(this.root);
     for(const r of [...this.ripples,this.portal,this.portalInner,this.portalBloom,this.boardGlow,this.burst])
       r.material.dispose();

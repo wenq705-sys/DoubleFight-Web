@@ -1,7 +1,7 @@
 import * as T from 'three';
 import {GLTFLoader} from '../collection/GLTFLoader.js';
 import {MOOD_STAGES,ThemeMoodDirector} from './theme-stage-core.mjs';
-import {ThemeStageVisual} from './theme-stage-visual.mjs';
+import {ThemeStageVisual} from './theme-stage-visual.mjs?v=mood-visible-v3';
 import {ThemeStageAudio} from './theme-stage-audio.mjs';
 const $=id=>document.getElementById(id);
 const root=$('view'),hint=$('hint'),group=new T.Group();
@@ -65,6 +65,13 @@ function refreshUI(){
   const s=director.snapshot();
   maxLabel.textContent='局内最高：'+s.highest;
   stageCorner.textContent=s.stageName+' · '+s.highest;
+  for(const q of document.querySelectorAll('[data-quick]')){
+    const qTile=Number(q.dataset.quick);
+    const isActive=qTile===2048?s.highest===2048:
+      qTile===2?s.stage===0:s.highest>=qTile&&
+        (qTile===1024||s.highest<(qTile===16?64:qTile===64?256:1024));
+    q.classList.toggle('active',isActive);
+  }
   for(const b of document.querySelectorAll('[data-max]'))
     b.classList.toggle('selected',Number(b.dataset.max)===s.highest);
 }
@@ -91,6 +98,11 @@ document.querySelectorAll('[data-max]').forEach(b=>b.onclick=()=>{
   const value=Number(b.dataset.max);
   if(value===2){director.reset();refreshUI();return}
   advance(value);
+});
+document.querySelectorAll('[data-quick]').forEach(q=>q.onclick=()=>{
+  const tile=Number(q.dataset.quick);
+  const original=document.querySelector('[data-max="'+tile+'"]');
+  if(original)original.click();
 });
 $('merge-demo').onclick=()=>{
   director.moment('merge',{tile:director.highest,

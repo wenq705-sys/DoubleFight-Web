@@ -54,12 +54,36 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
 .stage-toast.special{background:#a56b3ceb;box-shadow:0 0 26px #ffbc6e77}
 @media(max-width:520px){.milestones{grid-template-columns:repeat(3,minmax(0,1fr))}
  .stage-panel{padding:12px}.stage-track span{letter-spacing:-.35px}}
+.view .hint{bottom:67px!important;opacity:.87}
+.quick-stage-control{position:absolute;z-index:4;left:9px;right:9px;bottom:12px;
+ display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.quick-stage-control button{cursor:pointer;touch-action:manipulation;min-width:0;
+ background:linear-gradient(#443831de,#29232ce8);border:1px solid #8d674d;border-radius:9px;
+ color:#e7c7a9;font:600 clamp(10px,2.45vw,12px) system-ui;padding:10px 2px;
+ box-shadow:0 3px 10px #0007}
+.quick-stage-control button.active{background:linear-gradient(#f4be6b,#a76331);color:#301b16;
+ border-color:#ffe3a0;box-shadow:0 0 15px #ffd27d99}
+.quick-stage-control button:last-child{color:#ffe5ae;border-color:#d4a660}
+.quick-stage-control button:last-child.active{color:#38220f;background:linear-gradient(#fff1be,#efbb51)}
+.mood-comparison{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 25px}
+.mood-comparison figure{margin:0;border:1px solid #8b623f;border-radius:13px;overflow:hidden;background:#1d1c27}
+.mood-comparison img{display:block;width:100%;height:auto}
+.mood-comparison figcaption{text-align:center;font-size:12px;color:#fbd8a5;padding:9px 3px;background:#392a25}
+@media(max-width:480px){.mood-comparison{gap:5px}.mood-comparison figcaption{font-size:10px;padding:6px 2px}}
 </style><script type="importmap">{"imports":{"three":"../collection/three.module.js"}}</script></head>
 <body><div class="eyebrow">DOUBLE FIGHT · NIGHT MARKET THEME FACTORY</div>
 <h1>东方夜市 · 莲灯棋台</h1>
 <p>按第二张参考图制作的真实可导出微缩场景。木雕夜市、樱花、锦鲤池、莲花瀑布、青瓦商铺和月门；游戏中使用<strong>真正的 4×4 棋盘</strong>，而非概念图的格数。</p>
-<span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span>
-<div class="view" id="view"><div class="stage-corner" id="stageCorner">初入夜市 · 2</div><div class="stage-toast" id="stageToast" aria-live="polite"></div><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div></div>
+<span class="badge">4×4 · 16 个独立棋格</span><span class="badge">棋盘 / 环境分离 GLB</span><span class="badge">直接 Blender 制作 · 未调用 Codex</span><span class="badge" style="background:#8d4f24;color:#fff0ca;border-color:#e2a85c">新版 V3：画面底部可直接切换阶段</span>
+<div class="view" id="view"><div class="stage-corner" id="stageCorner">初入夜市 · 2</div><div class="stage-toast" id="stageToast" aria-live="polite"></div><div class="hint" id="hint">正在装载 3D 棋盘与环境…</div>
+  <div class="quick-stage-control" aria-label="直接切换夜市五阶段" id="quickStages">
+    <button data-quick="2" class="active">初入</button>
+    <button data-quick="16">苏醒</button>
+    <button data-quick="64">繁盛</button>
+    <button data-quick="256">华彩</button>
+    <button data-quick="1024">盛会</button>
+    <button data-quick="2048">2048</button>
+  </div></div>
 <div class="switch">
 <button id="all" class="chosen">完整微缩场景</button><button id="board">仅看棋盘</button><button id="top">垂直俯视 4×4</button><button id="reset">重置视角</button><button id="quality">画质：自动</button>
 </div><p class="small">手机单指旋转视角、双指缩放。展厅暂时不摆放 11 个棋子，先集中验证棋盘和环境的整体观感。</p>
@@ -92,8 +116,14 @@ a{color:#fbc78a}.small{font-size:12px;color:#b4a7a0}.file{display:flex;gap:11px;
  所有特效均不占用 4×4 棋子触控区域。音乐首次点击后才会启动。</p>
  <p class="stage-note" id="load-error" aria-live="polite"></p>
 </section>
+<h2>实际运行的五段演出对比</h2>
+<p class="small">以下是浏览器加载同一套真实 3D 场景、相同镜头拍下的开局与盛会。点击上方 3D 画面底部的「初入 / 苏醒 / 繁盛 / 华彩 / 盛会 / 2048」，亲自切换。</p>
+<div class="mood-comparison">
+ <figure><img src="./mood-stage0-visible.png?v=mood-visible-v3" alt="开局初入夜市：轻夜色、灯光未完全点亮"/><figcaption>开局 · 初入夜市（2）</figcaption></figure>
+ <figure><img src="./mood-stage4-visible.png?v=mood-visible-v3" alt="1024 盛会：悬空宫灯、鎏金流光、莲灯、水景和月门共同点亮"/><figcaption>1024 · 神灯盛会（亮度与舞台结构跃迁）</figcaption></figure>
+</div>
 <h2>Blender V2 · 棋盘和夜市场景精修</h2><p class="small">16 格新增极浅六瓣莲纹、四角金玉雕饰、夜市屋檐灯花、月门双层镶边、临水涟漪。<a href="./scene-before-v2.png?v=nightmarket-art-v2">查看 V1 原版对照 ↗</a></p><div class="gallery"><img src="./scene-hero.png?v=nightmarket-art-v2" alt="完整东方夜市莲灯棋台斜俯视渲染"/>
 <img src="./scene-top.png?v=nightmarket-art-v2" alt="棋盘与环境俯视校验"/><img src="./board-only.png?v=nightmarket-art-v2" alt="无环境的完整4×4棋盘"/></div>
 <div class="note"><b>接入预留：</b>两份 GLB 共享同一个世界原点。棋子的位置、逻辑行列与槽位宽度单独保存在 <code>placement.json</code>，不把模型、文字或数字烘焙进棋格；场景装饰可整体关闭，方便低端手机使用。</div>
 <div class="file"><a href="./placement.json">4×4 槽位数据</a><a href="./nightmarket-diorama.blend">可编辑 Blender 工程</a><a href="./board-4x4.glb">棋盘 GLB</a><a href="./environment-mobile.glb">移动端环境 GLB</a><a href="./stats.json">面数 / 资源体积</a><a href="../collection/?v=74bd9fe">11 阶模型展厅 ↗</a></div>
-<script type="module" src="./scene-app.mjs?v=nightmarket-art-v2"></script></body></html>
+<script type="module" src="./scene-app.mjs?v=mood-visible-v3"></script></body></html>
