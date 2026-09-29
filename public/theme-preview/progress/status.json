@@ -7,8 +7,8 @@
                       "name":  "莲花团子"
                   },
                   {
-                      "detail":  "等待 Codex 原创建模",
-                      "status":  "todo",
+                      "detail":  "GLB 1.36 MB",
+                      "status":  "done",
                       "level":  4,
                       "name":  "炭火狸猫"
                   },
@@ -68,5 +68,5 @@
                   }
               ],
     "note":  "仅统计同时存在 Blender 工程和有效 GLB 的独立重制模型（Codex 或直接 Blender）。",
-    "updated":  "2026-09-29 10:28:01"
+    "updated":  "2026-09-29 10:32:58"
 }
