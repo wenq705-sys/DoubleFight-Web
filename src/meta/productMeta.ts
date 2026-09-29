@@ -101,4 +101,5 @@ export interface ThemeAccess {
 export const THEME_ACCESS: Record<ThemeId, ThemeAccess> = {
   kingdom: { theme: 'kingdom', free: true, permanentPrice: 0, trial: 'none' },
   palace: { theme: 'palace', free: true, permanentPrice: 0, trial: 'none' },
+  nightmarket: { theme: 'nightmarket', free: true, permanentPrice: 0, trial: 'none' },
 };

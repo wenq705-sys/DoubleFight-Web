@@ -145,6 +145,8 @@ export class DouyinSocial {
   }
 
   async setAscensionRank(theme: ThemeId, elapsedMs: number): Promise<boolean> {
+    // This new Solo theme has no registered ascension zone yet; do not submit to another theme's leaderboard.
+    if (theme === 'nightmarket') return false;
     if (!this.api.setImRankData || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return false;
     const duration = Math.min(1_999_999_999, Math.max(1, Math.floor(elapsedMs)));
     // Native numeric ranks sort descending. Ascension is lower-is-better, so use
@@ -169,6 +171,7 @@ export class DouyinSocial {
   }
 
   async openAscensionRank(theme: ThemeId): Promise<boolean> {
+    if (theme === 'nightmarket') return false;
     if (!this.api.getImRankList) return false;
     return new Promise(resolve => {
       try {

@@ -34,7 +34,7 @@ export class OnlineLobby {
   private readonly library: HTMLDialogElement;
   private readonly changeSkills: HTMLButtonElement;
 
-  private currentTheme: ThemeId = 'kingdom';
+  private currentTheme: Exclude<ThemeId, 'nightmarket'> = 'kingdom';
   private loadout: SkillLoadout = [...DEFAULT_SKILL_LOADOUT];
   private activeSlot = 0;
   private onCloseHandler: (() => void) | null = null;
@@ -232,7 +232,8 @@ export class OnlineLobby {
   }
 
   show(theme: ThemeId): void {
-    if (!browserPlatform.storage.getItem('doublefight-online-theme')) this.currentTheme = theme;
+    if (!browserPlatform.storage.getItem('doublefight-online-theme'))
+      this.currentTheme = theme === 'nightmarket' ? 'palace' : theme;
     this.renderSetup();
     this.root.classList.remove('online-lobby--hidden');
     this.root.setAttribute('aria-hidden', 'false');
@@ -258,9 +259,9 @@ export class OnlineLobby {
   }
 
   setTheme(theme: ThemeId): void {
-    this.currentTheme = theme;
+    this.currentTheme = theme === 'nightmarket' ? 'palace' : theme;
     const state = this.client.snapshot();
-    if (state.room?.phase === 'lobby') this.client.setTheme(theme);
+    if (state.room?.phase === 'lobby') this.client.setTheme(this.currentTheme);
   }
 
   private assignSkill(skillId: SkillId): void {

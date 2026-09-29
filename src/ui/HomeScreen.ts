@@ -13,6 +13,7 @@ type ThemeCard = {
 const CARDS: ThemeCard[] = [
   { id: 'kingdom', title: '微缩王国', kicker: 'MINIATURE KINGDOM', icon: '♜' },
   { id: 'palace', title: '后宫晋升', kicker: 'PALACE ASCENSION', icon: '♛' },
+  { id: 'nightmarket', title: '东方夜市·莲灯盛会', kicker: 'ORIENTAL LANTERN FESTIVAL', icon: '🏮' },
   { id: 'candy', title: '糖果王国', kicker: 'COMING SOON', icon: '🍭', locked: true },
   { id: 'snow', title: '冰雪神殿', kicker: 'COMING SOON', icon: '❄️', locked: true },
 ];
@@ -43,7 +44,7 @@ export class HomeScreen {
         <div class="home-island__land">
           <div class="home-island__rim"></div>
           <div class="home-island__world">
-            ${card.id === 'kingdom' || card.id === 'palace' ? `<img class="home-island__hero" src="${previews[card.id]}" alt="${card.title}主题棋子" />` : `<span class="home-island__icon">${card.icon}</span>`}
+            ${card.id === 'kingdom' || card.id === 'palace' || card.id === 'nightmarket' ? `<img class="home-island__hero" src="${previews[card.id]}" alt="${card.title}主题棋子" />` : `<span class="home-island__icon">${card.icon}</span>`}
             <i class="home-island__prop home-island__prop--1"></i>
             <i class="home-island__prop home-island__prop--2"></i>
             <i class="home-island__prop home-island__prop--3"></i>
@@ -122,13 +123,13 @@ export class HomeScreen {
   private bind(): void {
     this.startButton.addEventListener('click', () => {
       const card = CARDS[this.index];
-      if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
+      if (card.locked || card.id === 'candy' || card.id === 'snow') return;
       this.onStartHandler?.(card.id);
     });
 
     this.onlineButton.addEventListener('click', () => {
       const card = CARDS[this.index];
-      if (card.locked || (card.id !== 'kingdom' && card.id !== 'palace')) return;
+      if (card.locked || card.id === 'nightmarket' || card.id === 'candy' || card.id === 'snow') return;
       this.onOnlineHandler?.(card.id);
     });
 
@@ -165,13 +166,13 @@ export class HomeScreen {
     this.title.textContent = card.title;
     this.kicker.textContent = card.kicker;
     this.startButton.disabled = Boolean(card.locked);
-    this.onlineButton.disabled = Boolean(card.locked);
+    this.onlineButton.disabled = Boolean(card.locked || card.id === 'nightmarket');
     this.startButton.textContent = card.locked ? '即将开放' : '进入世界';
-    this.onlineButton.innerHTML = card.locked
-      ? '<span>🔒</span> 在线对决 <small>未开放</small>'
+    this.onlineButton.innerHTML = card.locked || card.id === 'nightmarket'
+      ? '<span>🔒</span> 在线对决 <small>暂未开放</small>'
       : '<span>⚔</span> 在线对决';
 
-    if (card.id === 'kingdom' || card.id === 'palace') {
+    if (card.id === 'kingdom' || card.id === 'palace' || card.id === 'nightmarket') {
       const best = Number(browserPlatform.storage.getItem(`doublefight-best-${card.id}`) ?? 0);
       const highest = Number(browserPlatform.storage.getItem(`doublefight-highest-${card.id}`) ?? 2);
       this.record.textContent = `最高 ${highest}  ·  BEST ${best.toLocaleString('zh-CN')}`;

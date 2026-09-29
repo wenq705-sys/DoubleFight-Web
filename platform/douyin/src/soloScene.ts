@@ -741,7 +741,7 @@ export class DouyinSoloScene {
       void this.social.setSoloRank(this.score);
     }
     if (this.highest > previousHighest) this.platform.storage.setItem(highestKey, String(this.highest));
-    if (improved || forceSync) {
+    if ((improved || forceSync) && this.currentTheme !== 'nightmarket') {
       void this.auth.syncSoloProgressDetailed(
         this.currentTheme,
         Math.max(previousBest, this.score),

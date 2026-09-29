@@ -25,6 +25,8 @@ export function themePreviews(): Record<ThemeId, string> {
     previews[theme] = renderer.domElement.toDataURL();
     scene.remove(model);
   }
+  // Real authored Blender scene shown on the home map; no fake icon.
+  previews.nightmarket = import.meta.env.BASE_URL + 'assets/themes/nightmarket/scene-hero.png';
   renderer.dispose(); renderer.forceContextLoss();
   return previews;
 }

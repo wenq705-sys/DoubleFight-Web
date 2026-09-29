@@ -1,4 +1,5 @@
 import './styles.css';
+import './nightmarket.css';
 import { SoloController } from './battle/SoloController';
 import type { Direction } from './game/board/types';
 import { ART } from './config/artDirection';
@@ -34,7 +35,9 @@ let inputLocked = false;
 let inGame = false;
 let pointerStart: { x: number; y: number; time: number } | null = null;
 let skillCharges = 3;
-let theme: ThemeId = storage.getItem('doublefight-theme') === 'kingdom' ? 'kingdom' : 'palace';
+const savedTheme = storage.getItem('doublefight-theme');
+let theme: ThemeId = savedTheme === 'nightmarket' || savedTheme === 'kingdom'
+  ? savedTheme : 'palace';
 
 const home = new HomeScreen(app, theme);
 const onlineEndpoint = resolveOnlineEndpoint();
@@ -56,6 +59,8 @@ const persistThemeRecord = (): void => {
 const refresh = () => {
   hud.setScore(board.score);
   hud.setHighest(highest(), theme);
+  const mood = scene.boardView.nightmarketMood;
+  hud.setNightMarketStage(mood?.stage ?? null, mood?.name ?? '', mood?.highest ?? 2);
   hud.setSkillCharges(skillCharges);
   persistThemeRecord();
 };
@@ -65,6 +70,9 @@ function applyTheme(nextTheme: ThemeId): void {
   storage.setItem('doublefight-theme', theme);
   scene.setTheme(theme, board.tiles());
   hud.setTheme(THEMES[theme]);
+  const currentMood = scene.boardView.nightmarketMood;
+  hud.setNightMarketStage(currentMood?.stage ?? null,
+    currentMood?.name ?? '', currentMood?.highest ?? 2);
 }
 
 function reset(): void {

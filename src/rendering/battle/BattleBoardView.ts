@@ -75,10 +75,19 @@ export class BattleBoardView {
   }
 
   get theme(): ThemeId { return this.currentTheme; }
+  get nightmarketMood(): { stage: number; name: string; highest: number } | null {
+    if (this.currentTheme !== 'nightmarket') return null;
+    return { stage: this.environment.moodStage ?? 0,
+      name: this.environment.moodName ?? '初入夜市',
+      highest: this.environment.reachedValue ?? 2 };
+  }
   get presentation() { return THEME_PRESENTATIONS[this.currentTheme]; }
   snapshot(): BoardTile[] { return this.targetTiles.map(tile => ({ ...tile })); }
   setQuality(quality: QualityLevel): void { this.effects.setQuality(quality); }
-  prewarmTheme(theme: ThemeId): void { THEME_PRESENTATIONS[theme].factory.warmup([2, 4, 8, 16, 32, 64, 128]); }
+  prewarmTheme(theme: ThemeId): void {
+    THEME_PRESENTATIONS[theme].factory.warmup(theme === 'nightmarket'
+      ? [2, 4, 8] : [2, 4, 8, 16, 32, 64, 128]);
+  }
 
   setTheme(theme: ThemeId): void {
     if (theme === this.currentTheme) return;
@@ -107,6 +116,7 @@ export class BattleBoardView {
     this.blockers.forEach(mesh => { mesh.visible = false; });
     this.shield.visible = false;
     tiles.forEach(tile => this.addTile(tile, false));
+    this.environment.resetMood?.(tiles);
   }
 
   setGesture(dx: number, dy: number): void {
@@ -181,6 +191,7 @@ export class BattleBoardView {
         this.cameraPunch = Math.max(this.cameraPunch, merge.value >= 512 ? 1 : 0.26);
       }
       if (result.spawned) this.spawn(result.spawned);
+      this.environment.onBoardMove?.(result);
     });
   }
 

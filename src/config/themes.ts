@@ -1,4 +1,4 @@
-export type ThemeId = 'kingdom' | 'palace';
+export type ThemeId = 'kingdom' | 'palace' | 'nightmarket';
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -19,6 +19,12 @@ export const THEMES: Record<ThemeId, ThemeMeta> = {
     label: '后宫晋升',
     subtitle: '后宫晋升 · 2048',
     highestLabel: '宫廷位分',
+  },
+  nightmarket: {
+    id: 'nightmarket',
+    label: '东方夜市',
+    subtitle: '莲灯盛会 · 十一阶灵物',
+    highestLabel: '莲灯灵物',
   },
 };
 
@@ -56,6 +62,12 @@ export const KINGDOM_RANKS: Record<number, string> = {
   2048: '王国奇观',
 };
 
+export const NIGHTMARKET_RANKS: Record<number, string> = {
+  2: '莲花团子', 4: '炭火狸猫', 8: '月灯玉兔', 16: '翡翠醒狮',
+  32: '琉璃锦鲤', 64: '紫晶魔女', 128: '玫瑰花妖', 256: '黄金招财蟾',
+  512: '冰晶凤凰', 1024: '月华九尾狐', 2048: '赤焰东方龙',
+};
+
 export interface PieceMeta {
   theme: ThemeId;
   value: PieceValue;
@@ -64,7 +76,8 @@ export interface PieceMeta {
   isFinal: boolean;
 }
 
-const rankTable = (theme: ThemeId): Record<number, string> => theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
+const rankTable = (theme: ThemeId): Record<number, string> =>
+  theme === 'nightmarket' ? NIGHTMARKET_RANKS : theme === 'palace' ? PALACE_RANKS : KINGDOM_RANKS;
 
 export function normalizePieceValue(value: number): PieceValue {
   if (!Number.isFinite(value) || value <= 2) return 2;

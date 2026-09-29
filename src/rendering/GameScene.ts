@@ -81,6 +81,8 @@ export class GameScene {
     this.scene.fog = new THREE.Fog(presentation.fog, this.cameraHome.distanceTo(this.cameraTarget) + 8, this.cameraHome.distanceTo(this.cameraTarget) + 28);
     this.renderer.toneMappingExposure = presentation.exposure;
     this.prewarmTheme(theme);
+    // The authored 3D diorama extends beyond the 4x4 field: reframe on island selection.
+    this.resize();
   }
   reset(tiles: BoardTile[]): void { this.boardView.reset(tiles); }
   setGesture(dx: number, dy: number): void { this.boardView.setGesture(dx, dy); }
@@ -132,8 +134,11 @@ export class GameScene {
     this.camera.aspect = ratio;
 
     this.camera.fov = 42;
-    this.cameraTarget.set(0, 0.6, ART.board.centerZ);
-    const distance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
+    const nightMarket = this.boardView.theme === 'nightmarket';
+    this.cameraTarget.set(0, nightMarket ? 0.82 : 0.6,
+      nightMarket ? ART.board.centerZ - .32 : ART.board.centerZ);
+    const distance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio))
+      * (nightMarket ? 1.20 : 1);
     this.cameraHome.copy(this.cameraTarget).add(new THREE.Vector3(0, 0.88, 0.475).multiplyScalar(distance));
     this.scene.fog = new THREE.Fog(this.boardView.presentation.fog, distance + 8, distance + 28);
 

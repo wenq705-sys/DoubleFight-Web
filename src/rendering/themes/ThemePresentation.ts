@@ -3,8 +3,10 @@ import { ART } from '../../config/artDirection';
 import type { ThemeId } from '../../config/themes';
 import { KingdomEnvironment } from '../environment/KingdomEnvironment';
 import { PalaceEnvironment } from '../environment/PalaceEnvironment';
+import { NightMarketEnvironment } from '../environment/NightMarketEnvironment';
 import { TileFactory, type TileVisual } from '../tiles/TileFactory';
 import { PalaceTileFactory } from '../tiles/PalaceTileFactory';
+import { NightMarketTileFactory } from '../tiles/NightMarketTileFactory';
 import { KINGDOM_SIZING, PALACE_SIZING, type TileVisualSizingProfile } from '../tiles/TileSizingPolicy';
 
 export interface EffectPalette {
@@ -17,7 +19,13 @@ export interface EffectPalette {
   confetti: readonly number[];
 }
 export type EnvironmentDetail = 'full' | 'duel' | 'board';
-export type ThemeEnvironment = Pick<KingdomEnvironment, 'root' | 'update' | 'impact' | 'setGesture' | 'clearGesture' | 'pulseDirection'>;
+export type ThemeEnvironment = Pick<KingdomEnvironment, 'root' | 'update' | 'impact' | 'setGesture' | 'clearGesture' | 'pulseDirection'> & {
+  resetMood?: (tiles: readonly import('../../game/board/types').BoardTile[]) => void;
+  onBoardMove?: (result: import('../../game/board/types').MoveResult) => void;
+  readonly moodStage?: number;
+  readonly moodName?: string;
+  readonly reachedValue?: number;
+};
 export interface ThemePresentation {
   sizing: TileVisualSizingProfile;
   factory: { create(value: number): TileVisual; warmup(values: number[]): void };
@@ -32,6 +40,12 @@ export interface ThemePresentation {
 }
 
 /** Theme dependencies live here; online controllers and board motion have no theme branches. */
+const nightmarketFactory = new NightMarketTileFactory();
+const NIGHTMARKET_SIZING: TileVisualSizingProfile = {
+  horizontalLimit: () => 1.56,
+  minimumHeight: () => 2.42,
+};
+
 export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
   kingdom: {
     sizing: KINGDOM_SIZING,
@@ -43,6 +57,20 @@ export const THEME_PRESENTATIONS: Record<ThemeId, ThemePresentation> = {
       secondary: ART.colors.royalBlueLight, spawn: 0xffffff, skill: 0x8de7ff,
       skillSecondary: 0xffb064, skillLight: 5.4,
       confetti: [ART.colors.gold, ART.colors.royalBlueLight, ART.colors.coralLight, ART.colors.flowerPink, ART.colors.teal],
+    },
+    feedback: { move: 8, merge: [11, 6, 14], skill: [22, 18, 38, 20, 62] },
+  },
+  nightmarket: {
+    sizing: NIGHTMARKET_SIZING,
+    factory: nightmarketFactory,
+    environment: detail => new NightMarketEnvironment(detail),
+    skillReaction: (environment, positions) => positions.forEach(p => environment.impact(256, p)),
+    surfaceY: 0.695, sky: 0x232732, fog: 0x272b37, exposure: 0.89,
+    effects: {
+      primary: value => value >= 1024 ? 0xffd38b : value >= 256 ? 0xffb66e : value >= 64 ? 0xffd4a2 : 0x9be3cc,
+      secondary: 0xffb87d, spawn: 0xffe0ac, skill: 0xe5b77b,
+      skillSecondary: 0x80dfd0, skillLight: 5.2,
+      confetti: [0xffcf83, 0xe884a9, 0x83d6c6, 0xffe6be, 0xee986a],
     },
     feedback: { move: 8, merge: [11, 6, 14], skill: [22, 18, 38, 20, 62] },
   },
