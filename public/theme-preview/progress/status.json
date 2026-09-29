@@ -1,8 +1,8 @@
 {
     "items":  [
                   {
-                      "detail":  "Zero-Codex Blender sample ready, not yet approved",
-                      "status":  "trial",
+                      "detail":  "GLB 1.99 MB",
+                      "status":  "done",
                       "level":  2,
                       "name":  "莲花团子"
                   },
@@ -67,6 +67,6 @@
                       "name":  "赤焰东方龙"
                   }
               ],
-    "note":  "仅统计同时存在 Blender 工程和有效 GLB 的 Codex 原创模型。",
-    "updated":  "2026-09-29 10:23:01"
+    "note":  "仅统计同时存在 Blender 工程和有效 GLB 的独立重制模型（Codex 或直接 Blender）。",
+    "updated":  "2026-09-29 10:23:24"
 }
