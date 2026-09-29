@@ -8,14 +8,23 @@ const clamp=(a,min=0,max=1)=>Math.max(min,Math.min(max,a));
 const petalsA=new T.Color(0xffa3a9),petalsB=new T.Color(0xffd9b7);
 const jade=new T.Color(0x7fdace),gold=new T.Color(0xffd37a);
 function radialTexture(){
-  const c=document.createElement('canvas');c.width=c.height=128;
-  const ctx=c.getContext('2d'),g=ctx.createRadialGradient(64,64,2,64,64,64);
-  g.addColorStop(0,'rgba(255,251,220,1)');
-  g.addColorStop(.12,'rgba(255,235,165,.94)');
-  g.addColorStop(.32,'rgba(255,173,72,.54)');
-  g.addColorStop(.65,'rgba(255,125,38,.17)');
-  g.addColorStop(1,'rgba(255,115,20,0)');
-  ctx.fillStyle=g;ctx.fillRect(0,0,128,128);return new T.CanvasTexture(c);
+  // Native Douyin has no DOM document: generate the SAME glowing sprite in pure RGBA.
+  // DataTexture can be uploaded directly to the existing single on-screen WebGL context.
+  const dim=64,data=new Uint8Array(dim*dim*4);
+  const ramp=[[0,255,251,220,255],[.12,255,235,165,240],[.32,255,173,72,138],
+    [.65,255,125,38,43],[1,255,115,20,0]];
+  for(let y=0;y<dim;y++)for(let x=0;x<dim;x++){
+    const d=Math.max(0,Math.hypot(x+.5-dim/2,y+.5-dim/2)/(dim/2));
+    let n=1;while(n<ramp.length-1&&ramp[n][0]<d)n++;
+    const lo=ramp[n-1],hi=ramp[n],t=Math.max(0,Math.min(1,(d-lo[0])/(hi[0]-lo[0])));
+    const i=(y*dim+x)*4;
+    for(let channel=0;channel<4;channel++)
+      data[i+channel]=Math.round(lo[channel+1]+(hi[channel+1]-lo[channel+1])*t);
+  }
+  const tex=new T.DataTexture(data,dim,dim,T.RGBAFormat);
+  tex.colorSpace=T.SRGBColorSpace;tex.needsUpdate=true;
+  tex.minFilter=T.LinearFilter;tex.magFilter=T.LinearFilter;
+  tex.generateMipmaps=false;return tex;
 }
 function sprite(map,x,y,z,size,col,opacity=0){
   const m=new T.SpriteMaterial({map,color:col,transparent:true,opacity,depthWrite:false,

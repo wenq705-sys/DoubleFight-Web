@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { canLoadNightMarketModels, loadNightMarketGLB } from '../loaders/NightMarketAssetLoader';
 import { normalizePieceValue } from '../../config/themes';
 import type { TileVisual } from './TileFactory';
 
@@ -9,7 +10,6 @@ import type { TileVisual } from './TileFactory';
  * exact fitTile measurement envelope; the authored character replaces it in-place.
  * No duplicate Board2048 logic and no per-spawn geometry decoding.
  */
-const BASE = import.meta.env.BASE_URL + 'assets/themes/nightmarket/tiles/';
 const PALETTE: Record<number, number> = {
   2: 0xc5e2bf, 4: 0xb87739, 8: 0xf39cb4, 16: 0x72b98e,
   32: 0x69c8d5, 64: 0x915ab7, 128: 0xe96e82, 256: 0xe9bd60,
@@ -26,7 +26,7 @@ export class NightMarketTileFactory {
 
   warmup(values: number[]): void {
     // Lower levels are useful immediately; all other values are requested on demand.
-    if (typeof window === 'undefined') return; // Node/Vitest must never fetch browser-relative GLBs.
+    if (!canLoadNightMarketModels()) return; // Node tests avoid filesystem and URL traffic; native still loads.
     values.slice(0, 3).forEach(value => { void this.load(normalizePieceValue(value)); });
   }
 
@@ -53,7 +53,7 @@ export class NightMarketTileFactory {
     waiting.name = 'temporary asynchronous loading glint';
     root.add(waiting);
 
-    if (typeof window !== 'undefined') void this.load(level).then(source => {
+    if (canLoadNightMarketModels()) void this.load(level).then(source => {
       if (!source) return; // Remain playable even after a failed asset fetch.
       const model = source.clone(true);
       const bounds = new THREE.Box3().setFromObject(model);
@@ -75,12 +75,12 @@ export class NightMarketTileFactory {
   }
 
   private load(level: number): Promise<THREE.Group | null> {
-    if (typeof window === 'undefined') return Promise.resolve(null);
+    if (!canLoadNightMarketModels()) return Promise.resolve(null);
     const cached = this.assets.get(level);
     if (cached) return cached;
-    const url = BASE + String(level).padStart(4, '0') + '.glb';
+    const relativePath = 'tiles/' + String(level).padStart(4, '0') + '.glb';
     const task = new Promise<THREE.Group | null>((resolve) => {
-      this.loader.load(url, result => {
+      loadNightMarketGLB(this.loader, relativePath, result => {
         const model = result.scene;
         model.traverse(node => {
           if (node instanceof THREE.Mesh) {
@@ -89,7 +89,7 @@ export class NightMarketTileFactory {
           }
         });
         resolve(model);
-      }, undefined, error => {
+      }, error => {
         console.warn('[NightMarket] Tile GLB unavailable:', level, error);
         resolve(null);
       });

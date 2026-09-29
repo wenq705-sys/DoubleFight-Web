@@ -455,7 +455,7 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
   const panelW = Math.min(318, width - 28);
   const x = (width - panelW) / 2;
   const y = height * 0.18;
-  const panelH = Math.min(470, height * 0.66);
+  const panelH = Math.min(516, height * 0.72);
   round(ctx, x, y, panelW, panelH, 28);
   ctx.fillStyle = 'rgba(9,28,36,.98)';
   ctx.fill();
@@ -491,8 +491,8 @@ function drawProfile(ctx: CanvasRenderingContext2D, width: number, height: numbe
   ctx.font = '800 11px sans-serif';
   ctx.fillText(`赛季  ${player?.season?.wins ?? player?.pvp.wins ?? 0}胜  ${player?.season?.losses ?? player?.pvp.losses ?? 0}负  ${player?.season?.draws ?? player?.pvp.draws ?? 0}平`, width / 2, y + 132);
 
-  (['kingdom', 'palace'] as ThemeId[]).forEach((theme, index) => {
-    const rowY = y + 174 + index * 88;
+  (['kingdom', 'palace', 'nightmarket'] as ThemeId[]).forEach((theme, index) => {
+    const rowY = y + 168 + index * Math.min(86,(panelH - 232) / 3);
     const highest = Number(platform.storage.getItem(`doublefight-highest-${theme}`) ?? 2);
     const best = Number(platform.storage.getItem(`doublefight-best-${theme}`) ?? 0);
     const mastery = loadThemeMastery(platform.storage, theme);

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadNightMarketGLB } from '../loaders/NightMarketAssetLoader';
 import { ART } from '../../config/artDirection';
 import type { BoardTile, Direction, MoveResult } from '../../game/board/types';
 // Browser-independent mood director and VFX share the exact tested preview implementations.
@@ -10,7 +11,6 @@ import { ThemeMoodDirector } from './nightmarket/ThemeMoodDirector.mjs';
 import { NightMarketSpectacle } from './nightmarket/NightMarketSpectacle.mjs';
 
 const SCALE = ART.board.gap / 1.065;
-const BASE = import.meta.env.BASE_URL + 'assets/themes/nightmarket/';
 const STAGE_NAMES = ['初入夜市', '夜市苏醒', '夜市繁盛', '华彩高潮', '神灯盛会'] as const;
 type ModelTag = 'lantern' | 'paper' | 'gold' | 'jade' | 'water' | 'lotus';
 type Tracked = { material: THREE.MeshStandardMaterial; tag: ModelTag; base: THREE.Color };
@@ -47,7 +47,8 @@ export class NightMarketEnvironment {
     // Authored 3D character anchor is 0.88m; move it to production surface Y = 0.695.
     this.frame.position.set(0, .695 - .88 * SCALE, ART.board.centerZ);
     this.root.add(this.frame);
-    this.mobile = window.innerWidth < 760 || window.matchMedia('(pointer: coarse)').matches;
+    this.mobile = typeof window === 'undefined' || window.innerWidth < 760 ||
+      typeof window.matchMedia !== 'function' || window.matchMedia('(pointer: coarse)').matches;
     this.showDetailed = detail === 'full';
     this.makeFallbackBoard();
     this.spectacle = detail === 'full'
@@ -147,7 +148,7 @@ export class NightMarketEnvironment {
   }
 
   private loadGLB(filename: string, purpose: 'board' | 'environment'): void {
-    this.loader.load(BASE + filename, result => {
+    loadNightMarketGLB(this.loader, filename, result => {
       if (this.disposed) return;
       const imported = result.scene;
       imported.name = 'authored night market ' + purpose;
@@ -170,8 +171,8 @@ export class NightMarketEnvironment {
           }
         });
       }
-    }, undefined, error => {
-      console.warn('[NightMarket] Production asset failed: ' + filename, error);
+    }, error => {
+      console.warn('[NightMarket] Douyin/Browser asset failed: ' + filename, error);
     });
   }
 

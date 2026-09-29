@@ -25,6 +25,7 @@ import type { PresentationEvent } from '../../../src/battle/PresentationEvents';
 type ProductMode = 'home' | 'solo' | 'online';
 type Rect = { x: number; y: number; width: number; height: number };
 
+const NATIVE_SOLO_THEMES: readonly ThemeId[] = ['kingdom', 'palace', 'nightmarket'];
 const HOME_TILES: readonly BoardTile[] = [
   { id: 9101, value: 32, row: 1, col: 0 },
   { id: 9102, value: 64, row: 1, col: 1 },
@@ -217,9 +218,7 @@ export class DouyinSoloScene {
   handleDirection(direction: Direction): void {
     if (this.mode === 'home') {
       if (direction === 'left' || direction === 'right') {
-        this.setTheme(direction === 'left'
-          ? this.currentTheme === 'kingdom' ? 'palace' : 'kingdom'
-          : this.currentTheme === 'palace' ? 'kingdom' : 'palace');
+        this.cycleSoloTheme(direction === 'left' ? 1 : -1);
         this.platform.haptics.trigger('light');
       }
       return;
@@ -299,6 +298,13 @@ export class DouyinSoloScene {
     else this.handleOnlineTap(x, y);
   }
 
+  /** Native home carousel cycles across all three unlockable Solo themes. */
+  private cycleSoloTheme(direction: -1 | 1): void {
+    const index = NATIVE_SOLO_THEMES.indexOf(this.currentTheme);
+    const next = (index + direction + NATIVE_SOLO_THEMES.length) % NATIVE_SOLO_THEMES.length;
+    this.setTheme(NATIVE_SOLO_THEMES[next]);
+  }
+
   setTheme(theme: ThemeId): void {
     if (theme === this.currentTheme) return;
     this.currentTheme = theme;
@@ -308,6 +314,7 @@ export class DouyinSoloScene {
     if (this.mode === 'home' || (this.mode === 'online' && this.online.snapshot().mode !== 'playing')) {
       this.boardView.reset(HOME_TILES);
     }
+    this.configureCamera();
     this.applyThemeLook();
     this.refreshHud();
   }
@@ -494,12 +501,18 @@ export class DouyinSoloScene {
     }
 
     if (this.hit(x, y, layout.theme)) {
-      this.setTheme(this.currentTheme === 'kingdom' ? 'palace' : 'kingdom');
+      this.cycleSoloTheme(1);
       this.platform.haptics.trigger('light');
       return;
     }
     if (this.hit(x, y, layout.solo)) { this.startSolo(); return; }
-    if (this.hit(x, y, layout.online)) { this.openOnline(); return; }
+    if (this.hit(x, y, layout.online)) {
+      if (this.currentTheme === 'nightmarket') {
+        this.notice = { text: '东方夜市现已开放单人模式 · 在线对决暂未开放', until: this.visualTime + 1.7 };
+        this.refreshHud();return;
+      }
+      this.openOnline();return;
+    }
     if (this.hit(x, y, layout.rank)) {
       void this.social.openSoloRank().then(ok => {
         if (!ok) {
@@ -833,9 +846,11 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const ratio = Math.max(0.1, info.width / Math.max(1, info.height));
     const heroMode = this.mode === 'home' || this.mode === 'online';
-    this.cameraTarget.set(0, heroMode ? 0.82 : 0.6, ART.board.centerZ + (heroMode ? 0.25 : 0));
+    const nightMarket = this.currentTheme === 'nightmarket';
+    this.cameraTarget.set(0, nightMarket ? 0.82 : heroMode ? 0.82 : 0.6,
+      nightMarket ? ART.board.centerZ - .32 : ART.board.centerZ + (heroMode ? 0.25 : 0));
     const baseDistance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
-    const distance = baseDistance * (heroMode ? 1.12 : 1);
+    const distance = baseDistance * (nightMarket ? (heroMode ? 1.32 : 1.20) : heroMode ? 1.12 : 1);
     this.cameraHome.copy(this.cameraTarget).add(
       new THREE.Vector3(0, heroMode ? 0.94 : 0.88, heroMode ? 0.52 : 0.475).multiplyScalar(distance),
     );
@@ -993,9 +1008,10 @@ export class DouyinSoloScene {
     ctx.font = '750 11px sans-serif';
     ctx.fillText(`最高 ${highest}   ·   BEST ${best.toLocaleString('zh-CN')}`, width / 2, metaY + 60);
 
-    this.drawPillButton(ctx, layout.theme, '‹   切换主题   ›', 'secondary');
+    this.drawPillButton(ctx, layout.theme, '‹   切换主题  ·  3座岛   ›', 'secondary');
     this.drawPillButton(ctx, layout.solo, '进入世界', 'primary');
-    this.drawPillButton(ctx, layout.online, '⚔  在线对决', 'secondary');
+    this.drawPillButton(ctx, layout.online,
+      this.currentTheme === 'nightmarket' ? '🔒 在线对决 · 暂未开放' : '⚔  在线对决', 'secondary');
     this.drawPillButton(ctx, layout.rank, '🏆 排行榜', 'secondary');
     this.drawPillButton(
       ctx,
@@ -1064,7 +1080,18 @@ export class DouyinSoloScene {
     ctx.fillStyle = 'rgba(255,255,255,.72)';
     ctx.font = '700 11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('滑动合成 · 解锁更高阶', width / 2, skill.y - 18);
+    ctx.fillText(this.currentTheme === 'nightmarket'
+      ? '滑动合成 · 逐级点亮莲灯盛会' : '滑动合成 · 解锁更高阶', width / 2, skill.y - 18);
+    if (this.currentTheme === 'nightmarket') {
+      const mood = this.boardView.nightmarketMood;
+      if (mood) {
+        this.roundedRect(ctx, width / 2 - 102, hudTop + 66, 204, 26, 13);
+        ctx.fillStyle = 'rgba(93,53,44,.91)';ctx.fill();
+        ctx.strokeStyle = 'rgba(255,213,143,.7)';ctx.lineWidth = 1;ctx.stroke();
+        ctx.fillStyle = '#ffe4ae';ctx.font = '850 11px sans-serif';
+        ctx.fillText(mood.name + ' · 灵物 ' + mood.highest, width / 2, hudTop + 79);
+      }
+    }
   }
 
   private drawOnlineHud(ctx: CanvasRenderingContext2D, width: number, height: number): void {

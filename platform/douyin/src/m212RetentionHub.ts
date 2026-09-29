@@ -360,11 +360,12 @@ function handleHubTap(
       scene.refreshHud();
       return;
     }
-    const themes: ThemeId[] = ['kingdom', 'palace'];
+    const themes: ThemeId[] = ['kingdom', 'palace', 'nightmarket'];
     for (let index = 0; index < themes.length; index += 1) {
       if (!hit(x, y, layout.cards[index])) continue;
       game.setTheme(themes[index]);
       state.collectionTheme = themes[index];
+      state.screen = null; // Immediately reveal the new themed 3D world
       platform.haptics.trigger('medium');
       scene.refreshHud();
       return;
@@ -398,6 +399,11 @@ function handleHubTap(
       engagement.track('collection_theme', { theme: 'palace' });
       scene.refreshHud();
       return;
+    }
+    if (hit(x, y, layout.nightmarket)) {
+      state.collectionTheme = 'nightmarket';
+      engagement.track('collection_theme', { theme: 'nightmarket' });
+      scene.refreshHud();return;
     }
     return;
   }
@@ -798,7 +804,7 @@ function drawThemeCenter(
   ctx.fillText('选择世界 · 查看收集进度 · 继续登顶', width / 2, layout.panel.y + 62);
   closeGlyph(ctx, layout.close);
 
-  const themes: ThemeId[] = ['kingdom', 'palace'];
+  const themes: ThemeId[] = ['kingdom', 'palace', 'nightmarket'];
   themes.forEach((theme, index) => {
     const rect = layout.cards[index];
     const active = theme === game.theme;
@@ -806,7 +812,9 @@ function drawThemeCenter(
     const best = Number(platform.storage.getItem(`doublefight-best-${theme}`) ?? 0);
     round(ctx, rect.x, rect.y, rect.width, rect.height, 22);
     const gradient = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
-    gradient.addColorStop(0, active ? 'rgba(43,92,89,.98)' : 'rgba(20,48,58,.95)');
+    gradient.addColorStop(0, active
+      ? (theme === 'nightmarket' ? 'rgba(139,86,53,.98)' : 'rgba(43,92,89,.98)')
+      : 'rgba(20,48,58,.95)');
     gradient.addColorStop(1, active ? 'rgba(66,65,39,.96)' : 'rgba(13,34,44,.95)');
     ctx.fillStyle = gradient;
     ctx.fill();
@@ -823,8 +831,8 @@ function drawThemeCenter(
     ctx.fillText(active ? '当前世界' : '点击切换', rect.x + 18, rect.y + 45);
     ctx.fillStyle = '#d8e5df';
     ctx.font = '800 11px sans-serif';
-    ctx.fillText(`图鉴 ${mastery.highestDiscoveredTier}/11`, rect.x + 18, rect.y + 73);
-    ctx.fillText(`BEST ${best.toLocaleString('zh-CN')}`, rect.x + 18, rect.y + 94);
+    ctx.fillText(`图鉴 ${mastery.highestDiscoveredTier}/11`, rect.x + 18, rect.y + Math.min(73,rect.height - 31));
+    ctx.fillText(`BEST ${best.toLocaleString('zh-CN')}`, rect.x + 18, rect.y + Math.min(94,rect.height - 10));
     ctx.textAlign = 'right';
     ctx.fillStyle = mastery.bestAscensionMs ? '#f3d273' : '#809598';
     ctx.font = '800 10px sans-serif';
@@ -839,7 +847,8 @@ function drawThemeCenter(
   ctx.fillStyle = '#758b8e';
   ctx.font = '700 10px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('更多主题世界将在后续版本加入', width / 2, layout.panel.y + layout.panel.height - 22);
+  ctx.fillText('三个主题已开放单机 · 夜市在线模式暂未开放', width / 2,
+    layout.panel.y + layout.panel.height - 22);
 
 }
 
@@ -865,6 +874,7 @@ function drawCollection(
 
   tab(ctx, layout.kingdom, '微缩王国', state.collectionTheme === 'kingdom');
   tab(ctx, layout.palace, '后宫晋升', state.collectionTheme === 'palace');
+  tab(ctx, layout.nightmarket, '东方夜市', state.collectionTheme === 'nightmarket');
 
   const mastery = loadThemeMastery(platform.storage, state.collectionTheme);
   const values = [...PIECE_VALUES];
@@ -1197,13 +1207,14 @@ function themeCenterLayout(width: number, height: number) {
   const panel = { x: (width - panelW) / 2, y: height * 0.14, width: panelW, height: panelH };
   const cardX = panel.x + 16;
   const cardW = panel.width - 32;
-  const cardH = Math.min(116, (panel.height - 190) / 2);
+  const cardH = Math.min(116, (panel.height - 185) / 3);
   return {
     panel,
     close: { x: panel.x + panel.width - 42, y: panel.y + 14, width: 28, height: 28 },
     cards: [
       { x: cardX, y: panel.y + 84, width: cardW, height: cardH },
-      { x: cardX, y: panel.y + 94 + cardH, width: cardW, height: cardH },
+      { x: cardX, y: panel.y + 93 + cardH, width: cardW, height: cardH },
+      { x: cardX, y: panel.y + 102 + cardH * 2, width: cardW, height: cardH },
     ] as Rect[],
     collection: { x: panel.x + 46, y: panel.y + panel.height - 72, width: panel.width - 92, height: 44 },
   };
@@ -1214,7 +1225,7 @@ function collectionLayout(width: number, height: number) {
   const panelH = Math.min(610, height * 0.78);
   const panel = { x: (width - panelW) / 2, y: height * 0.10, width: panelW, height: panelH };
   const tabGap = 8;
-  const tabW = (panel.width - 44 - tabGap) / 2;
+  const tabW = (panel.width - 36 - tabGap * 2) / 3;
   const gridX = panel.x + 14;
   const gridY = panel.y + 116;
   const gapX = 8;
@@ -1230,8 +1241,9 @@ function collectionLayout(width: number, height: number) {
   return {
     panel,
     close: { x: panel.x + panel.width - 42, y: panel.y + 12, width: 28, height: 28 },
-    kingdom: { x: panel.x + 18, y: panel.y + 76, width: tabW, height: 32 },
-    palace: { x: panel.x + 18 + tabW + tabGap, y: panel.y + 76, width: tabW, height: 32 },
+    kingdom: { x: panel.x + 14, y: panel.y + 76, width: tabW, height: 32 },
+    palace: { x: panel.x + 14 + tabW + tabGap, y: panel.y + 76, width: tabW, height: 32 },
+    nightmarket: { x: panel.x + 14 + (tabW + tabGap) * 2, y: panel.y + 76, width: tabW, height: 32 },
     cells,
   };
 }
