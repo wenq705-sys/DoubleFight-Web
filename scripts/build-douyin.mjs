@@ -2,6 +2,7 @@ import { build } from 'vite';
 import { copyFile, mkdir, readFile, writeFile, stat, readdir } from 'node:fs/promises';
 import { collectThemeArtPacks, syncThemeRegistry, installNativeThemePacks }
   from './theme-art-pipeline.mjs';
+import { renderNightMarketMusic } from './audio/nightmarket-bgm.mjs';
 
 const release = process.argv.includes('--release') || process.env.DOUYIN_RELEASE === '1';
 const outDir = release ? 'platform/douyin/dist-release' : 'platform/douyin/dist';
@@ -45,7 +46,7 @@ await build({
 await mkdir(outDir, { recursive: true });
 await copyFile('platform/douyin/game.json', `${outDir}/game.json`);
 await copyFile(projectConfigSource, `${outDir}/project.config.json`);
-await writeGeneratedAudio(outDir);
+await writeGeneratedAudio(outDir, artPacks);
 const artInstall = await installNativeThemePacks(artPacks, outDir, {
   existingGameBytes: (await stat(outDir+'/game.js')).size,
 });
@@ -191,7 +192,7 @@ function renderMusic(plan, sampleRate = 11025) {
   return pcmWav(samples.map(sample => Math.tanh(sample * 1.18) * 0.78), sampleRate);
 }
 
-async function writeGeneratedAudio(root) {
+async function writeGeneratedAudio(root, artPacks) {
   const audioDir = `${root}/audio`;
   await mkdir(audioDir, { recursive: true });
   const cues = {
@@ -279,4 +280,44 @@ async function writeGeneratedAudio(root) {
   await Promise.all(Object.entries(plans).map(([theme, plan]) =>
     writeFile(`${audioDir}/music-${theme}.wav`, renderMusic(plan))
   ));
+
+  // Factory contract: an optional authored music.wav wins. Every imported art
+  // theme otherwise gets a deterministic original packaged loop automatically.
+  for (const pack of artPacks) {
+    if (Object.hasOwn(plans, pack.id)) throw new Error('Duplicate theme music id: ' + pack.id);
+    const source = `public/assets/themes/${pack.id}/music.wav`;
+    const destination = `${audioDir}/music-${pack.id}.wav`;
+    let supplied = null;
+    try { supplied = await readFile(source); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (supplied) {
+      if (supplied.length < 8192 || supplied.toString('ascii', 0, 4) !== 'RIFF' ||
+          supplied.toString('ascii', 8, 12) !== 'WAVE')
+        throw new Error('Invalid authored theme soundtrack: ' + source);
+      await copyFile(source, destination);
+    } else if (pack.id === 'nightmarket') {
+      await writeFile(destination, renderNightMarketMusic(pcmWav));
+    } else {
+      const seed = [...pack.id].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      const key = seed % 5;
+      const base = 67 + key;
+      await writeFile(destination, renderMusic({
+        bpm: 118 + (seed % 12), chords: [53 + key, 57 + key, 50 + key, 55 + key],
+        hook: [base, base + 3, base + 5, base + 7, base + 5, base + 3, base, base - 2],
+        lead: 'pluck', pad: 'triangle', melody: .16, chord: .12,
+        bass: .15, drum: .19, hat: .043, accents: [
+          { beat: 7.5, length: .5, note: base + 12, wave: 'bell', gain: .08 },
+        ],
+      }));
+    }
+  }
+  // Never silently publish a theme with missing/malformed music again.
+  for (const id of [...Object.keys(plans), ...artPacks.map(pack => pack.id)]) {
+    const track = await readFile(`${audioDir}/music-${id}.wav`);
+    if (track.length < 8192 || track.toString('ascii', 0, 4) !== 'RIFF' ||
+        track.toString('ascii', 8, 12) !== 'WAVE') {
+      throw new Error('Missing/invalid theme BGM: ' + id);
+    }
+  }
+  console.log('[ThemeMusic] packaged BGM:', [...Object.keys(plans), ...artPacks.map(pack => pack.id)].join(', '));
 }

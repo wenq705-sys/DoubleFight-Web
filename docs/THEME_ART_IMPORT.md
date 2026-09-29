@@ -8,6 +8,7 @@
 
     theme.json                   唯一注册入口
     scene-hero.png               首页主题岛形象（Web）
+    music.wav                    可选，主题专属循环配乐（缺省自动生成基础曲目）
     board-4x4.glb                独立 4x4 棋盘
     environment-mobile.glb       移动端环境；抖音包内离线读取
     environment-full.glb         可选，Web 高精度环境
