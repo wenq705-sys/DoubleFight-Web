@@ -1,68 +1,68 @@
 {
   "2": {
-    "bytes": 25444,
+    "bytes": 79888,
     "meshes": 7,
-    "primitives": 7
+    "materials": 3
   },
   "4": {
-    "bytes": 23080,
-    "meshes": 6,
-    "primitives": 6
+    "bytes": 80764,
+    "meshes": 7,
+    "materials": 3
   },
   "8": {
-    "bytes": 25164,
-    "meshes": 7,
-    "primitives": 7
+    "bytes": 91960,
+    "meshes": 8,
+    "materials": 4
   },
   "16": {
-    "bytes": 29296,
-    "meshes": 9,
-    "primitives": 9
+    "bytes": 94952,
+    "meshes": 10,
+    "materials": 4
   },
   "32": {
-    "bytes": 43428,
+    "bytes": 117128,
     "meshes": 13,
-    "primitives": 13
+    "materials": 6
   },
   "64": {
-    "bytes": 41056,
-    "meshes": 12,
-    "primitives": 12
+    "bytes": 128180,
+    "meshes": 15,
+    "materials": 6
   },
   "128": {
-    "bytes": 41908,
-    "meshes": 12,
-    "primitives": 12
+    "bytes": 143828,
+    "meshes": 18,
+    "materials": 6
   },
   "256": {
-    "bytes": 39596,
-    "meshes": 13,
-    "primitives": 13
+    "bytes": 171140,
+    "meshes": 27,
+    "materials": 6
   },
   "512": {
-    "bytes": 41100,
-    "meshes": 14,
-    "primitives": 14
+    "bytes": 179508,
+    "meshes": 31,
+    "materials": 6
   },
   "1024": {
-    "bytes": 41924,
-    "meshes": 14,
-    "primitives": 14
+    "bytes": 175372,
+    "meshes": 31,
+    "materials": 5
   },
   "2048": {
-    "bytes": 52100,
-    "meshes": 18,
-    "primitives": 18
+    "bytes": 204076,
+    "meshes": 35,
+    "materials": 6
   },
   "board": {
-    "bytes": 166780,
-    "meshes": 27,
-    "primitives": 27
+    "bytes": 167612,
+    "meshes": 25,
+    "materials": 6
   },
   "environment": {
-    "bytes": 87016,
-    "meshes": 18,
-    "primitives": 18
+    "bytes": 115060,
+    "meshes": 20,
+    "materials": 9
   },
-  "seconds": 2.8
+  "seconds": 4.3
 }
