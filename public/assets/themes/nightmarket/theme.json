@@ -49,6 +49,10 @@
     "gameSurfaceY": 0.695,
     "centerZ": 0
   },
+  "camera": {
+    "home": { "targetY": 0.76, "targetZOffset": -0.18, "distanceScale": 1.35, "eyeY": 0.88, "eyeZ": 0.64 },
+    "solo": { "targetY": 0.76, "targetZOffset": -0.18, "distanceScale": 1.24, "eyeY": 0.82, "eyeZ": 0.58 }
+  },
   "render": {
     "sky": "#232732",
     "fog": "#272b37",

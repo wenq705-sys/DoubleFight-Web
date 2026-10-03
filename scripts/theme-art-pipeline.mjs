@@ -107,6 +107,17 @@ export async function collectThemeArtPacks(inputDir=INPUT_DIR){
       positive(raw.placement[key],id+'.placement.'+key,25);
     yes(Number.isFinite(raw.placement.centerZ)&&Math.abs(raw.placement.centerZ)<30,
       id+': invalid board centerZ');
+    if(raw.camera){
+      for(const mode of ['home','solo']){
+        const camera=raw.camera[mode]; if(!camera)continue;
+        for(const key of ['targetY','targetZOffset','distanceScale','eyeY','eyeZ'])
+          yes(typeof camera[key]==='number'&&Number.isFinite(camera[key]),
+            id+'.camera.'+mode+'.'+key+': finite number required');
+        yes(camera.distanceScale>.5&&camera.distanceScale<2,id+'.camera.'+mode+': invalid distanceScale');
+        yes(camera.eyeY>.1&&camera.eyeY<2&&camera.eyeZ>.1&&camera.eyeZ<2,
+          id+'.camera.'+mode+': invalid eye offset');
+      }
+    }
     yes(raw.ranks&&typeof raw.ranks==='object',id+': missing 11 rank names');
     yes(raw.assets?.tiles&&typeof raw.assets.tiles==='object',
       id+': assets.tiles must list all 11 distinct GLBs');
@@ -116,6 +127,8 @@ export async function collectThemeArtPacks(inputDir=INPUT_DIR){
     for(const key of ['sky','fog','accent','secondary','spawn','skill'])
       validRGB(raw.render?.[key],id+'.render.'+key);
     positive(raw.render.exposure,id+'.render.exposure',3);
+    if(raw.render.vfx!==undefined) yes(['default','ink'].includes(raw.render.vfx),
+      id+': render.vfx must be default or ink');
     yes(Array.isArray(raw.render.confetti)&&raw.render.confetti.length>=3,
       id+': render.confetti needs at least three palette colors');
     raw.render.confetti.forEach((x,i)=>validRGB(x,id+'.render.confetti['+i+']'));

@@ -3,7 +3,7 @@ import { ART } from '../../config/artDirection';
 import type { EffectPalette } from '../themes/ThemePresentation';
 import type { QualityLevel } from '../../performance/PerformanceManager';
 
-type PoolKind = 'spark' | 'confetti' | 'ring' | 'flash' | 'beam' | 'ray';
+type PoolKind = 'spark' | 'confetti' | 'ring' | 'flash' | 'beam' | 'ray' | 'ink' | 'brush';
 
 interface FxItem {
   mesh: THREE.Mesh;
@@ -25,6 +25,19 @@ interface LightItem {
   peak: number;
 }
 
+function makeInkBlotGeometry(): THREE.ShapeGeometry {
+  const shape = new THREE.Shape();
+  const points = 18;
+  for (let i = 0; i <= points; i += 1) {
+    const angle = (i / points) * Math.PI * 2;
+    const radius = 0.72 + 0.13 * Math.sin(i * 2.31) + 0.08 * Math.sin(i * 5.17);
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  return new THREE.ShapeGeometry(shape);
+}
+
 const SHARED = {
   spark: new THREE.OctahedronGeometry(0.06, 0),
   confetti: new THREE.BoxGeometry(0.055, 0.15, 0.025),
@@ -32,6 +45,8 @@ const SHARED = {
   flash: new THREE.SphereGeometry(0.32, 10, 8),
   beam: new THREE.CylinderGeometry(0.06, 0.32, 1, 12, 1, true),
   ray: new THREE.BoxGeometry(0.045, 0.022, 1),
+  ink: makeInkBlotGeometry(),
+  brush: new THREE.PlaneGeometry(1, 0.18),
 };
 
 export class Effects {
@@ -58,6 +73,7 @@ export class Effects {
   }
 
   merge(position: THREE.Vector3, value: number, theme: EffectPalette): void {
+    if (theme.style === 'ink') { this.inkMerge(position, value, theme); return; }
     const tier = Math.min(10, Math.max(1, Math.log2(value) - 1));
     const primary = theme.primary(value);
     const secondary = theme.secondary;
@@ -120,6 +136,7 @@ export class Effects {
   }
 
   skillClear(positions: THREE.Vector3[], theme: EffectPalette): void {
+    if (theme.style === 'ink') { this.inkSkillClear(positions, theme); return; }
     const center = new THREE.Vector3(0, 0.62, ART.board.centerZ);
     const primary = theme.skill;
     const secondary = theme.skillSecondary;
@@ -142,6 +159,59 @@ export class Effects {
 
     this.confetti(center.clone().add(new THREE.Vector3(0, 2.1, 0)), this.quality === 'high' ? 20 : 12, theme);
     this.light(center.clone().add(new THREE.Vector3(0, 2.8, 0)), primary, theme.skillLight, 0.86);
+  }
+
+  private inkMerge(position: THREE.Vector3, value: number, theme: EffectPalette): void {
+    const tier = Math.min(10, Math.max(1, Math.log2(value) - 1));
+    const growth = 1.15 + tier * 0.105;
+    this.inkBlot(position, theme.primary(value), growth, 0.34 + tier * 0.012);
+    const count = this.quality === 'low' ? 3 : Math.min(7, 4 + Math.floor(tier / 2));
+    for (let i = 0; i < count; i += 1) {
+      const item = this.acquire('brush');
+      if (!item) break;
+      const angle = (i / count) * Math.PI * 2 + (i % 2) * 0.19;
+      this.activate(item, position.clone().add(new THREE.Vector3(0, 0.055, 0)), theme.primary(value), 0.28 + i * 0.012);
+      item.mesh.rotation.x = -Math.PI / 2;
+      item.mesh.rotation.z = angle;
+      item.startScale.set(0.08, 0.55, 1);
+      item.endScale.set(0.72 + tier * 0.055, 0.82, 1);
+    }
+    if (value >= 64) this.ring(position.clone().add(new THREE.Vector3(0, 0.025, 0)), theme.secondary, 0.36, 1.65 + tier * 0.07);
+    if (value >= 512) this.ring(position.clone().add(new THREE.Vector3(0, 0.045, 0)), 0xa98945, 0.42, 2.35);
+    const origin = position.clone().add(new THREE.Vector3(0, 0.64, 0));
+    if (value >= 256) this.confetti(origin, this.quality === 'high' ? 5 : 3, theme);
+    this.light(origin, value >= 512 ? 0xa98945 : theme.secondary, value >= 1024 ? 2.6 : 1.5, 0.32);
+  }
+
+  private inkSkillClear(positions: THREE.Vector3[], theme: EffectPalette): void {
+    const center = new THREE.Vector3(0, this.presentationSurfaceY(positions), ART.board.centerZ);
+    const sweep = this.acquire('brush');
+    if (sweep) {
+      this.activate(sweep, center.clone().add(new THREE.Vector3(0, 0.075, 0)), theme.skill, 0.48);
+      sweep.mesh.rotation.x = -Math.PI / 2;
+      sweep.mesh.rotation.z = -0.28;
+      sweep.startScale.set(0.12, 2.8, 1);
+      sweep.endScale.set(8.4, 3.5, 1);
+    }
+    positions.forEach((position, index) => {
+      this.inkBlot(position, index % 2 ? theme.secondary : theme.skill, 1.75, 0.42);
+    });
+    this.ring(center, theme.secondary, 0.42, 5.8);
+    this.light(center.clone().add(new THREE.Vector3(0, 1.6, 0)), theme.secondary, 2.3, 0.48);
+  }
+
+  private inkBlot(position: THREE.Vector3, color: number, growth: number, life: number): void {
+    const item = this.acquire('ink');
+    if (!item) return;
+    this.activate(item, position.clone().add(new THREE.Vector3(0, 0.045, 0)), color, life);
+    item.mesh.rotation.x = -Math.PI / 2;
+    item.mesh.rotation.z = (position.x * 1.7 + position.z * 0.9) % Math.PI;
+    item.startScale.setScalar(0.08);
+    item.endScale.set(growth, growth * 0.82, growth);
+  }
+
+  private presentationSurfaceY(positions: THREE.Vector3[]): number {
+    return positions.length ? Math.max(...positions.map(position => position.y)) + 0.02 : 0.7;
   }
 
   dispose(): void {
@@ -208,6 +278,8 @@ export class Effects {
       flash: this.mobile ? 8 : 12,
       beam: this.mobile ? 5 : 7,
       ray: this.mobile ? 18 : 28,
+      ink: this.mobile ? 8 : 12,
+      brush: this.mobile ? 14 : 20,
     };
 
     (Object.keys(counts) as PoolKind[]).forEach((kind) => {
@@ -228,9 +300,10 @@ export class Effects {
       color: 0xffffff,
       transparent: true,
       opacity: 0,
-      blending: THREE.AdditiveBlending,
+      blending: kind === 'ink' || kind === 'brush' ? THREE.NormalBlending : THREE.AdditiveBlending,
       depthWrite: false,
-      side: kind === 'ring' || kind === 'beam' ? THREE.DoubleSide : THREE.FrontSide,
+      side: kind === 'ring' || kind === 'beam' || kind === 'ink' || kind === 'brush'
+        ? THREE.DoubleSide : THREE.FrontSide,
     });
     const mesh = new THREE.Mesh(SHARED[kind], material);
     mesh.visible = false;
@@ -270,7 +343,7 @@ export class Effects {
     item.endScale.set(1, 1, 1);
     if (item.mesh.material instanceof THREE.MeshBasicMaterial) {
       item.mesh.material.color.setHex(color);
-      item.mesh.material.opacity = 0.82;
+      item.mesh.material.opacity = item.kind === 'ink' ? 0.62 : item.kind === 'brush' ? 0.72 : 0.82;
     }
   }
 

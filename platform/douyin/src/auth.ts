@@ -1,8 +1,9 @@
 import { THEME_UNLOCK_ECONOMY } from '../../../shared/index';
+import { ART_THEMES } from '../../../src/config/artThemes.generated';
 // New art worlds are locally available in the review test build; their server economy is not altered.
 const CLIENT_THEME_ECONOMY: Record<string, {free: boolean; coinCost: number; adViewsRequired: number}> = {
   ...THEME_UNLOCK_ECONOMY,
-  nightmarket: { free: true, coinCost: 0, adViewsRequired: 0 },
+  ...Object.fromEntries(ART_THEMES.map(theme => [theme.id, { free: true, coinCost: 0, adViewsRequired: 0 }])),
 };
 import type { Platform } from '../../../src/platform/types';
 import { THEME_IDS, type ThemeId } from '../../../src/config/themes';

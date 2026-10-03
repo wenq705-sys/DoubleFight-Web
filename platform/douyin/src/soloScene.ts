@@ -10,6 +10,7 @@ import {
   themeIndex,
   type ThemeId,
 } from '../../../src/config/themes';
+import { ART_THEMES, ART_THEME_BY_ID } from '../../../src/config/artThemes.generated';
 import { SoloController } from '../../../src/battle/SoloController';
 import { BattleBoardView } from '../../../src/rendering/battle/BattleBoardView';
 import { setTextureCanvasFactory } from '../../../src/rendering/TextureCanvasFactory';
@@ -27,7 +28,7 @@ import {
 } from '../../../shared/index';
 const CLIENT_THEME_ECONOMY: Record<string, { free: boolean; coinCost: number; adViewsRequired: number }> = {
   ...THEME_UNLOCK_ECONOMY,
-  nightmarket: { free: true, coinCost: 0, adViewsRequired: 0 },
+  ...Object.fromEntries(ART_THEMES.map(theme => [theme.id, { free: true, coinCost: 0, adViewsRequired: 0 }])),
 };
 import { DouyinOnlineFlow } from './onlineFlow';
 import { DouyinCommercial } from './commercial';
@@ -1437,17 +1438,15 @@ export class DouyinSoloScene {
     const info = this.platform.getSystemInfo();
     const ratio = Math.max(0.1, info.width / Math.max(1, info.height));
     const heroMode = this.mode === 'home' || this.mode === 'online';
-    // Only the Oriental Night Market uses its own lower exhibition camera.
-    // The original five approved worlds and future imported themes retain their framing.
-    const nightMarket = this.currentTheme === 'nightmarket';
-    this.cameraTarget.set(0, nightMarket ? 0.76 : heroMode ? 0.82 : 0.6,
-      nightMarket ? ART.board.centerZ - 0.18 : ART.board.centerZ + (heroMode ? 0.25 : 0));
+    const mode = heroMode ? 'home' : 'solo';
+    const authoredCamera = ART_THEME_BY_ID[this.currentTheme]?.camera?.[mode];
+    const targetY = authoredCamera?.targetY ?? (heroMode ? 0.82 : 0.6);
+    const targetZOffset = authoredCamera?.targetZOffset ?? (heroMode ? 0.25 : 0);
+    this.cameraTarget.set(0, targetY, ART.board.centerZ + targetZOffset);
     const baseDistance = Math.max(20, 5.5 / (Math.tan(THREE.MathUtils.degToRad(21)) * ratio));
-    const distance = baseDistance * (nightMarket ? (heroMode ? 1.35 : 1.24) : heroMode ? 1.12 : 1);
-    // Camera elevation changes through the eye-target offset ratio, not target Y alone:
-    // nightmarket Solo ~54.7° from horizontal (previously ~61.6°).
-    const eyeOffset = nightMarket
-      ? new THREE.Vector3(0, heroMode ? 0.88 : 0.82, heroMode ? 0.64 : 0.58)
+    const distance = baseDistance * (authoredCamera?.distanceScale ?? (heroMode ? 1.12 : 1));
+    const eyeOffset = authoredCamera
+      ? new THREE.Vector3(0, authoredCamera.eyeY, authoredCamera.eyeZ)
       : new THREE.Vector3(0, heroMode ? 0.94 : 0.88, heroMode ? 0.52 : 0.475);
     this.cameraHome.copy(this.cameraTarget).add(eyeOffset.multiplyScalar(distance));
     this.camera.position.copy(this.cameraHome);

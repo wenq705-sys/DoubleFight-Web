@@ -3,7 +3,8 @@ import { THEME_IDS, THEMES, ZODIAC_RANKS, adjacentTheme, isThemeId, themeIndex }
 
 describe('theme registry navigation', () => {
   it('recognizes only registered themes', () => {
-    expect(THEME_IDS).toEqual(['kingdom', 'palace', 'zodiac', 'candy', 'dreamhouse', 'nightmarket']);
+    expect(THEME_IDS).toEqual(['kingdom', 'palace', 'zodiac', 'candy', 'dreamhouse', 'inkdragon', 'nightmarket']);
+    expect(isThemeId('inkdragon')).toBe(true);
     expect(isThemeId('nightmarket')).toBe(true);
     expect(Object.keys(THEMES)).toEqual(THEME_IDS);
     expect(isThemeId('kingdom')).toBe(true);

@@ -29,6 +29,7 @@ export interface EffectPalette {
   skill: number;
   skillSecondary: number;
   skillLight: number;
+  style?: 'default' | 'ink';
   confetti: readonly number[];
 }
 
@@ -83,7 +84,7 @@ function importedArtPresentation(art: (typeof ART_THEMES)[number]): ThemePresent
       primary: () => rgb(art.render.accent), secondary: rgb(art.render.secondary),
       spawn: rgb(art.render.spawn), skill: rgb(art.render.skill),
       skillSecondary: rgb(art.render.secondary), skillLight: 5.2,
-      confetti: art.render.confetti.map(rgb),
+      style: 'vfx' in art.render ? art.render.vfx : 'default', confetti: art.render.confetti.map(rgb),
     },
     feedback: { move: 8, merge: [11, 6, 14], skill: [22, 18, 38, 20, 62] },
   };

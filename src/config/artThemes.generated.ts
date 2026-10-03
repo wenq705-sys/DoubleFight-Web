@@ -3,6 +3,118 @@ import type { ArtThemeDefinition } from './artThemeSchema';
 export const ART_THEMES = [
   {
     "schemaVersion": 1,
+    "id": "inkdragon",
+    "label": "水墨龙门",
+    "title": "水墨龙门",
+    "kicker": "INK DRAGON GATE",
+    "subtitle": "一墨成鱼 · 跃门化龙",
+    "highestLabel": "真龙化境",
+    "icon": "🐉",
+    "online": false,
+    "ranks": {
+      "2": "墨滴灵鱼",
+      "4": "游墨小鱼",
+      "8": "双尾墨鱼",
+      "16": "白腹灵鲤",
+      "32": "朱砂锦鲤",
+      "64": "金纹龙鲤",
+      "128": "墨角龙鲤",
+      "256": "踏浪蛟",
+      "512": "盘墨蛟龙",
+      "1024": "腾云苍龙",
+      "2048": "水墨真龙"
+    },
+    "assets": {
+      "hero": "scene-hero.png",
+      "board": "board-4x4.glb",
+      "environmentMobile": "environment-mobile.glb",
+      "tiles": {
+        "2": "tiles/0002.glb",
+        "4": "tiles/0004.glb",
+        "8": "tiles/0008.glb",
+        "16": "tiles/0016.glb",
+        "32": "tiles/0032.glb",
+        "64": "tiles/0064.glb",
+        "128": "tiles/0128.glb",
+        "256": "tiles/0256.glb",
+        "512": "tiles/0512.glb",
+        "1024": "tiles/1024.glb",
+        "2048": "tiles/2048.glb"
+      },
+      "overlays": []
+    },
+    "placement": {
+      "rows": 4,
+      "columns": 4,
+      "gridGap": 1.065,
+      "artFloorY": 0.88,
+      "gameSurfaceY": 0.695,
+      "centerZ": 0
+    },
+    "camera": {
+      "home": {
+        "targetY": 0.74,
+        "targetZOffset": -0.1,
+        "distanceScale": 1.2,
+        "eyeY": 0.9,
+        "eyeZ": 0.58
+      },
+      "solo": {
+        "targetY": 0.68,
+        "targetZOffset": -0.04,
+        "distanceScale": 1.12,
+        "eyeY": 0.84,
+        "eyeZ": 0.54
+      }
+    },
+    "render": {
+      "sky": "#B9B5AA",
+      "fog": "#CBC6BA",
+      "exposure": 0.96,
+      "accent": "#24292A",
+      "secondary": "#A33B2D",
+      "spawn": "#E7DDC4",
+      "skill": "#171B1C",
+      "vfx": "ink",
+      "confetti": [
+        "#202526",
+        "#A33B2D",
+        "#A98945",
+        "#E7DDC4"
+      ]
+    },
+    "mood": {
+      "preset": "generic",
+      "thresholds": [
+        2,
+        16,
+        64,
+        256,
+        1024
+      ],
+      "labels": [
+        "晨雾初墨",
+        "游鱼聚势",
+        "龙门将启",
+        "翻浪化蛟",
+        "真龙现世"
+      ],
+      "glowMaterialKeys": {
+        "gold": [
+          "aged muted gold"
+        ],
+        "seal": [
+          "vermilion cinnabar"
+        ],
+        "paper": [
+          "warm rice paper",
+          "cool rice paper"
+        ]
+      }
+    }
+  },
+  {
+    "schemaVersion": 1,
     "id": "nightmarket",
     "label": "东方夜市",
     "title": "东方夜市·莲灯盛会",
@@ -51,6 +163,22 @@ export const ART_THEMES = [
       "artFloorY": 0.88,
       "gameSurfaceY": 0.695,
       "centerZ": 0
+    },
+    "camera": {
+      "home": {
+        "targetY": 0.76,
+        "targetZOffset": -0.18,
+        "distanceScale": 1.35,
+        "eyeY": 0.88,
+        "eyeZ": 0.64
+      },
+      "solo": {
+        "targetY": 0.76,
+        "targetZOffset": -0.18,
+        "distanceScale": 1.24,
+        "eyeY": 0.82,
+        "eyeZ": 0.58
+      }
     },
     "render": {
       "sky": "#232732",

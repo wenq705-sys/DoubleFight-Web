@@ -30,6 +30,11 @@ export interface ArtThemeDefinition {
     gameSurfaceY: number;
     centerZ: number;
   };
+  /** Optional mobile composition preset. Keeps authored worlds out of scene code. */
+  camera?: {
+    home?: { targetY: number; targetZOffset: number; distanceScale: number; eyeY: number; eyeZ: number };
+    solo?: { targetY: number; targetZOffset: number; distanceScale: number; eyeY: number; eyeZ: number };
+  };
   render: {
     sky: string;
     fog: string;
@@ -38,6 +43,8 @@ export interface ArtThemeDefinition {
     secondary: string;
     spawn: string;
     skill: string;
+    /** Optional reusable presentation language for merges/skills. */
+    vfx?: 'default' | 'ink';
     confetti: readonly string[];
   };
   mood: {
