@@ -68,13 +68,13 @@ export const ART_THEMES = [
       }
     },
     "render": {
-      "sky": "#B9B5AA",
-      "fog": "#CBC6BA",
-      "exposure": 0.96,
-      "accent": "#24292A",
-      "secondary": "#A33B2D",
-      "spawn": "#E7DDC4",
-      "skill": "#171B1C",
+      "sky": "#DED2B8",
+      "fog": "#D3C8B2",
+      "exposure": 1.04,
+      "accent": "#0B0D0E",
+      "secondary": "#C62214",
+      "spawn": "#F1E4C6",
+      "skill": "#080A0B",
       "vfx": "ink",
       "confetti": [
         "#202526",
